@@ -40,19 +40,20 @@ Drone, Manager) live in STATUS.md next to each system.
 
 ---
 
-## Code map (current single-file build)
+## Code map (ES modules under `src/`)
 
-Top-level structure to orient in. The full function-by-function map is in STATUS.md.
-**After modularization this section must be rewritten to point at module/file paths**
-— "where things live" stops being function names and becomes files.
+The game is **modularized**: `atomic-dustbin-dan.html` is just the entry point
+(imports + the delta-timed loop). Serve it over http(s) — `file://` blocks ES
+module loads (`python3 -m http.server`). The full module-by-module map (imports
+and responsibilities) is in **STATUS.md → "Architecture map"**. Quick orientation:
 
-- `CFG` — global tunables (incl. `CFG.TERMINAL`, `CFG.DAN_IFRAME`, `CFG.SLOW_FACTOR`).
-- `ENEMY` — per-type stat table (hp/speed/points/damage + spawner/cadence + ranged stats). Add new enemies here.
-- `LEVEL_PLAN` `["picker","forklift","security","sorter","cleaner","drone","manager"]` + `levelType()`.
-- Entities: `dan`, `shots`, `enemies`, `terminals`, `pickups`, `marks`, `floats`, `exit`, `ebolts`.
-- Loop: `update(dt)` branches by state → `updateDan` / `updateShots/Enemies/Ebolts/Pickups/Effects/Camera`; per-type AI `updatePicker/Forklift/Security/Sorter/Cleaner/Drone/Manager`.
-- Shared enemy-projectile pool `ebolts` with `kind`: `bolt` / `arc` / `drop` / `homing` (Cleaner cone is handled outside the pool).
+- **Data/leaves:** `config.js` (`CFG`, `ENEMY`, `POWERUPS`, `LEVEL_PLAN`), `palette.js` (`COL`), `canvas.js` (`ctx`/view dims).
+- **State:** `state.js` — the single mutable `G` object (run meta + all entities `dan/shots/enemies/terminals/pickups/marks/floats/ebolts/camera/exit` + timers) and `levelType()`. Modules read/mutate `G.*`; whole-value resets (`G.shots = []`) live in `level.js`.
+- **World:** `world.js` — `map`, collision (`moveBody`), geometry/LOS, `destroyShelf`.
+- **Sim:** `player.js` (Dan + soap shots), `enemies.js` (spawn + per-type AI + Cleaner patrol/spray), `projectiles.js` (`G.ebolts` pool; `kind`: `bolt`/`arc`/`drop`/`homing`), `combat.js` (damage/kill/berserk), `level.js` (newGame/buildLevel/nextLevel + terminals + pickups), `effects.js`. `update.js` orchestrates one frame.
+- **Render:** `render.js` (compositor + world draws), `render-entities.js` (enemy/ebolt sprites), `screens.js` (HUD + title/levelclear/gameover). `input.js` registers listeners on import.
 - States: `title` / `playing` / `levelclear` / `dead`.
+- **Adding an enemy:** stats in `config.js` (`ENEMY` + `LEVEL_PLAN`), color in `palette.js`, spawn-init + AI in `enemies.js`, sprite in `render-entities.js`, any new projectile `kind` in `projectiles.js`.
 
 ---
 

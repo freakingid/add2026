@@ -85,27 +85,32 @@ design intent is in **GDD.md**. Behavior described here is the source of truth f
 
 ## Architecture map (where things live)
 
-> **Migration note:** this maps the CURRENT single-file build by function name. As the
-> 85KB file is modularized, rewrite this to map function → module/file path; that's the
-> change that keeps Claude Code from re-reading the whole file to navigate.
+> The game is now **ES modules** under `src/`, loaded by `atomic-dustbin-dan.html`
+> (which only imports and runs the delta-timed loop). Run it from a static server
+> (e.g. `python3 -m http.server`) — `file://` blocks module loads. All mutable
+> run/level state lives on the single `G` object in `state.js`; modules read &
+> mutate `G.dan`, `G.shots`, … (ES modules can't reassign an imported binding, so
+> whole-value resets like `G.shots = []` happen in `level.js`).
 
-- `CFG` — global tunables incl. `CFG.TERMINAL`.
-- `ENEMY` — per-type stat table (hp/speed/points/damage, plus `spawners` = base terminal count, `preplace` = initial emission, `interval`/`max` = cadence/cap, and ranged stats like `boltSpeed`/`boltDmg`/`boltRange`/`fireCd`/`windup`). Add new enemies here.
-- `LEVEL_PLAN` (`["picker","forklift","security","sorter","cleaner","drone","manager"]`) + `levelType()`.
-- `TERMINAL_TINT` — emitter color per enemy type.
-- `POWERUPS` / `POWERUP_KEYS`.
-- Input: `keys{}`, `fireKeyStack`, `FIRE_ANGLES` (compass i/o/p/k/;/,/./), `keyboardFireAngle()`.
-- World: `map[][]`, `isWall()`, `isBorderTile()`, `generateWarehouse()`, `randomFloorTile()`, `hasLineOfSight()`, `destroyShelf()`; Cleaner patrol routing: `tileFloor`/`tileCenter`/`tileClearRun`/`rectPerimeterClear`/`nearestWaypoint`/`buildCleanerPatrol`/`advancePatrol`.
-- Flow: `GAME`; `newGame()` (full reset) → `buildLevel()` (per-level, keeps hp/powerups/score; resets `ebolts`) → `nextLevel()`.
-- Spawning: `spawnEnemy(type,pos)` (per-type init incl. Security's `fireCd`/`winding`/`aim`, Sorter's `fireCd`/`wander`/`canSee`, Cleaner's patrol route via `buildCleanerPatrol`, Drone's `flying`/`dropCd`/`weavePhase`/`rotor`, Manager's `fireCd`/`winding`/`aim`/`canSee`); `spawnFromTerminal(type)` (emits from a random matching terminal, returns false if none left); `spawnWave(type)` (cap-aware; calls `spawnFromTerminal`).
-- Entities: `dan`, `shots`, `enemies`, `terminals`, `pickups`, `marks`, `floats`, `exit`, `ebolts`.
-- Update: `update(dt)` branches by state; `updateDan` (applies `dan.slow` move-scaling + decays `slow`/`sprayTick`) / `updateShots/Enemies/Ebolts/Pickups/Effects/Camera`; per-type AI `updatePicker/Forklift/Security/Sorter/Cleaner/Drone/Manager`. All ground movers apply `berserSpd(e)` when `e.berserk > 0`. Berserk timer decays in `updateEnemies`.
-- **Drone (flying):** `updateDrone(e,dt)` — free mover (NOT `moveBody`), seeks a hover spot ABOVE Dan (`hoverAbove`) swaying via `weavePhase`, clamped to the interior border; drops down its own column when at/above + lined up (ignores walls / no LOS).
-- **Cleaner spray:** `updateCleaner` (patrol ↔ spray windup/active), `danInSprayCone` (range + half-angle + LOS, gates damage), `coneRayDist` (wall raymarch — clips the rendered cone and gates spraying into walls), `applySpray(d)` (refresh `dan.slow`, tick `dan.hp` via `dan.sprayTick`).
-- **Enemy projectiles:** `fireEnemyBolt(e,angle,d)` + `fireEnemyArc(e,tx,ty,d)` + `fireEnemyDrop(e,tx,ty,d)` + `fireEnemyHoming(e,d)` (spawn into `ebolts`); `updateEbolts(dt)` dispatches by `kind` — straight `bolt` (range/wall expiry, overlap hit), `arc` via `updateArc` (time-based lob, wall-ignoring, AoE), `drop` via `updateDrop` (vertical descent onto fixed point, wall-ignoring, AoE), `homing` via `updateHoming` (steered missile, capped turn rate, wall-AoE on impact).
-- Combat: `meleeContact(e,dx,dy,dist,dmg)` (0-dmg-safe; adds `berserDmgBonus` when `e.berserk>0`), `killEnemy()` (awards points, shows score float for ALL kills, triggers Manager berserk pulse), `destroyTerminal()`.
-- Collision: `moveBody()` + `bodyHitsWall()` (per-axis AABB vs tiles).
-- Render: camera transform; `drawPicker/Forklift/Security/Sorter`, `drawCleaner` (bot + cone + droplets), `drawDrone` (elevated body + cast shadow + spinning rotors + arming light), `drawManager` (navy chassis, launcher arm, red visor, dashed windup beam, 6 HP pips), `drawEbolts` (bolt + arc box + drop package/reticle/shadow + homing missile w/ exhaust + fins), `drawEnemies` (berserk orange aura), `drawMarks` (`"berserk"` expanding ring on Manager death), `drawTerminals`, `drawDan` (slow aura), HUD/screens.
+**Module layout** (leaf-first; arrows = imports):
+
+- **`config.js`** — `CFG`, `ENEMY` (per-type stat table + ranged stats), `POWERUPS`/`POWERUP_KEYS`, `LEVEL_PLAN`. Pure data. *No imports.*
+- **`palette.js`** — `COL`, `TERMINAL_TINT`. *No imports.*
+- **`canvas.js`** — `canvas`, `ctx`, `VIEW_W/H`. *No imports.*
+- **`state.js`** — `G` (the mutable container: run meta + entities `dan/shots/enemies/terminals/pickups/marks/floats/ebolts/camera/exit` + `spawnTimer`/`pickupTimer`) and `levelType()`. ← config.
+- **`world.js`** — `map[][]` (exported `let`, reassigned only here), `isWall`/`isBorderTile`/`generateWarehouse`/`randomFloorTile`/`hasLineOfSight`/`destroyShelf`, collision `bodyHitsWall`/`moveBody`, tile helpers `tileFloor`/`tileCenter`/`tileClearRun`/`rectPerimeterClear`, `clamp`. ← config, canvas, state.
+- **`effects.js`** — `addFloat`, `updateEffects` (marks + floats lifetimes). ← state.
+- **`combat.js`** — shared damage/death: `hitDanRanged`/`hitDanArea` (i-frame + knockback), `meleeContact` (0-dmg-safe; `berserDmgBonus` when berserk), `killEnemy` (points, score float for all kills, Manager berserk pulse), `destroyTerminal`. ← config, palette, state, effects.
+- **`projectiles.js`** — the `G.ebolts` pool: `fireEnemyBolt/Arc/Drop/Homing` + `updateEbolts` dispatching by `kind` (`bolt`/`arc`/`drop`/`homing`; `updateArc/Drop/Homing` helpers). ← config, state, world, combat.
+- **`enemies.js`** — `spawnEnemy` (per-type init), `updateEnemies` (dispatch + melee contact via `combat`), per-type AI `updatePicker/Forklift/Security/Sorter/Cleaner/Drone/Manager`, `berserSpd`, Cleaner patrol routing (`nearestWaypoint`/`buildCleanerPatrol`/`advancePatrol`) + spray helpers (`danInSprayCone`/`coneRayDist`(exported, also clips the rendered cone)/`applySpray`). ← config, state, world, combat, projectiles.
+- **`level.js`** — `newGame` (full reset) → `buildLevel` (world + terminals + exit; keeps HP/powerups/score) → `nextLevel`; spawner-terminal emission `spawnFromTerminal`/`spawnWave`; pickups `spawnPickup`/`updatePickups`. ← config, state, world, enemies, effects.
+- **`input.js`** — `keys`, `mouse`, `fireKeyStack`, `FIRE_ANGLES`, `keyboardFireAngle`; registers key/mouse/touch listeners on import (side-effect). ← canvas, state, level (`newGame`).
+- **`player.js`** — `updateDan` (slow move-scaling, decays `slow`/`sprayTick`), `fireVolley`/`fireBubble`, `updateShots` (bubble↔enemy↔terminal). ← config, state, input, world, combat.
+- **`update.js`** — `update(dt)` orchestrator + `updateCamera` + spawn/terminal/exit/death bookkeeping. ← state, config, player, enemies, projectiles, level, effects, world, canvas.
+- **`render-entities.js`** — `drawEnemies` (per-type sprites + berserk aura) + `drawEbolts` (bolt/arc/drop/homing). ← canvas, state, config, palette, enemies (`coneRayDist`).
+- **`screens.js`** — `drawHUD` + `drawTitle`/`drawLevelClear`/`drawGameOver` (+ internal `drawFireLegend`). ← canvas, state, config, palette.
+- **`render.js`** — `render()` compositor + world/entity draws (`drawFloor`/`drawWalls`/`drawMarks`/`drawExit`/`drawExitPointer`/`drawTerminals`/`drawShots`/`drawPickups`/`drawFloats`/`drawDan`). ← canvas, state, config, palette, world, render-entities, screens.
+- **`atomic-dustbin-dan.html`** — entry: imports `update` + `render` (+ `input` for its listeners) and runs the delta-timed `loop`. Nothing else.
 
 ---
 
