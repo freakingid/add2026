@@ -22,6 +22,7 @@ is a design decision, not a fix.
 - **One enemy type per level** (testing), set by `LEVEL_PLAN`; levels reachable in sequence via the exit door.
 - **All enemies spawn from destroyable terminals** (generalized Dispatch Terminal). A single GLOBAL spawn cadence per level (`spawnTimer` + the type's `interval`) emits from a random matching terminal, capped by the type's `max`. Destroying ALL a type's terminals stops its spawns; thinning some does NOT slow the rate.
 - **Knockback** is `+dx/dist` — pushes Dan AWAY from the enemy.
+- **After every implementation change, update STATUS.md** — the "Current state" bullet for the affected system and the relevant subsystem decisions block if reasoning changed. STATUS.md is the handoff artifact; it must reflect reality after every session.
 
 ### Keyboard fire keys (canonical — matches GDD §4.3)
 

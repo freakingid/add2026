@@ -16,6 +16,10 @@ import {
 import { meleeContact } from "./combat.js";
 import { fireEnemyBolt, fireEnemyArc, fireEnemyDrop, fireEnemyHoming } from "./projectiles.js";
 
+// Flips each drone spawn so successive drones orbit Dan in opposite directions
+// (they cross paths — harder to dodge several at once).
+let droneOrbitToggle = 1;
+
 /* ---- Cleaner patrol routing (uses world.js tile helpers) ---------------- */
 function nearestWaypoint(e){
   let bi = 0, bd = Infinity;
@@ -132,8 +136,13 @@ export function spawnEnemy(type, pos){
   if (type === "drone"){
     e.flying = true;                                   // flagged for walls/future Dustbin pull
     e.dropCd = d.firstFireMin + Math.random() * 0.6;   // grace before first bomb
-    e.weavePhase = Math.random() * Math.PI * 2;        // horizontal sway around Dan's column
     e.rotor = Math.random() * Math.PI * 2;             // spinning-rotor phase
+    // Three-phase predatory orbit (STALK -> COMMIT -> DROP).
+    e.phase = "stalk";
+    e.orbitDir = droneOrbitToggle;                     // alternate CW/CCW across drones
+    droneOrbitToggle = -droneOrbitToggle;
+    e.orbitAngle = Math.atan2(e.y - G.dan.y, e.x - G.dan.x);  // start from current bearing
+    e.stalkT = d.stalkMinT + Math.random() * (d.stalkMaxT - d.stalkMinT);
   }
   if (type === "manager"){
     e.losCheck = Math.random() * 0.2;
@@ -386,25 +395,74 @@ function applySpray(d){
   }
 }
 
-// Aerial bomber (GDD 6). FLYING: ignores ground walls entirely — uses its own
-// free mover (NOT moveBody), staying only inside the outer border. Seeks a hover
-// spot ABOVE Dan (swaying horizontally around his column), then DROPS a package
-// bomb straight down its OWN column onto Dan's row. Only commits a drop when it's
-// at/above Dan and lined up over him, so the bomb always falls downward.
-function updateDrone(e, dt){
-  const d = ENEMY.drone;
-  e.rotor += dt * 26;                      // fast rotor spin (visual)
-  e.weavePhase += dt * d.weaveRate;        // horizontal sway phase
-
-  // Target a point ABOVE Dan, swaying around his column so it isn't a sitting
-  // target and the drop column varies.
-  const tgx = G.dan.x + Math.sin(e.weavePhase) * d.weaveAmp;
-  const tgy = G.dan.y - d.hoverAbove;        // smaller y = higher on screen = "above"
-  const mx = tgx - e.x, my = tgy - e.y;
+// Free mover (NOT moveBody): step straight toward (tx,ty) at e.speed, without
+// overshooting. Flying drones ignore walls; clamped to the border by the caller.
+function droneMoveToward(e, tx, ty, dt){
+  const mx = tx - e.x, my = ty - e.y;
   const ml = Math.hypot(mx, my);
   if (ml > 1){
-    e.x += (mx / ml) * e.speed * dt;
-    e.y += (my / ml) * e.speed * dt;
+    const step = Math.min(e.speed * dt, ml);
+    e.x += (mx / ml) * step;
+    e.y += (my / ml) * step;
+  }
+}
+
+// (Re)enter STALK with a fresh randomised duration; optionally flip orbit
+// direction (after a completed drop) and resume the circle from the current
+// bearing so the orbit doesn't snap.
+function droneEnterStalk(e, d, flip){
+  e.phase = "stalk";
+  e.stalkT = d.stalkMinT + Math.random() * (d.stalkMaxT - d.stalkMinT);
+  if (flip && Math.random() < 0.5) e.orbitDir = -e.orbitDir;
+  e.orbitAngle = Math.atan2(e.y - G.dan.y, e.x - G.dan.x);
+}
+
+// Aerial bomber (GDD 6). FLYING: ignores ground walls entirely (free mover, NOT
+// moveBody), staying only inside the outer border. Three-phase predatory orbit:
+//   STALK  — circle Dan at stalkRadius in e.orbitDir; no bombs; for a randomised
+//            stalkMinT..stalkMaxT, then COMMIT.
+//   COMMIT — break orbit and climb to a hover spot above Dan's column. If Dan
+//            jukes so |drone.x - Dan.x| > abortDist before alignment, abort back
+//            to STALK (mobility is the counterplay); once at/above Dan AND within
+//            dropAlignX, enter DROP.
+//   DROP   — drop a package bomb straight down its OWN column onto Dan's row
+//            (existing fireEnemyDrop reticle/shadow), then re-enter STALK.
+// Bombs only fire in DROP; the drop cooldown ticks in every phase so it's ready
+// by the time the drone lines up.
+function updateDrone(e, dt){
+  const d = ENEMY.drone;
+  e.rotor += dt * 26;                       // fast rotor spin (visual)
+  e.dropCd -= dt;
+
+  if (e.phase === "stalk"){
+    // Orbit Dan. Angular rate uses ~70% of the speed budget so the chaser keeps
+    // its radius instead of spending all its speed on tangential travel.
+    e.orbitAngle += e.orbitDir * (e.speed * 0.7 / d.stalkRadius) * dt;
+    const tgx = G.dan.x + Math.cos(e.orbitAngle) * d.stalkRadius;
+    const tgy = G.dan.y + Math.sin(e.orbitAngle) * d.stalkRadius;
+    droneMoveToward(e, tgx, tgy, dt);
+    e.stalkT -= dt;
+    if (e.stalkT <= 0) e.phase = "commit";
+
+  } else if (e.phase === "commit"){
+    // Climb toward the hover spot above Dan's column.
+    droneMoveToward(e, G.dan.x, G.dan.y - d.hoverAbove, dt);
+    if (Math.abs(e.x - G.dan.x) > d.abortDist){
+      droneEnterStalk(e, d, false);         // Dan juked away — abort
+    } else if (e.y <= G.dan.y && Math.abs(e.x - G.dan.x) <= d.dropAlignX){
+      e.phase = "drop";                     // at/above Dan and lined up
+    }
+
+  } else { // drop
+    if (e.dropCd <= 0){
+      fireEnemyDrop(e, e.x, G.dan.y, d);    // x = drone's column, y = Dan's row
+      e.dropCd = d.dropCd;
+      droneEnterStalk(e, d, true);          // fresh stalk, maybe flip direction
+    } else {
+      // Hold the firing line over Dan's column until the bomb is off cooldown.
+      droneMoveToward(e, G.dan.x, G.dan.y - d.hoverAbove, dt);
+      if (Math.abs(e.x - G.dan.x) > d.abortDist) droneEnterStalk(e, d, false);
+    }
   }
 
   // Flier: no wall collision; just stay inside the playable interior (border).
@@ -412,17 +470,6 @@ function updateDrone(e, dt){
         hiY = (CFG.ROWS - 1) * CFG.TILE - e.r;
   e.x = clamp(e.x, lo, hiX);
   e.y = clamp(e.y, lo, hiY);
-
-  // Drop straight down its OWN column (bomb x = drone x) onto Dan's row — but
-  // only when it's at/above Dan AND roughly lined up over him.
-  e.dropCd -= dt;
-  const linedUp = Math.abs(e.x - G.dan.x) <= d.dropAlignX;
-  const above   = e.y <= G.dan.y;
-  const inRange = Math.hypot(G.dan.x - e.x, G.dan.y - e.y) <= d.dropRange;
-  if (e.dropCd <= 0 && linedUp && above && inRange){
-    fireEnemyDrop(e, e.x, G.dan.y, d);       // x = drone's column, y = Dan's row
-    e.dropCd = d.dropCd;
-  }
 }
 
 // Rare boss-tier pursuer (GDD 6.1.9). Slow ground unit; fires a homing missile on

@@ -4,11 +4,48 @@ HTML5 Game inspired by Atari's "Gauntlet" arcade game, with my own dream enhance
 
 ## Files
 - `atomic-dustbin-dan.html` - Main game file
-- `atomic-dustbin-dan-STATUS.md` - Project status and progress
-- `Atomic-Dustbin-Dan-GDD.md` - Game design document
+- `CLAUDE.md` - Rules and decisions that must be loaded for every prompt
+- `STATUS.md` - Project status and progress
+- `GDD.md` - Game design document
 
-## Running
-Open `atomic-dustbin-dan.html` in a browser.
+### Refactoring file results
+
+`atomic-dustbin-dan.html` is now imports + the loop, nothing else — it pulls in update, render, and input (for its listener side-effects) and runs update(dt); render();.
+
+Modules (leaf-first):
+
+* config.js
+* palette.js
+* canvas.js
+* state.js
+* world.js
+* effects.js
+* combat.js
+* projectiles.js
+* enemies.js
+* level.js
+* input.js
+* player.js
+* update.js
+* render-entities.js
+* screens.js
+* render.js
+
+The one cross-cutting change was the approved G state object in `state.js` — all the reassigned globals (dan, shots, enemies, timers, exit, …) now live on G. I did that rewrite with a lexer-based transform that only touched code regions, so comments and string literals stayed intact.
+
+## Running the game locally
+
+This game now uses ES modules, which require a local server to run.
+
+### Quick Start (Python)
+
+1. Navigate to the project directory in your terminal
+2. Run: `python3 -m http.server`
+3. Open your browser and go to `http://localhost:8000`
+4. Click on the main HTML file to launch the game
+
+The server will stay running — just visit `http://localhost:8000` again if you refresh or return later. Stop the server with `Ctrl+C`.
 
 ## Notes
+
 20260623-0925: Initial commit f66e2c3 is a full day into work without any prior commits. This just finished implementation of the Drone enemy and some bomb height adjustments.

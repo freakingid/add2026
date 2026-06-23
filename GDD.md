@@ -184,10 +184,8 @@ Always knows Dan's location; mood flips on line of sight:
 - **Exposed (has LOS):** panics — flees fast in an erratic, jittery scatter, holds fire. Wants cover.
 - **In cover (no LOS):** feels secure — advances and periodically lobs a box in a slow high arc that clears walls to drop on Dan. Only lobs when within ~140px; closes distance under cover otherwise. A wall usually sits between them, so Dan's straight soap shots can't answer back — bombarding from cover is its whole game. Each lob is telegraphed by a ground shadow at the landing spot: predictable and dodgeable, but punishing in tight, wall-heavy rooms.
 
-**6.1.5 DRONE** — aerial ranged attacker; ignores ground obstacles. HP 2, 150 pts.
-Ranged package bomb dropped below its position, 2 HP per hit. Flies above shelving
-and walls. A shadow / targeting indicator appears on the ground before the bomb
-lands. Forces Dan to stay mobile. Still affected by the Atomic Dustbin attract phase.
+**6.1.5 DRONE** — aerial ranged attacker; ignores ground obstacles. HP 2, 150 pts. Ranged package bomb dropped below its position, 2 HP per hit. Flies above shelving and walls. A shadow / targeting indicator appears on the ground before the bomb lands. Forces Dan to stay mobile by orbiting unpredictably before committing to a bombing run. Still affected by the Atomic Dustbin attract phase.
+**Movement behavior:** Drones use a three-phase predatory orbit cycle rather than flying directly above Dan. **STALK** — the drone orbits Dan at a medium radius, circling clockwise or counter-clockwise. No bombing during this phase; the drone is visibly circling, not descending. **COMMIT** — after a randomized stalk duration, the drone breaks orbit and climbs toward bombing position above Dan. This is the readable telegraph: it accelerates upward and inward. If Dan moves far enough to break pursuit, the drone aborts back to STALK — mobility is the counterplay. **DROP** — if the drone reaches position, it drops the bomb (existing reticle + shadow system), then returns to STALK. Multiple drones may orbit in opposite directions, making their paths cross and harder to dodge simultaneously.
 
 **6.1.6 INVENTORY BOT** — wanderer / worker hunter. HP 1, 75 pts. Melee contact,
 1 HP to Dan. Dual state:

@@ -104,16 +104,19 @@ export const ENEMY = {
   },
   drone: {
     hp:2, speed:122, radius:12, points:150,  // GDD 6: aerial bomber, ignores walls
-    // FLYING: free mover (no moveBody/walls). Seeks a hover spot ABOVE Dan and
-    // drops a package bomb straight down ITS OWN column (bomb x = drone x). Only
-    // commits a drop when it's at/above Dan and roughly lined up over him, so the
-    // bomb always falls downward onto him. Bombs ignore walls / need no LOS —
-    // you can't hide, only move out from under it.
+    // FLYING: free mover (no moveBody/walls), staying inside the outer border.
+    // Three-phase predatory orbit (see STATUS "Drone"): STALK (circle Dan at
+    // stalkRadius, no bombs) -> COMMIT (climb to a hover spot above Dan's column;
+    // abort back to STALK if Dan jukes past abortDist) -> DROP (package bomb
+    // straight down its OWN column onto Dan's row, then re-STALK). Bombs ignore
+    // walls / need no LOS — you can't hide, only move out from under it.
     flying:true,
-    hoverAbove:220,                          // preferred vertical standoff ABOVE Dan
-    weaveAmp:70, weaveRate:1.4,              // horizontal sway around Dan's column
+    stalkRadius:180,                         // orbit standoff during STALK
+    stalkMinT:1.5, stalkMaxT:3.0,            // randomised STALK duration per cycle
+    abortDist:200,                           // |drone.x - Dan.x| that cancels a COMMIT
+    hoverAbove:220,                          // vertical standoff ABOVE Dan when committing
     altitude:22,                             // visual elevation (shadow offset below)
-    dropRange:300, dropCd:1.7, firstFireMin:0.7,
+    dropCd:1.7, firstFireMin:0.7,
     dropAlignX:80,                           // max |drone.x - Dan.x| to commit a drop
     // --- drop (vertical descent down the drone's OWN column) ---
     dropDur:0.9,                             // descent + telegraph window (dodge time)
