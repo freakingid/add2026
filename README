@@ -1,0 +1,14 @@
+# Atomic Dustbin Dan
+
+HTML5 Game inspired by Atari's "Gauntlet" arcade game, with my own dream enhancements.
+
+## Files
+- `atomic-dustbin-dan.html` - Main game file
+- `atomic-dustbin-dan-STATUS.md` - Project status and progress
+- `Atomic-Dustbin-Dan-GDD.md` - Game design document
+
+## Running
+Open `atomic-dustbin-dan.html` in a browser.
+
+## Notes
+20260623-0925: Initial commit f66e2c3 is a full day into work without any prior commits. This just finished implementation of the Drone enemy and some bomb height adjustments.
