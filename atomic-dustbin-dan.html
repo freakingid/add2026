@@ -59,25 +59,24 @@
 
 /* =========================================================================
    ATOMIC DUSTBIN DAN — Core build v0.1
-   Latest pass: Level 6 — Drone (aerial bomber) + first FLYING enemy,
-   plus refinements to the Drone drop and the Cleaner.
-     - Drone: seeks a hover spot ABOVE Dan (swaying around his column) and drops
-       a package bomb straight down its OWN column (bomb x = drone x) onto Dan's
-       row — only when it's at/above Dan and lined up, so bombs always fall down
-       from the drone rather than materializing over Dan. Bombs ignore walls / no
-       LOS. The falling bomb uses fake perspective: ~2x size at release, shrinking
-       to 1x as it nears the floor (shadow grows to match). `e.flying` flag set.
-     - Cleaner: now PATROLS a fixed route chosen at spawn (a back-and-forth line
-       down the longest clear aisle, or a small rectangular loop) and sprays along
-       its heading. The spray cone is CLIPPED to walls in the render (stops at
-       shelves instead of bleeding through), and it won't start a spray facing a
-       wall point-blank. Damage stays LOS-gated as before.
+   Latest pass: Level 7 — Manager Bot (boss-tier) + homing missile + berserk pulse.
+     - Manager Bot: rare slow ground pursuer (HP 6, 500 pts). Fires a slow-tracking
+       homing missile (`kind:"homing"`) with a capped turn rate — outrunnable on
+       straights, or lure it into a shelf to detonate harmlessly (small wall-AoE).
+       Brief dashed-beam windup telegraphs the launch. On death, emits a berserk
+       pulse (expanding orange ring) that buffs ALL nearby robots: speed ×1.7 and
+       +2 melee dmg for 7 s. L7 is the first mixed-type level: Manager terminals
+       plus Picker terminals, so the berserk pulse has targets to buff.
+     - killEnemy now shows a score float for every enemy kill (previously only
+       terminals did); no behaviour change, just feedback improvement.
+     - Multi-type spawn loop: spawner now iterates all terminal types present, so
+       any future mixed level works automatically.
    Earlier passes: Dan + soap + power-ups; Picker + destroyable Dispatch Terminal
    (L1); Forklift charge/LOS/shelf-smash (L2); Security taser bolt + shared enemy-
    projectile system (L3); Sorter cowardly arc-lobber (L4); Cleaner cone-spray +
-   first STATUS EFFECT on Dan (slow, L5). ALL enemies emerge from destroyable
-   spawner-terminals. HP/power-ups/score persist. One enemy type per level
-   (LEVEL_PLAN). Keyboard fire = compass 3x3 (i/o/p k/l/; ,/./).
+   first STATUS EFFECT on Dan (slow, L5); Drone aerial bomber + `kind:"drop"` (L6).
+   ALL enemies emerge from destroyable spawner-terminals. HP/power-ups/score persist.
+   One primary enemy type per level (LEVEL_PLAN). Keyboard fire = compass 3x3.
    ========================================================================= */
 
 const canvas = document.getElementById("game");
@@ -206,11 +205,27 @@ const ENEMY = {
     baseR:9,                                 // bomb base size (scaled 2x->1x as it falls)
     spawners:2, max:4, interval:2.8, preplace:3,
   },
+  manager: {
+    hp:6, speed:72, radius:14, points:500,   // GDD 6: rare boss — slow ground pursuer
+    dmgContact:0,                            // pure ranged; no contact damage
+    sight:380, fireRange:340,
+    fireCd:3.5, firstFireMin:1.0, windup:0.4,
+    // --- homing missile (new kind; slow-tracking, outrunnable, lures into walls) ---
+    missileSpeed:90, missileDmg:3, missileRadius:7,
+    missileRange:580, missileTurnRate:1.4,   // rad/s max steer; sprint = outrun it
+    missileBlast:24,                         // small AoE if it hits a wall or Dan
+    // --- on-death berserk pulse ---
+    berserRadius:220,                        // how far the pulse reaches from death point
+    berserDur:7.0,                           // seconds berserk lasts on nearby robots
+    berserSpeedMult:1.7,                     // speed multiplier while berserk
+    berserDmgBonus:2,                        // added to melee damage while berserk
+    spawners:1, max:2, interval:8.0, preplace:1,
+  },
 };
 
 // Which single enemy type populates each test level (one type per level).
 // Extend as enemies are added; levels beyond the list reuse the last entry.
-const LEVEL_PLAN = ["picker", "forklift", "security", "sorter", "cleaner", "drone"];
+const LEVEL_PLAN = ["picker", "forklift", "security", "sorter", "cleaner", "drone", "manager"];
 function levelType(){
   return LEVEL_PLAN[Math.min(GAME.level - 1, LEVEL_PLAN.length - 1)];
 }
@@ -233,6 +248,8 @@ const COL = {
   droneBody:"#3b4a63", droneDark:"#26303f", droneRotor:"rgba(180,214,255,0.45)",
   droneEye:"#ff5b6e", droneLight:"#7fe0ff", droneShadow:"rgba(0,0,0,0.30)",
   bomb:"#b5742e", bombDark:"#7c4d1a", bombStripe:"#ffd23f", bombLight:"#ff4d4d",
+  managerBody:"#1e2d40", managerDark:"#111c28", managerTrim:"#8090a8", managerEye:"#e04020",
+  missile:"#703020", missileFin:"#9aa0a8", missileWarhead:"#ff5020",
   terminal:"#3a4250", terminalLit:"#5dff8f",
   amber:"#ffb627", soap:"#5fd2ff", atomic:"#5dff8f", text:"#e8ebef",
 };
@@ -241,7 +258,7 @@ const COL = {
 // when levels eventually mix types). Falls back to the generic green.
 const TERMINAL_TINT = {
   picker: "#ff6a5a", forklift: "#ffc24a", security: COL.bolt, sorter: "#b7c98a",
-  cleaner: COL.spray, drone: "#a6c8ff",
+  cleaner: COL.spray, drone: "#a6c8ff", manager: "#ff7020",
 };
 
 /* ---- Input -------------------------------------------------------------- */
@@ -524,6 +541,17 @@ function buildLevel(){
   // Initial population emerges from the terminals (not floor-placed).
   for (let i = 0; i < (d.preplace || 0); i++) spawnFromTerminal(type);
 
+  // Manager level: also seed a couple of Picker terminals so the berserk pulse
+  // has targets to buff. This is the first mixed-type level (GDD intent).
+  if (type === "manager"){
+    for (let i = 0; i < 2; i++){
+      const pp = randomFloorTile(6);
+      terminals.push({ x:pp.x, y:pp.y, r:14, pulse:Math.random()*Math.PI*2,
+        hp:CFG.TERMINAL.hp, hitFlash:0, type:"picker" });
+    }
+    for (let i = 0; i < 3; i++) spawnFromTerminal("picker");
+  }
+
   // One exit door, placed away from Dan's spawn (GDD 8.1).
   const ep = randomFloorTile(8);
   exit = { x:ep.x, y:ep.y, r:18, pulse:0 };
@@ -589,6 +617,14 @@ function spawnEnemy(type, pos){
     e.weavePhase = Math.random() * Math.PI * 2;        // horizontal sway around Dan's column
     e.rotor = Math.random() * Math.PI * 2;             // spinning-rotor phase
   }
+  if (type === "manager"){
+    e.losCheck = Math.random() * 0.2;
+    e.canSee = false;
+    e.fireCd = d.firstFireMin + Math.random() * 0.8;   // stagger opening shot
+    e.winding = 0;      // >0 = telegraphing launch; aim latched in e.aim
+    e.aim = 0;
+    // e.berserk starts undefined; berserSpd/berserDmg handle that gracefully
+  }
   enemies.push(e);
 }
 
@@ -649,11 +685,13 @@ function update(dt){
   updateDan(dt);
   updateShots(dt);
 
-  // spawn the level's enemy type at its own cadence
+  // Spawn from every terminal type present in the level, each capped by its own max.
+  // Pure levels have one type; mixed levels (e.g. Manager + Pickers) cycle both.
   const type = levelType();
   spawnTimer -= dt;
   if (spawnTimer <= 0){
-    spawnWave(type);
+    const seen = new Set();
+    for (const t of terminals){ if (!seen.has(t.type)){ spawnWave(t.type); seen.add(t.type); } }
     spawnTimer = ENEMY[type].interval;
   }
 
@@ -874,12 +912,14 @@ function updateEnemies(dt){
     if (e.hitFlash > 0) e.hitFlash -= dt;
     if (e.spawn > 0){ e.spawn -= dt; continue; }
     e.bob += dt * 8;
+    if (e.berserk > 0) e.berserk -= dt;   // decay on any enemy that received the pulse
 
     if (e.type === "forklift") updateForklift(e, dt);
     else if (e.type === "security") updateSecurity(e, dt);
     else if (e.type === "sorter") updateSorter(e, dt);
     else if (e.type === "cleaner") updateCleaner(e, dt);
     else if (e.type === "drone") updateDrone(e, dt);
+    else if (e.type === "manager") updateManager(e, dt);
     else updatePicker(e, dt);
 
     // melee contact with Dan (single event; re-entry needed via knockback)
@@ -891,20 +931,26 @@ function updateEnemies(dt){
         dmg = (e.mode === "charge") ? ENEMY.forklift.dmgCharge : ENEMY.forklift.dmgContact;
       else if (e.type === "security")
         dmg = ENEMY.security.dmgContact;   // light contact zap (ranged unit)
-      else if (e.type === "sorter" || e.type === "cleaner" || e.type === "drone")
+      else if (e.type === "sorter" || e.type === "cleaner" || e.type === "drone" || e.type === "manager")
         dmg = 0;                           // hazard/ranged units: no contact damage (GDD 6)
       else
         dmg = ENEMY.picker.dmg;
+      // Berserk bonus: pulse from a dying Manager buffs nearby robots' melee (GDD 6.1.9)
+      if (dmg > 0 && e.berserk > 0) dmg += ENEMY.manager.berserDmgBonus;
       meleeContact(e, dx, dy, dist, dmg);
     }
   }
 }
 
+// Speed multiplier from the Manager's berserk pulse. Safe for any enemy type:
+// e.berserk is undefined on spawns and undefined > 0 is false.
+function berserSpd(e){ return (e.berserk > 0) ? ENEMY.manager.berserSpeedMult : 1; }
+
 // Basic chaser (Picker).
 function updatePicker(e, dt){
   const dx = dan.x - e.x, dy = dan.y - e.y;
   const dist = Math.hypot(dx, dy) || 1;
-  moveBody(e, (dx/dist) * e.speed * dt, (dy/dist) * e.speed * dt);
+  moveBody(e, (dx/dist) * e.speed * berserSpd(e) * dt, (dy/dist) * e.speed * berserSpd(e) * dt);
 }
 
 // Slow tank that locks line-of-sight and charges, smashing shelves (GDD 6).
@@ -955,7 +1001,7 @@ function updateSecurity(e, dt){
   const dist = Math.hypot(dx, dy) || 1;
 
   // Aggressive pursuit — always close on Dan (it fires while moving).
-  moveBody(e, (dx/dist) * e.speed * dt, (dy/dist) * e.speed * dt);
+  moveBody(e, (dx/dist) * e.speed * berserSpd(e) * dt, (dy/dist) * e.speed * berserSpd(e) * dt);
 
   // Throttled line-of-sight check (reuses the Forklift's LOS helper).
   e.losCheck -= dt;
@@ -1001,10 +1047,11 @@ function updateSorter(e, dt){
     e.wander += (Math.random() - 0.5) * d.fleeJitter * dt * 6;
     const away = Math.atan2(-dy, -dx);
     const ang = away + Math.sin(e.wander) * 0.9;
-    moveBody(e, Math.cos(ang) * d.fleeSpeed * dt, Math.sin(ang) * d.fleeSpeed * dt);
+    const fl = d.fleeSpeed * berserSpd(e);
+    moveBody(e, Math.cos(ang) * fl * dt, Math.sin(ang) * fl * dt);
   } else {
     // In cover -> advance toward Dan, and bombard once within lob range.
-    moveBody(e, (dx/dist) * e.speed * dt, (dy/dist) * e.speed * dt);
+    moveBody(e, (dx/dist) * e.speed * berserSpd(e) * dt, (dy/dist) * e.speed * berserSpd(e) * dt);
     e.fireCd -= dt;
     if (e.fireCd <= 0 && dist <= d.fireRange){
       fireEnemyArc(e, dan.x, dan.y, d);   // target Dan's position at lob time
@@ -1043,7 +1090,7 @@ function updateCleaner(e, dt){
   const dx = w.x - e.x, dy = w.y - e.y;
   const dist = Math.hypot(dx, dy) || 1;
   e.face = Math.atan2(dy, dx);                       // face the direction of travel
-  moveBody(e, (dx/dist) * e.speed * dt, (dy/dist) * e.speed * dt);
+  moveBody(e, (dx/dist) * e.speed * berserSpd(e) * dt, (dy/dist) * e.speed * berserSpd(e) * dt);
 
   // Advance on arrival, or if stuck against geometry for too long.
   e.wpTimer -= dt;
@@ -1139,6 +1186,62 @@ function updateDrone(e, dt){
   }
 }
 
+// Rare boss-tier pursuer (GDD 6.1.9). Slow ground unit; fires a homing missile on
+// a long cooldown whenever it has line-of-sight + range. Brief windup telegraphs the
+// launch. On death (handled in killEnemy) emits a berserk pulse buffing nearby robots.
+function updateManager(e, dt){
+  const d = ENEMY.manager;
+  const dx = dan.x - e.x, dy = dan.y - e.y;
+  const dist = Math.hypot(dx, dy) || 1;
+
+  // Slow ground pursuer — berserk also boosts its own speed (rare: two Managers)
+  moveBody(e, (dx/dist) * e.speed * berserSpd(e) * dt, (dy/dist) * e.speed * berserSpd(e) * dt);
+
+  // Throttled LOS check
+  e.losCheck -= dt;
+  if (e.losCheck <= 0){
+    e.losCheck = 0.25;
+    e.canSee = dist < d.sight && hasLineOfSight(e.x, e.y, dan.x, dan.y);
+  }
+
+  if (e.winding > 0){
+    // Telegraph: aim latched at windup start so Dan can sidestep the launch.
+    e.winding -= dt;
+    if (e.winding <= 0){
+      fireEnemyHoming(e, d);
+      e.fireCd = d.fireCd;
+    }
+  } else {
+    e.fireCd -= dt;
+    if (e.fireCd <= 0 && e.canSee && dist <= d.fireRange){
+      e.aim = Math.atan2(dy, dx);   // latch initial heading; missile steers from there
+      e.winding = d.windup;
+    }
+  }
+}
+
+// Fire a homing missile from Manager `e`. The missile's initial direction is toward
+// Dan, but it can steer each frame (capped turn rate — outrunnable, lure-into-walls).
+function fireEnemyHoming(e, d){
+  const angle = Math.atan2(dan.y - e.y, dan.x - e.x);
+  const muzzle = e.r + 6;
+  ebolts.push({
+    kind: "homing",
+    x: e.x + Math.cos(angle) * muzzle,
+    y: e.y + Math.sin(angle) * muzzle,
+    vx: Math.cos(angle) * d.missileSpeed,
+    vy: Math.sin(angle) * d.missileSpeed,
+    speed:    d.missileSpeed,
+    turnRate: d.missileTurnRate,
+    r:    d.missileRadius,
+    dmg:  d.missileDmg,
+    blast: d.missileBlast,
+    traveled: 0,
+    range: d.missileRange,
+    spin: Math.random() * Math.PI * 2,
+  });
+}
+
 /* ---- Shared enemy-projectile system (GDD 6 ranged enemies) ---------------
    One pool (`ebolts`) drives every robot's ranged attack. Each entry carries a
    `kind` that selects its motion + how it expires, so later enemies reuse this:
@@ -1217,6 +1320,10 @@ function updateEbolts(dt){
       if (updateDrop(b, dt)) ebolts.splice(i, 1);
       continue;
     }
+    if (b.kind === "homing"){
+      if (updateHoming(b, dt)) ebolts.splice(i, 1);
+      continue;
+    }
 
     // --- straight kinds (bolt): move, expire on range/wall, hit on overlap ---
     b.x += b.vx * dt;
@@ -1283,6 +1390,44 @@ function updateDrop(b, dt){
   return false;
 }
 
+// Advance a homing missile: steer toward Dan each frame by up to `turnRate` rad/s
+// (capped so it's outrunnable on straights). Stops on wall impact (small AoE) or
+// Dan overlap, and expires at max range. Returns true when finished.
+function updateHoming(b, dt){
+  // Steer toward Dan with a capped turn so the missile can be outrun or lured.
+  const curAngle = Math.atan2(b.vy, b.vx);
+  const targetAngle = Math.atan2(dan.y - b.y, dan.x - b.x);
+  let diff = targetAngle - curAngle;
+  while (diff >  Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  const turn = Math.sign(diff) * Math.min(Math.abs(diff), b.turnRate * dt);
+  const newAngle = curAngle + turn;
+  b.vx = Math.cos(newAngle) * b.speed;
+  b.vy = Math.sin(newAngle) * b.speed;
+
+  b.x += b.vx * dt;
+  b.y += b.vy * dt;
+  b.traveled += b.speed * dt;
+
+  // Expire on range.
+  if (b.traveled >= b.range) return true;
+
+  // Wall impact: small AoE burst, then remove. Harmless if Dan is out of blast.
+  if (isWall((b.x / CFG.TILE)|0, (b.y / CFG.TILE)|0)){
+    marks.push({ x:b.x, y:b.y, life:1 });
+    if (dan.iframe <= 0 && Math.hypot(dan.x - b.x, dan.y - b.y) <= b.blast + dan.r)
+      hitDanArea(b.x, b.y, b.dmg);
+    return true;
+  }
+
+  // Hit Dan.
+  if (Math.hypot(b.x - dan.x, b.y - dan.y) <= b.r + dan.r){
+    if (dan.iframe <= 0) hitDanRanged(b);
+    return true;
+  }
+  return false;
+}
+
 // Apply a ranged hit to Dan: shared i-frame + a lighter knockback along the
 // bolt's travel direction.
 function hitDanRanged(b){
@@ -1324,6 +1469,23 @@ function meleeContact(e, dx, dy, dist, dmg){
 function killEnemy(index){
   const e = enemies[index];
   GAME.score += ENEMY[e.type].points;
+  addFloat(e.x, e.y - 16, "+" + ENEMY[e.type].points, COL.amber);
+
+  // Manager on-death: emit a berserk pulse that buffs all nearby robots (GDD 6.1.9).
+  // Berserk effect: increased speed + increased melee damage for `berserDur` seconds.
+  // If two Managers die near the same robot, the timer refreshes to whichever is longer.
+  if (e.type === "manager"){
+    const md = ENEMY.manager;
+    for (const other of enemies){
+      if (other === e) continue;   // will be spliced out below
+      if (Math.hypot(other.x - e.x, other.y - e.y) <= md.berserRadius){
+        other.berserk = Math.max(other.berserk || 0, md.berserDur);
+      }
+    }
+    // Expanding ring telegraph for the pulse (drawn in drawMarks as "berserk" kind)
+    marks.push({ x:e.x, y:e.y, life:1.5, kind:"berserk" });
+  }
+
   enemies.splice(index, 1);
 }
 
@@ -1568,7 +1730,16 @@ function drawShots(){
 
 function drawMarks(){
   for (const m of marks){
-    if (m.kind === "debris"){
+    if (m.kind === "berserk"){
+      // Expanding orange ring: Manager's on-death pulse made visible.
+      const progress = 1 - m.life / 1.5;          // 0 at death -> 1 at end
+      const rad = progress * 200;
+      ctx.strokeStyle = "rgba(255,100,20," + (m.life / 1.5 * 0.75).toFixed(2) + ")";
+      ctx.lineWidth = 4 - progress * 2.5;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, Math.max(1, rad), 0, Math.PI*2);
+      ctx.stroke();
+    } else if (m.kind === "debris"){
       ctx.fillStyle = "rgba(150,108,60," + (0.7 * m.life).toFixed(3) + ")";
       ctx.beginPath();
       ctx.arc(m.x, m.y, (m.size || 6) * (1.3 - m.life * 0.5), 0, Math.PI*2);
@@ -1623,11 +1794,20 @@ function drawFloats(){
 
 function drawEnemies(){
   for (const e of enemies){
+    // Berserk aura: orange pulsing ring around any robot buffed by a Manager death.
+    if (e.berserk > 0 && e.spawn <= 0){
+      const pulse = 0.5 + 0.5 * Math.sin(e.bob * 4);
+      ctx.fillStyle = "rgba(255,100,20," + (0.13 + 0.09*pulse).toFixed(2) + ")";
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r + 7 + pulse * 3, 0, Math.PI*2);
+      ctx.fill();
+    }
     if (e.type === "forklift") drawForklift(e);
     else if (e.type === "security") drawSecurity(e);
     else if (e.type === "sorter") drawSorter(e);
     else if (e.type === "cleaner") drawCleaner(e);
     else if (e.type === "drone") drawDrone(e);
+    else if (e.type === "manager") drawManager(e);
     else drawPicker(e);
   }
 }
@@ -2001,6 +2181,85 @@ function drawDrone(e){
   }
 }
 
+// Rare corporate overlord. Boss-tier: large dark-navy chassis, a missile launcher
+// arm, and a red visor that flares while winding up a shot. HP pips = 6.
+function drawManager(e){
+  const grow = e.spawn > 0 ? (1 - e.spawn/0.4) : 1;
+  const r = e.r * grow;
+  const x = e.x, y = e.y;
+  const flash = e.hitFlash > 0;
+  const winding = e.winding > 0;
+  const face = winding ? e.aim : Math.atan2(dan.y - e.y, dan.x - e.x);
+
+  // Launch-telegraph: targeting beam down the aim lane, intensifies as it builds.
+  if (winding){
+    const intensity = 1 - e.winding / ENEMY.manager.windup;   // 0..1
+    ctx.strokeStyle = "rgba(255,80,20," + (0.25 + 0.55*intensity).toFixed(2) + ")";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6,5]);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(e.aim)*180, y + Math.sin(e.aim)*180);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(face);
+
+  // Missile launcher tube extending from the front
+  ctx.fillStyle = flash ? "#ffffff" : COL.missileFin;
+  ctx.fillRect(r*0.58, -r*0.26, r*1.05, r*0.52);   // tube
+  ctx.fillStyle = flash ? "#ffffff" : COL.missile;
+  ctx.fillRect(r*1.42, -r*0.15, r*0.46, r*0.30);   // warhead stub (armed)
+  if (winding){
+    // Warhead tip brightens orange as it's about to launch
+    ctx.fillStyle = COL.missileWarhead;
+    ctx.beginPath();
+    ctx.arc(r*1.88, 0, r*0.14, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // Body: boxy executive chassis (wider than tall = imposing silhouette)
+  ctx.fillStyle = flash ? "#ffffff" : COL.managerBody;
+  ctx.fillRect(-r, -r*0.88, r*1.82, r*1.78);
+  // Left shoulder plate (darker armour panel)
+  ctx.fillStyle = flash ? "#ffffff" : COL.managerDark;
+  ctx.fillRect(-r, -r*0.88, r*0.40, r*1.78);
+  // Lower trim band
+  ctx.fillStyle = flash ? "#ffffff" : COL.managerDark;
+  ctx.fillRect(-r, r*0.52, r*1.82, r*0.38);
+  // Lapel / insignia stripe
+  ctx.fillStyle = flash ? "#ffffff" : COL.managerTrim;
+  ctx.fillRect(r*0.14, -r*0.88, r*0.11, r*1.08);
+
+  // Visor: narrow red slit (flares brighter while telegraphing a shot)
+  ctx.fillStyle = flash ? "#ffffff" : COL.managerEye;
+  ctx.globalAlpha = winding ? 1 : 0.88;
+  ctx.fillRect(r*0.20, -r*0.44, r*0.52, r*0.34);
+  ctx.globalAlpha = 1;
+  if (winding){
+    // Hot white core — the "eye" charges up
+    ctx.fillStyle = "rgba(255,200,150,0.7)";
+    ctx.fillRect(r*0.22, -r*0.42, r*0.48, r*0.30);
+  }
+
+  // Outline
+  ctx.strokeStyle = "#0a1018";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(-r, -r*0.88, r*1.82, r*1.78);
+  ctx.restore();
+
+  // HP pips above (6) — red to mark boss tier
+  const max = ENEMY.manager.hp;
+  const pw = (2*r) / max;
+  for (let h = 0; h < max; h++){
+    ctx.fillStyle = h < e.hp ? COL.managerEye : "#1a1020";
+    ctx.fillRect(x - r + h*pw, y - r - 11, pw - 2, 4);
+  }
+}
+
 // Render every active enemy projectile by kind (taser bolt; lobbed box).
 function drawEbolts(){
   for (const b of ebolts){
@@ -2108,6 +2367,60 @@ function drawEbolts(){
       ctx.beginPath();
       ctx.arc(0, b.r*0.62, b.r*0.22, 0, Math.PI*2);
       ctx.fill();
+      ctx.restore();
+    } else if (b.kind === "homing"){
+      // Slow tracking missile: a rocket silhouette oriented along its velocity.
+      const ang = Math.atan2(b.vy, b.vx);
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(ang);
+
+      // Engine glow / exhaust plume behind the missile
+      ctx.fillStyle = "rgba(255,160,40,0.55)";
+      ctx.beginPath();
+      ctx.moveTo(-b.r * 1.1, 0);
+      ctx.lineTo(-b.r * 2.9, -b.r * 0.44);
+      ctx.lineTo(-b.r * 3.6, 0);
+      ctx.lineTo(-b.r * 2.9,  b.r * 0.44);
+      ctx.closePath();
+      ctx.fill();
+      // Outer heat glow
+      ctx.fillStyle = "rgba(255,80,20,0.18)";
+      ctx.beginPath();
+      ctx.arc(0, 0, b.r * 2.8, 0, Math.PI*2);
+      ctx.fill();
+
+      // Body
+      ctx.fillStyle = COL.missile;
+      ctx.fillRect(-b.r * 1.0, -b.r * 0.5, b.r * 2.0, b.r);
+      // Warning stripe
+      ctx.fillStyle = COL.bombStripe;
+      ctx.fillRect(-b.r * 0.28, -b.r * 0.5, b.r * 0.46, b.r);
+
+      // Warhead (tapered nose)
+      ctx.fillStyle = COL.missileWarhead;
+      ctx.beginPath();
+      ctx.moveTo(b.r * 1.0,  -b.r * 0.5);
+      ctx.lineTo(b.r * 2.3,   0);
+      ctx.lineTo(b.r * 1.0,   b.r * 0.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Tail fins
+      ctx.fillStyle = COL.missileFin;
+      ctx.beginPath();
+      ctx.moveTo(-b.r, 0);
+      ctx.lineTo(-b.r * 1.6, -b.r * 0.95);
+      ctx.lineTo(-b.r * 0.7, -b.r * 0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-b.r, 0);
+      ctx.lineTo(-b.r * 1.6,  b.r * 0.95);
+      ctx.lineTo(-b.r * 0.7,  b.r * 0.5);
+      ctx.closePath();
+      ctx.fill();
+
       ctx.restore();
     }
   }
@@ -2235,7 +2548,7 @@ function drawHUD(){
   ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
   ctx.font = "bold 16px 'Arial Black', sans-serif";
   ctx.fillStyle = COL.amber;
-  const typeName = { picker:"PICKER BOT", forklift:"FORKLIFT BOT", security:"SECURITY BOT", sorter:"SORTER BOT", cleaner:"CLEANER BOT", drone:"DRONE" }[levelType()] || "";
+  const typeName = { picker:"PICKER BOT", forklift:"FORKLIFT BOT", security:"SECURITY BOT", sorter:"SORTER BOT", cleaner:"CLEANER BOT", drone:"DRONE", manager:"MANAGER BOT" }[levelType()] || "";
   ctx.fillText("LEVEL " + GAME.level + "  ·  " + typeName, VIEW_W/2, pad + 14);
 }
 

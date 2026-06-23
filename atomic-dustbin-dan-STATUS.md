@@ -31,6 +31,17 @@
     rendered cone is **clipped to walls** so it stops at shelves instead of bleeding through, and it
     won't start a spray facing a wall point-blank. HP 2, 100 pts, no contact damage. **Introduces the
     first status effect on Dan.**
+  - **Manager Bot** (L7) — Rare **boss-tier** ground pursuer (HP 6, 500 pts). Slow mover; fires a
+    slow-tracking **homing missile** (`kind:"homing"`) on a long cooldown whenever it has LOS + range.
+    A dashed-beam windup telegraphs the launch (aim latched at windup start = dodgeable). Missile steers
+    toward Dan each frame with a capped turn rate — outrunnable on straights; lure it into a shelf to
+    detonate harmlessly (small wall-AoE). On death, emits a **berserk pulse** (expanding orange ring
+    mark): all robots within `berserRadius` (220 px) gain `e.berserk` timer → speed ×1.7 + melee
+    dmg +2 for 7 s. Refreshes if a second pulse hits before expiry. L7 is the first **mixed-type
+    level**: Manager terminals + 2 Picker terminals (3 preplaced Pickers), so the pulse has targets.
+    No contact damage (`dmgContact:0`). Feel dials: `missileSpeed` 90 / `missileTurnRate` 1.4 rad/s /
+    `fireCd` 3.5 s / `berserDur` 7 s / `berserSpeedMult` 1.7 / `berserDmgBonus` 2 / `max` 2 / 
+    `interval` 8 s.
   - **Drone** (L6) — Aerial bomber (GDD §6.1.5). **First FLYING enemy:** ignores ground walls
     entirely (free mover, not `moveBody`); seeks a hover spot **above Dan** (swaying around his
     column) and **drops a package bomb straight down its OWN column** (bomb x = drone x) onto Dan's
@@ -46,10 +57,11 @@
   `updateDan`, reset per level. Visual: green aura + drips on Dan while slowed.
 - **Shared enemy-projectile system (`ebolts`)** — One pool drives every robot's ranged attack;
   each projectile carries a `kind` selecting its motion + expiry. Implemented: `bolt` (Security —
-  straight, dies on walls), `arc` (Sorter — time-based lob, ignores walls, AoE on landing), and
-  `drop` (Drone — descends vertically onto a FIXED point, ignores walls, AoE on landing).
-  Stubbed for later: homing (Manager). Cone (Cleaner) is handled outside the pool. Dan-collision
-  funnels through the shared i-frame window via `hitDanRanged` (point) / `hitDanArea` (blast).
+  straight, dies on walls), `arc` (Sorter — time-based lob, ignores walls, AoE on landing), `drop`
+  (Drone — descends vertically onto a FIXED point, ignores walls, AoE on landing), and `homing`
+  (Manager — slow-tracking missile, steers toward Dan each frame, stops on wall with small AoE).
+  Cone (Cleaner) is handled outside the pool. Dan-collision funnels through the shared i-frame
+  window via `hitDanRanged` (point) / `hitDanArea` (blast).
 - **Spawner-terminals (all enemies):** every level places destroyable spawner-terminals
   (HP 4, 300 pts, HP pips, hit flash) of its enemy type; **all enemies emerge from terminals**
   (no floor placement). Emitter light is tinted per enemy type; brief white pulse on each emit.
@@ -151,7 +163,7 @@
 - `ENEMY` — per-type stat table (hp/speed/points/damage, plus `spawners` = base terminal count,
   `preplace` = initial emission from terminals, `interval`/`max` = cadence/cap, and ranged stats
   like `boltSpeed`/`boltDmg`/`boltRange`/`fireCd`/`windup`). Add new enemies here.
-- `LEVEL_PLAN` (`["picker","forklift","security","sorter","cleaner","drone"]`) + `levelType()` — enemy/level.
+- `LEVEL_PLAN` (`["picker","forklift","security","sorter","cleaner","drone","manager"]`) + `levelType()` — enemy/level.
 - `TERMINAL_TINT` — emitter color per enemy type (terminal readability).
 - `POWERUPS` / `POWERUP_KEYS`.
 - Input: `keys{}`, `fireKeyStack`, `FIRE_ANGLES` (compass i/o/p/k/;/,/./), `keyboardFireAngle()`.
@@ -162,12 +174,14 @@
   resets `ebolts`) -> `nextLevel()`.
 - Spawning: `spawnEnemy(type,pos)` (per-type init incl. Security's `fireCd`/`winding`/`aim`,
   Sorter's `fireCd`/`wander`/`canSee`, Cleaner's patrol route via `buildCleanerPatrol`, Drone's
-  `flying`/`dropCd`/`weavePhase`/`rotor`); `spawnFromTerminal(type)` (emits from a random matching
-  terminal, returns false if none left); `spawnWave(type)` (cap-aware; calls `spawnFromTerminal`).
+  `flying`/`dropCd`/`weavePhase`/`rotor`, Manager's `fireCd`/`winding`/`aim`/`canSee`);
+  `spawnFromTerminal(type)` (emits from a random matching terminal, returns false if none left);
+  `spawnWave(type)` (cap-aware; calls `spawnFromTerminal`).
 - Entities: `dan`, `shots`, `enemies`, `terminals`, `pickups`, `marks`, `floats`, `exit`, **`ebolts`**.
 - Update: `update(dt)` branches by state; `updateDan` (now applies `dan.slow` move-scaling + decays
   `slow`/`sprayTick`) / `updateShots/Enemies/Ebolts/Pickups/Effects/Camera`; per-type AI
-  `updatePicker/Forklift/Security/Sorter/Cleaner/Drone`.
+  `updatePicker/Forklift/Security/Sorter/Cleaner/Drone/Manager`. All ground movers apply
+  `berserSpd(e)` multiplier when `e.berserk > 0`. Berserk timer decays in `updateEnemies` loop.
 - **Drone (flying):** `updateDrone(e,dt)` — free mover (NOT `moveBody`), seeks a hover spot ABOVE Dan
   (`hoverAbove`) swaying via `weavePhase`, clamped to the interior border only; drops down its own
   column when at/above + lined up (ignores walls / no LOS).
@@ -175,15 +189,20 @@
   (range + half-angle + LOS, gates damage), `coneRayDist` (wall raymarch — clips the rendered cone and
   gates spraying into walls), `applySpray(d)` (refresh `dan.slow`, tick `dan.hp` via `dan.sprayTick`).
 - **Enemy projectiles:** `fireEnemyBolt(e,angle,d)` + `fireEnemyArc(e,tx,ty,d)` + `fireEnemyDrop(e,tx,ty,d)`
-  (spawn into `ebolts`); `updateEbolts(dt)` dispatches by `kind` — straight `bolt` (range/wall expiry,
-  overlap hit), `arc` via `updateArc(b,dt)` (time-based lob, wall-ignoring, AoE), and `drop` via
-  `updateDrop(b,dt)` (vertical descent onto a fixed point, wall-ignoring, AoE); impact via
-  `hitDanRanged(b)` (point) / `hitDanArea(x,y,dmg)` (blast), both through the shared i-frame window.
-- Combat: `meleeContact(e,dx,dy,dist,dmg)` (0-dmg-safe), `killEnemy()`, `destroyTerminal()`.
+  + `fireEnemyHoming(e,d)` (spawn into `ebolts`); `updateEbolts(dt)` dispatches by `kind` — straight
+  `bolt` (range/wall expiry, overlap hit), `arc` via `updateArc(b,dt)` (time-based lob, wall-ignoring,
+  AoE), `drop` via `updateDrop(b,dt)` (vertical descent onto fixed point, wall-ignoring, AoE), and
+  `homing` via `updateHoming(b,dt)` (steered missile, capped turn rate, wall-AoE on impact).
+- Combat: `meleeContact(e,dx,dy,dist,dmg)` (0-dmg-safe; adds `berserDmgBonus` when `e.berserk>0`),
+  `killEnemy()` (awards points, shows score float for ALL kills, triggers Manager berserk pulse),
+  `destroyTerminal()`.
 - Collision: `moveBody()` + `bodyHitsWall()` (per-axis AABB vs tiles).
 - Render: camera transform; `drawPicker()`, `drawForklift()`, `drawSecurity()`, `drawSorter()`,
   `drawCleaner()` (bot + cone + spray droplets), `drawDrone()` (elevated body + cast shadow + spinning
-  rotors + arming light), `drawEbolts()` (bolt + arc box + drop package/reticle/shadow),
+  rotors + arming light), `drawManager()` (dark navy chassis, missile launcher arm, red visor, dashed
+  windup beam, 6 HP pips), `drawEbolts()` (bolt + arc box + drop package/reticle/shadow + homing
+  missile with exhaust plume + fins), `drawEnemies()` (berserk orange aura on any berserked enemy),
+  `drawMarks()` (`"berserk"` expanding ring mark on Manager death),
   `drawTerminals()`, `drawMarks()`, `drawDan()` (slow aura), HUD/screens.
 
 ## Testing scaffolding to replace with real GDD behavior later
@@ -203,40 +222,52 @@ until human workers exist.
 4. Sorter Bot — cowardly flee/cover AI + arcing lobbed projectile (`kind:"arc"`) — **DONE (L4)**
 5. Cleaner Bot — cone spray + first status effect on Dan (slow) — **DONE (L5)**
 6. Drone — first flier (free mover, ignores walls) + vertical bomb-drop (`kind:"drop"`) — **DONE (L6)**
-7. **Manager Bot (L7) — NEXT: homing missiles (`kind:"homing"`) + on-death berserk pulse.**
-   Rare boss-tier (HP 6, 500 pts, 3 dmg/missile). Add the `homing` projectile kind to `ebolts`
-   (slow-tracking toward Dan, outrunnable / lure-into-walls to detonate); on death emit a temporary
-   **berserk pulse** buffing nearby robots (speed + melee dmg). Best tested alongside Pickers.
+7. Manager Bot — homing missiles (`kind:"homing"`) + on-death berserk pulse — **DONE (L7)**
 - Scanner Bot — buffs/alarms nearby robots; test alongside Pickers.
 - Inventory Bot — hunts human workers; needs the workers feature first.
 
 Larger unbuilt GDD features: human workers + rescue scoring (§7), Atomic Dustbin special (§5),
 full procedural placement (§8.1), audio (§10), sprite-art polish (§10).
 
-## Implementation notes for the next enemy (Manager / homing missiles + berserk)
+### Manager decisions (L7 — confirm if changing feel)
 
-The new ideas are a **tracking** projectile and an **on-death buff aura**:
+- **Missile is outrunnable by design.** `missileSpeed` 90 px/s vs Dan's 185 px/s — even slowed by
+  Cleaner spray (×0.5 = 92.5 px/s) Dan can barely outpace it. `missileTurnRate` 1.4 rad/s lets it
+  track straights; the counterplay is sharp corners into shelving to lure it into a wall-AoE. Tune
+  `missileSpeed` up (harder) or `missileTurnRate` down (wider turns = easier to dodge around corners).
+- **Wall impact = small AoE, not a ricochet.** Missile detonates on any wall tile with `missileBlast`
+  24 px radius — harmless if Dan's clear. (Alt: ricochet like bounce-shot — would make luring into
+  walls a double-edged tactic.)
+- **Berserk refresh = max of existing vs new.** If two Managers die near the same robot, the berserk
+  timer is refreshed to whichever is longer (`Math.max(existing, berserDur)`), not stacked.
+- **L7 is a mixed-type level.** Manager terminals + 2 hardcoded Picker terminals + 3 preplaced
+  Pickers. The spawn loop now iterates all terminal types present (multi-type support generalized —
+  any future mixed level works without further changes). Picker max (22) and Manager interval (8 s)
+  govern their respective cadences.
+- **Score float added to all enemy kills.** `killEnemy` now calls `addFloat` for every enemy type
+  (previously only terminal destructions showed a float). Minor feedback improvement; revert easily.
+- **Manager contact damage = 0.** Pure ranged unit; `dmgContact:0`. Even berserk, it does no melee.
+  The berserk dmg bonus only applies to enemies with `dmg > 0` (Pickers, Forklifts, Security).
 
-- New projectile kind `homing`: add `fireEnemyHoming(e,d)` + an `updateHoming(b,dt)` branch in
-  `updateEbolts`. Unlike `bolt` (straight) it steers: each frame, rotate its velocity a capped amount
-  toward Dan (a max turn rate so it's outrunnable and can be lured into walls). It should set
-  `stopsOnWall:true` so luring it into a shelf detonates it harmlessly (small AoE on wall/expiry/Dan).
-  3 dmg (GDD). Reuse `hitDanRanged`/`hitDanArea` through the shared i-frame window.
-- Manager AI `updateManager(e,dt)`: rare, slow-ish pursuer with LOS-gated fire on a long cooldown
-  (reuse `hasLineOfSight`). It's a normal ground unit — route through `moveBody` (NOT a flier).
-- **On-death berserk pulse:** Manager needs death-side logic that current `killEnemy(index)` doesn't
-  have — when a Manager dies, find nearby robots and apply a temporary `e.berserk` timer that boosts
-  speed + melee damage (no new ranged). Cleanest: give `killEnemy` an optional hook or check
-  `e.type === "manager"` inside it before the splice, then iterate `enemies` within a radius and
-  stamp `e.berserk = duration`. Per-type movers read a `e.berserk>0 ? buffMult : 1` on speed, and the
-  contact-dmg branch adds a berserk bonus. Decide: does berserk also re-trigger if two Managers die
-  near each other (refresh vs ignore)? Suggest refresh (take the max remaining).
-- Rarity: Managers are boss-tier — low `max` (1–2), long `interval`, few `spawners`. GDD says test
-  alongside Pickers, so L7 may want a Picker+Manager mix rather than pure Manager (first multi-type
-  level — would also exercise `spawnWave` with a per-terminal type already in place).
-- Register (same checklist as every enemy): `ENEMY.manager` stats, `LEVEL_PLAN += "manager"`,
-  `TERMINAL_TINT.manager`, `COL` entries, `spawnEnemy` init block, dispatch in `updateEnemies`/
-  `drawEnemies`, contact-dmg branch, HUD `typeName`, `drawManager`, plus the `homing` fire/update/draw.
+## Implementation notes for the next enemy (Scanner Bot)
+
+Scanner Bot is a support enemy: it doesn't attack Dan directly, but triggers an **alarm** that buffs
+nearby robots when it detects Dan in line-of-sight. Key new idea: **indirect threat via area buff**.
+
+- **Detection loop:** `updateScanner(e,dt)` polls LOS to Dan (`hasLineOfSight`) on a throttled timer.
+  When it acquires Dan within sight range, start `e.alarming = true` + a persistent alarm timer
+  (`e.alarmT`). While alarming: nearby enemies receive a speed/damage buff (similar to berserk but
+  lighter, continuous rather than one-shot). If LOS breaks (Dan ducks behind a shelf), the alarm fades
+  after a grace period.
+- **Alarm visual:** Scanner should have a rotating radar dish or sweep arc; while alarming, emit a
+  pulsing red ring around it (similar to berserk but continuous). Dan's shot killing the Scanner
+  should cancel the alarm instantly.
+- **Buff scope:** `alarmRadius` (e.g. 300 px) — only robots within range get the buff. This means
+  Dan can kill the Scanner to stop the buff, or lure buffed robots out of range.
+- **No contact / no ranged damage:** pure support unit (GDD §6.1.3). `dmgContact:0`, no ebolts.
+- **Register checklist:** `ENEMY.scanner`, `LEVEL_PLAN += "scanner"`, `TERMINAL_TINT.scanner`,
+  `COL` entries, `spawnEnemy` init, `updateScanner`, dispatch in `updateEnemies`/`drawEnemies`,
+  `drawScanner`, HUD `typeName`. No new projectile kind needed.
 
 Tuning scaffolding still in place (replace with GDD §8.3 difficulty mix later): power-up pickup
 respawn, and per-type `spawners`/`preplace`/`interval`/`max`.
