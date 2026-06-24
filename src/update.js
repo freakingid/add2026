@@ -37,7 +37,7 @@ export function update(dt){
   if (G.spawnTimer <= 0){
     const seen = new Set();
     for (const t of G.terminals){ if (!seen.has(t.type)){ spawnWave(t.type); seen.add(t.type); } }
-    G.spawnTimer = ENEMY[type].interval;
+    G.spawnTimer = (type === "mixed") ? CFG.MIXED_INTERVAL : ENEMY[type].interval;
   }
 
   updateEnemies(dt);

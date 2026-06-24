@@ -5,7 +5,7 @@
    keeping HP/power-ups/score) -> nextLevel. Also the spawner-terminal emission
    (spawnFromTerminal / spawnWave) and the power-up pickup seeding/collection.
    ========================================================================= */
-import { CFG, ENEMY, POWERUPS, POWERUP_KEYS } from "./config.js";
+import { CFG, ENEMY, POWERUPS, POWERUP_KEYS, LEVEL_PLAN } from "./config.js";
 import { G, levelType } from "./state.js";
 import { generateWarehouse, randomFloorTile } from "./world.js";
 import { spawnEnemy } from "./enemies.js";
@@ -56,31 +56,37 @@ function buildLevel(){
   G.spawnTimer = 0.6;
   G.pickupTimer = 0;
 
-  // Every level gets destroyable spawner-terminals of its enemy type (the
-  // Dispatch Terminal generalized to all enemies). Count scales with level.
+  // Destroyable spawner-terminals (the Dispatch Terminal generalized to all
+  // enemies). A terminal knows the type it emits; the global spawn loop tops each
+  // type up to its own max.
   const type = levelType();
-  const d = ENEMY[type];
-  const termCount = Math.min((d.spawners || 3) + ((G.level - 1) / 2 | 0), 6);
-  for (let i = 0; i < termCount; i++){
+  const addTerminal = (t) => {
     const p = randomFloorTile(6);
-    G.terminals.push({
-      x:p.x, y:p.y, r:14, pulse:Math.random()*Math.PI*2,
-      hp:CFG.TERMINAL.hp, hitFlash:0, type,    // terminal knows what it emits
-    });
-  }
-  // Initial population emerges from the terminals (not floor-placed).
-  for (let i = 0; i < (d.preplace || 0); i++) spawnFromTerminal(type);
+    G.terminals.push({ x:p.x, y:p.y, r:14, pulse:Math.random()*Math.PI*2,
+      hp:CFG.TERMINAL.hp, hitFlash:0, type:t });
+  };
 
-  // Manager / Scanner levels are mixed-type: also seed a couple of Picker
-  // terminals so the Manager's berserk pulse / the Scanner's alarm have targets
-  // to buff (GDD intent — support enemies need a cluster to amplify).
-  if (type === "manager" || type === "scanner"){
-    for (let i = 0; i < 2; i++){
-      const pp = randomFloorTile(6);
-      G.terminals.push({ x:pp.x, y:pp.y, r:14, pulse:Math.random()*Math.PI*2,
-        hp:CFG.TERMINAL.hp, hitFlash:0, type:"picker" });
+  if (type === "mixed"){
+    // Sandbox: one terminal of EVERY real enemy type at once (the multi-type
+    // spawn loop emits each over time). Inventory bots hunt the level's workers.
+    for (const t of LEVEL_PLAN){
+      if (t === "mixed") continue;
+      addTerminal(t);
+      spawnFromTerminal(t);                 // preplace one of each
     }
-    for (let i = 0; i < 3; i++) spawnFromTerminal("picker");
+  } else {
+    const d = ENEMY[type];
+    const termCount = Math.min((d.spawners || 3) + ((G.level - 1) / 2 | 0), 6);
+    for (let i = 0; i < termCount; i++) addTerminal(type);
+    // Initial population emerges from the terminals (not floor-placed).
+    for (let i = 0; i < (d.preplace || 0); i++) spawnFromTerminal(type);
+
+    // Manager / Scanner levels also seed a Picker cluster so the berserk pulse /
+    // alarm has targets to amplify (GDD intent — support enemies need a cluster).
+    if (type === "manager" || type === "scanner"){
+      for (let i = 0; i < 2; i++) addTerminal("picker");
+      for (let i = 0; i < 3; i++) spawnFromTerminal("picker");
+    }
   }
 
   // Human workers to rescue — 5 per level, scattered away from Dan's spawn (GDD 7/8.1).

@@ -6,7 +6,8 @@ rules, see CLAUDE.md. Section numbers here are stable — STATUS.md references t
 
 ### Build status index
 
-- **Built:** §2 Player, §3 Power-ups, §4 Controls, §6 Enemies (Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner — Inventory pending), §7 Human workers + rescue scoring, §8.2 level-end, §8.3 progression, parts of §10.
+- **Built:** §2 Player, §3 Power-ups, §4 Controls, §6 Enemies (**full roster**: Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner, Inventory + Dispatch Terminal) plus a `"mixed"` all-types sandbox level, §7 Human workers + rescue scoring, §8.2 level-end, §8.3 progression, parts of §10.
+- **Not yet built:** §5 Atomic Dustbin special, §8.1 full guaranteed-placement procgen, §10 audio + sprite polish.
 - **Designed, NOT yet built:** §5 Atomic Dustbin, §7 Human Workers, full procedural placement (§8.1), audio (§10), sprite-art polish (§10).
 
 ---
@@ -188,7 +189,7 @@ Always knows Dan's location; mood flips on line of sight:
 **Movement behavior:** Drones use a three-phase predatory orbit cycle rather than flying directly above Dan. **STALK** — the drone orbits Dan at a medium radius, circling clockwise or counter-clockwise. No bombing during this phase; the drone is visibly circling, not descending. **COMMIT** — after a randomized stalk duration, the drone breaks orbit and climbs toward bombing position above Dan. This is the readable telegraph: it accelerates upward and inward. If Dan moves far enough to break pursuit, the drone aborts back to STALK — mobility is the counterplay. **DROP** — if the drone reaches position, it drops the bomb (existing reticle + shadow system), then returns to STALK. Multiple drones may orbit in opposite directions, making their paths cross and harder to dodge simultaneously.
 
 **6.1.6 INVENTORY BOT** — wanderer / worker hunter. HP 1, 75 pts. Melee contact,
-1 HP to Dan. Dual state:
+1 HP to Dan. **(BUILT, L9.)** Dual state:
 - *Default:* wanders slowly and randomly, oblivious to Dan.
 - *Hunter:* periodically (timer or worker proximity) locks onto the nearest human worker and pursues slowly but relentlessly.
 - **Special:** the ONLY robot capable of killing human workers. Slow, but it will find them.

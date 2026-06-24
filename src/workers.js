@@ -52,6 +52,15 @@ export function updateWorkers(dt){
   }
 }
 
+// Inventory Bot kills a worker on contact (GDD 6.1.6 / 7.3): no points, gone for
+// the level. Safe to call with a worker that's already left the array.
+export function killWorker(w){
+  const i = G.workers.indexOf(w);
+  if (i < 0) return;
+  addFloat(w.x, w.y - 14, "WORKER LOST", COL.chargeWarn);
+  G.workers.splice(i, 1);
+}
+
 // Award the escalating rescue value, count it, and remove the worker.
 function rescueWorker(i){
   const w = G.workers[i], d = CFG.WORKER;

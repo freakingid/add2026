@@ -15,6 +15,7 @@ import {
 } from "./world.js";
 import { meleeContact } from "./combat.js";
 import { fireEnemyBolt, fireEnemyArc, fireEnemyDrop, fireEnemyHoming } from "./projectiles.js";
+import { killWorker } from "./workers.js";
 
 // Flips each drone spawn so successive drones orbit Dan in opposite directions
 // (they cross paths — harder to dodge several at once).
@@ -161,6 +162,13 @@ export function spawnEnemy(type, pos){
     e.alarmT = 0; e.alarming = false;       // alarm timer + state (set by LOS to Dan)
     e.sweep = Math.random() * Math.PI * 2;  // radar-dish sweep phase
   }
+  if (type === "inventory"){
+    e.mode = "wander";                      // wander (oblivious) <-> hunt (lock a worker)
+    e.heading = Math.random() * Math.PI * 2;
+    e.wanderT = 0;
+    e.target = null;                        // the worker being hunted
+    e.huntCd = Math.random() * d.huntPeriod;   // stagger the first hunt check
+  }
   G.enemies.push(e);
 }
 export function updateEnemies(dt){
@@ -179,6 +187,7 @@ export function updateEnemies(dt){
     else if (e.type === "drone") updateDrone(e, dt);
     else if (e.type === "manager") updateManager(e, dt);
     else if (e.type === "scanner") updateScanner(e, dt);
+    else if (e.type === "inventory") updateInventory(e, dt);
     else updatePicker(e, dt);
 
     // melee contact with Dan (single event; re-entry needed via knockback)
@@ -192,6 +201,8 @@ export function updateEnemies(dt){
         dmg = ENEMY.security.dmgContact;   // light contact zap (ranged unit)
       else if (e.type === "sorter" || e.type === "cleaner" || e.type === "drone" || e.type === "manager" || e.type === "scanner")
         dmg = 0;                           // hazard/ranged/support units: no contact damage (GDD 6)
+      else if (e.type === "inventory")
+        dmg = ENEMY.inventory.dmgContact;  // light melee bump (GDD 6.1.6)
       else
         dmg = ENEMY.picker.dmg;
       // Buff bonuses to melee: Manager berserk pulse (GDD 6.1.9) and Scanner alarm (GDD 6.1.3).
@@ -568,4 +579,53 @@ function updateScanner(e, dt){
       }
     }
   }
+}
+
+// Wanderer / worker-hunter (GDD 6.1.6). Two modes: WANDER (oblivious random roam)
+// and HUNT (lock the nearest human worker and pursue relentlessly). It snaps into
+// HUNT when a worker comes within proxAcquire, or on its huntPeriod timer; reaching
+// the locked worker KILLS it (the only robot that can — no points, gone for the
+// level), then it drops back to WANDER. Slow, but it corners fleeing workers.
+function updateInventory(e, dt){
+  const d = ENEMY.inventory;
+  e.huntCd -= dt;
+
+  // Nearest living worker (target candidate).
+  let near = null, bd = Infinity;
+  for (const w of G.workers){
+    const dd = (w.x - e.x)*(w.x - e.x) + (w.y - e.y)*(w.y - e.y);
+    if (dd < bd){ bd = dd; near = w; }
+  }
+
+  // Acquire: a worker within proxAcquire, or the periodic timer fired.
+  if (e.mode === "wander" && near && (bd <= d.proxAcquire*d.proxAcquire || e.huntCd <= 0)){
+    e.mode = "hunt"; e.target = near; e.huntCd = d.huntPeriod;
+  }
+
+  if (e.mode === "hunt"){
+    // Target rescued/killed -> grab the nearest remaining, else give up hunting.
+    if (!e.target || G.workers.indexOf(e.target) < 0) e.target = near;
+    if (!e.target){
+      e.mode = "wander";
+    } else {
+      const tx = e.target.x - e.x, ty = e.target.y - e.y;
+      const td = Math.hypot(tx, ty) || 1;
+      moveBody(e, (tx/td) * d.huntSpeed * buffSpd(e) * dt, (ty/td) * d.huntSpeed * buffSpd(e) * dt);
+      if (Math.hypot(e.target.x - e.x, e.target.y - e.y) <= e.r + e.target.r){
+        killWorker(e.target);
+        e.target = null; e.mode = "wander"; e.huntCd = d.huntPeriod;
+      }
+      return;
+    }
+  }
+
+  // WANDER: slow random roam; re-pick heading periodically, turn if boxed in.
+  e.wanderT -= dt;
+  if (e.wanderT <= 0){
+    e.heading += (Math.random() - 0.5) * Math.PI;
+    e.wanderT = d.wanderMin + Math.random() * (d.wanderMax - d.wanderMin);
+  }
+  const ox = e.x, oy = e.y;
+  moveBody(e, Math.cos(e.heading) * e.speed * buffSpd(e) * dt, Math.sin(e.heading) * e.speed * buffSpd(e) * dt);
+  if (e.x === ox && e.y === oy) e.heading += Math.PI * 0.5 + Math.random();
 }

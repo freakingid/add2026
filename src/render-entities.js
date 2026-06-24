@@ -37,6 +37,7 @@ export function drawEnemies(){
     else if (e.type === "drone") drawDrone(e);
     else if (e.type === "manager") drawManager(e);
     else if (e.type === "scanner") drawScanner(e);
+    else if (e.type === "inventory") drawInventory(e);
     else drawPicker(e);
   }
 }
@@ -543,6 +544,63 @@ function drawScanner(e){
     ctx.fillStyle = h < e.hp ? COL.scannerSweep : "#222a3a";
     ctx.fillRect(x - r + h*pw, y - r - 10, pw - 2, 3);
   }
+}
+
+// Wanderer / worker-hunter. A low, dark crawler with a grabber claw out front and
+// a single eye that glows violet while wandering, hot red while hunting a worker.
+function drawInventory(e){
+  const grow = e.spawn > 0 ? (1 - e.spawn/0.4) : 1;
+  const r = e.r * grow;
+  const flash = e.hitFlash > 0;
+  const hunting = e.mode === "hunt" && e.target;
+  // Face travel/target direction.
+  const face = hunting
+    ? Math.atan2(e.target.y - e.y, e.target.x - e.x)
+    : (e.heading ?? 0);
+  const bobY = Math.sin(e.bob) * 1.2;
+  const x = e.x, y = e.y + bobY;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(face);
+
+  // skittering legs (three a side), animated
+  ctx.strokeStyle = flash ? "#ffffff" : COL.inventoryDark;
+  ctx.lineWidth = 2;
+  for (let i = -1; i <= 1; i++){
+    const lx = i * r * 0.5;
+    const kick = Math.sin(e.bob * 2 + i) * r * 0.22;
+    ctx.beginPath();
+    ctx.moveTo(lx, -r*0.5); ctx.lineTo(lx + kick, -r*1.05);
+    ctx.moveTo(lx,  r*0.5); ctx.lineTo(lx - kick,  r*1.05);
+    ctx.stroke();
+  }
+
+  // grabber claw out front (snaps while hunting)
+  const snap = hunting ? Math.abs(Math.sin(e.bob * 3)) * r * 0.28 : r * 0.12;
+  ctx.fillStyle = flash ? "#ffffff" : COL.inventoryClaw;
+  ctx.fillRect(r*0.7, -r*0.5 - snap, r*0.5, r*0.22);
+  ctx.fillRect(r*0.7,  r*0.28 + snap, r*0.5, r*0.22);
+
+  // low carapace body
+  ctx.fillStyle = flash ? "#ffffff" : COL.inventoryBody;
+  ctx.fillRect(-r*0.9, -r*0.6, r*1.7, r*1.2);
+  ctx.fillStyle = flash ? "#ffffff" : COL.inventoryDark;
+  ctx.fillRect(-r*0.9, -r*0.6, r*0.5, r*1.2);     // dark rear plate
+  ctx.strokeStyle = "#211a2c";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(-r*0.9, -r*0.6, r*1.7, r*1.2);
+
+  // single hunting eye
+  ctx.fillStyle = flash ? "#ffffff" : (hunting ? COL.inventoryHunt : COL.inventoryEye);
+  ctx.beginPath(); ctx.arc(r*0.25, 0, r*0.26, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#1a1226";
+  ctx.beginPath(); ctx.arc(r*0.32, 0, r*0.1, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // HP pip above (1)
+  ctx.fillStyle = e.hp > 0 ? COL.inventoryEye : "#2a2036";
+  ctx.fillRect(x - r*0.5, y - r - 9, r, 3);
 }
 
 // Render every active enemy projectile by kind (taser bolt; lobbed box).

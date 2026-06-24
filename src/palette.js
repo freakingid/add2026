@@ -24,6 +24,7 @@ export const COL = {
   missile:"#703020", missileFin:"#9aa0a8", missileWarhead:"#ff5020",
   scannerBody:"#3a4a6a", scannerDark:"#26324a", scannerDish:"#cfd6df", scannerSweep:"#7fe0ff", scannerAlarm:"#ff5b4d",
   workerBody:"#2f7d8f", workerVest:"#ffd23f", workerVestDark:"#caa01f", workerSkin:"#e3b58a", workerHelmet:"#ff8a3b",
+  inventoryBody:"#5a4a6a", inventoryDark:"#3a2f4a", inventoryClaw:"#cfd0d6", inventoryEye:"#9b7bff", inventoryHunt:"#ff4d4d",
   terminal:"#3a4250", terminalLit:"#5dff8f",
   amber:"#ffb627", soap:"#5fd2ff", atomic:"#5dff8f", text:"#e8ebef",
 };
@@ -33,4 +34,5 @@ export const COL = {
 export const TERMINAL_TINT = {
   picker: "#ff6a5a", forklift: "#ffc24a", security: COL.bolt, sorter: "#b7c98a",
   cleaner: COL.spray, drone: "#a6c8ff", manager: "#ff7020", scanner: "#9fb4ff",
+  inventory: "#b08bff",
 };

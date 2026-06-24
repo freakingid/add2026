@@ -31,6 +31,7 @@ export const CFG = {
   RAPID_MULT: 2,               // fire-rate multiplier while Rapid Fire active
   MAX_PICKUPS: 5,              // power-up pickups present in the level at once
   PICKUP_RESPAWN: 6,          // sec between topping the level back up to MAX
+  MIXED_INTERVAL: 2.0,        // global spawn cadence on the "mixed" all-types level
 
   // Human workers (GDD 7) — wander slowly avoiding robots; Dan rescues by contact
   // for escalating points (rescueBase doubles each: 100/200/400/800/1600 = 3100).
@@ -171,8 +172,22 @@ export const ENEMY = {
     sweepRate:3.2,                           // radar-dish sweep angular speed (visual)
     spawners:2, max:4, interval:3.0, preplace:2,
   },
+  inventory: {
+    hp:1, speed:50, radius:11, points:75,    // GDD 6.1.6: wanderer / worker-hunter
+    dmgContact:1,                            // light melee bump to Dan
+    // Dual state: WANDER (oblivious, random roam) <-> HUNT (lock the nearest
+    // human worker and pursue relentlessly). The ONLY robot that can KILL a
+    // worker (on contact — no points, gone for the level). Slow, but it corners
+    // fleeing workers against shelves.
+    huntSpeed:96,                            // pursuit speed (just edges worker fleeSpeed 92)
+    proxAcquire:150,                         // a worker this close snaps it into HUNT
+    huntPeriod:6.0,                          // also (re)checks for a hunt target on this timer
+    wanderMin:0.8, wanderMax:2.2,            // re-pick wander heading every [min,max] sec
+    spawners:2, max:4, interval:3.2, preplace:2,
+  },
 };
 
-// Which single enemy type populates each test level (one type per level).
-// Extend as enemies are added; levels beyond the list reuse the last entry.
-export const LEVEL_PLAN = ["picker", "forklift", "security", "sorter", "cleaner", "drone", "manager", "scanner"];
+// Which single enemy type populates each test level (one type per level), except
+// the trailing "mixed" sandbox which seeds one terminal of EVERY real type.
+// Levels beyond the list reuse the last entry ("mixed") — so L10+ stay mixed.
+export const LEVEL_PLAN = ["picker", "forklift", "security", "sorter", "cleaner", "drone", "manager", "scanner", "inventory", "mixed"];
