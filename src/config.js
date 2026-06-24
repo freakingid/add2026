@@ -224,6 +224,7 @@ export const ENEMY = {
     // worker (on contact — no points, gone for the level). Slow, but it corners
     // fleeing workers against shelves.
     huntSpeed:96,                            // pursuit speed (just edges worker fleeSpeed 92)
+    huntDanSpeed:105,                         // once no workers remain, turns on Dan at this speed (outrunnable; punishes cornering)
     proxAcquire:150,                         // a worker this close snaps it into HUNT
     huntPeriod:6.0,                          // also (re)checks for a hunt target on this timer
     wanderMin:0.8, wanderMax:2.2,            // re-pick wander heading every [min,max] sec

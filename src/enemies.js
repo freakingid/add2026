@@ -598,6 +598,18 @@ function updateInventory(e, dt){
   const d = ENEMY.inventory;
   e.huntCd -= dt;
 
+  // No workers left to hunt -> turn on Dan himself (GDD 6.1.6). Re-checked every
+  // tick so the bot pivots the instant the last human is gone. Reuses "hunt" mode
+  // (hot-red eye, faces target) with Dan as the target; melee damage is dealt by
+  // the shared contact block in updateEnemies().
+  if (G.workers.length === 0){
+    e.mode = "hunt"; e.target = G.dan;
+    const tx = G.dan.x - e.x, ty = G.dan.y - e.y;
+    const td = Math.hypot(tx, ty) || 1;
+    moveBody(e, (tx/td) * d.huntDanSpeed * buffSpd(e) * dt, (ty/td) * d.huntDanSpeed * buffSpd(e) * dt);
+    return;
+  }
+
   // Nearest living worker (target candidate).
   let near = null, bd = Infinity;
   for (const w of G.workers){
