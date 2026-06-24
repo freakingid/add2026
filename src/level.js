@@ -9,6 +9,7 @@ import { CFG, ENEMY, POWERUPS, POWERUP_KEYS, LEVEL_PLAN } from "./config.js";
 import { G, levelType } from "./state.js";
 import { generateWarehouse, randomFloorTile } from "./world.js";
 import { spawnEnemy } from "./enemies.js";
+import { placeVendingMachines } from "./vending.js";
 import { addFloat } from "./effects.js";
 
 // Full reset — new run from level 1. HP, power-ups, score all cleared.
@@ -51,6 +52,7 @@ function buildLevel(){
   G.marks = [];
   G.floats = [];
   G.ebolts = [];
+  G.vending = [];
   G.workers = [];
   G.rescued = 0;
   G.spawnTimer = 0.6;
@@ -97,6 +99,9 @@ function buildLevel(){
       heading:Math.random()*Math.PI*2, wanderT:0, bob:Math.random()*Math.PI*2, fleeing:false,
     });
   }
+
+  // Vending machines — contact-triggered HP restore, flush against walls (GDD 2.5).
+  placeVendingMachines();
 
   // One exit door, placed away from Dan's spawn (GDD 8.1).
   const ep = randomFloorTile(8);

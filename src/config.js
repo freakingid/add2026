@@ -25,6 +25,20 @@ export const CFG = {
 
   TERMINAL: { hp:4, points:300 },   // Dispatch Terminal — destroyable spawner
 
+  // Vending machines (GDD 2.5) — static, contact-triggered HP restoration. Sole
+  // means of healing mid-run. Two variants; single-use (deplete after one touch),
+  // capped at Dan's maxHp. Robots ignore them entirely. `r` = contact radius;
+  // breadth/depth size the drawn cabinet (breadth runs PARALLEL to the wall it's
+  // flush against, depth perpendicular). Test levels place a fixed set; full
+  // weighted procgen comes with §8.1.
+  VENDING: {
+    r: 15,
+    small: { heal:5,  breadth:22, depth:16 },   // dim glow, shorter unit
+    large: { heal:10, breadth:28, depth:20 },   // brighter glow, taller unit
+    testPlacement: ["small", "large"],          // manual 1–2 machines for now (§8.1 later)
+    minDistFromCenter: 4,                        // keep off Dan's central spawn pocket
+  },
+
   // Power-ups (GDD 3) — shot-count based, fully stackable
   POWERUP_SHOTS: 75,            // enhanced shots granted per pickup
   TRIPLE_SPREAD: 0.22,         // rad between fan projectiles

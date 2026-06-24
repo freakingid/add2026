@@ -27,6 +27,7 @@ export function render(){
   drawWalls();
   drawMarks();
   drawExit();
+  drawVending();
   drawTerminals();
   drawPickups();
   drawWorkers();
@@ -150,6 +151,61 @@ function drawWalls(){
       // tape seam
       ctx.fillStyle = COL.shelfEdge;
       ctx.fillRect(px + T/2 - 1, py+2, 2, T-4);
+    }
+  }
+}
+
+// Vending machines (GDD 2.5): a flush-against-wall cabinet with a lit display.
+// Active = colored glow (green small / blue large); depleted = dark/static, glow
+// extinguished, left as a landmark. Cabinet long-axis runs parallel to its wall.
+function drawVending(){
+  for (const m of G.vending){
+    const def = CFG.VENDING[m.variant];
+    const vertical = m.dy !== 0;                 // wall above/below -> breadth horizontal
+    const bw = vertical ? def.breadth : def.depth;
+    const bh = vertical ? def.depth : def.breadth;
+    const glowCol = m.variant === "large" ? COL.vendLarge : COL.vendSmall;
+    const baseGlow = m.variant === "large" ? 0.55 : 0.32;   // large unit glows brighter
+    const pulse = 0.5 + 0.5 * Math.sin(m.glow);
+
+    // ambient floor glow + dispense flash (only while active)
+    if (!m.depleted){
+      const a = (baseGlow * (0.5 + 0.5*pulse)) + (m.flash > 0 ? m.flash * 1.5 : 0);
+      ctx.globalAlpha = Math.min(0.6, a);
+      ctx.fillStyle = glowCol;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, Math.max(bw, bh) * 0.75, 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // cabinet body
+    ctx.fillStyle = m.flash > 0 ? "#ffffff" : COL.vendBody;
+    ctx.fillRect(m.x - bw/2, m.y - bh/2, bw, bh);
+    ctx.strokeStyle = COL.vendDark;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(m.x - bw/2 + 1, m.y - bh/2 + 1, bw - 2, bh - 2);
+
+    // lit display screen, inset
+    const pad = 4;
+    ctx.fillStyle = m.depleted ? COL.vendDepleted
+                  : m.flash > 0 ? "#ffffff" : glowCol;
+    ctx.globalAlpha = m.depleted ? 1 : (0.55 + 0.45 * pulse);
+    ctx.fillRect(m.x - bw/2 + pad, m.y - bh/2 + pad, bw - pad*2, bh*0.5 - pad);
+    ctx.globalAlpha = 1;
+
+    // dispensing slot at the base
+    ctx.fillStyle = COL.vendDark;
+    ctx.fillRect(m.x - bw/2 + pad, m.y + bh/2 - pad - 3, bw - pad*2, 3);
+
+    // depleted units show a dim "static" cross-out on the dark screen
+    if (m.depleted){
+      ctx.strokeStyle = "rgba(120,130,145,0.35)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(m.x - bw/2 + pad, m.y - bh/2 + pad);
+      ctx.lineTo(m.x + bw/2 - pad, m.y - bh/2 + bh*0.5 - pad);
+      ctx.stroke();
     }
   }
 }

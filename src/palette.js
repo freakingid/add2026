@@ -26,6 +26,8 @@ export const COL = {
   workerBody:"#2f7d8f", workerVest:"#ffd23f", workerVestDark:"#caa01f", workerSkin:"#e3b58a", workerHelmet:"#ff8a3b",
   inventoryBody:"#5a4a6a", inventoryDark:"#3a2f4a", inventoryClaw:"#cfd0d6", inventoryEye:"#9b7bff", inventoryHunt:"#ff4d4d",
   terminal:"#3a4250", terminalLit:"#5dff8f",
+  vendBody:"#2c333f", vendDark:"#171c24", vendTrim:"#5b6675",
+  vendSmall:"#5dff8f", vendLarge:"#5fd2ff", vendDepleted:"#1b1f27",
   amber:"#ffb627", soap:"#5fd2ff", atomic:"#5dff8f", text:"#e8ebef",
 };
 

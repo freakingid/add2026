@@ -6,9 +6,9 @@ rules, see CLAUDE.md. Section numbers here are stable — STATUS.md references t
 
 ### Build status index
 
-- **Built:** §2 Player, §3 Power-ups, §4 Controls, §6 Enemies (**full roster**: Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner, Inventory + Dispatch Terminal) plus a `"mixed"` all-types sandbox level, §7 Human workers + rescue scoring, §8.2 level-end, §8.3 progression, parts of §10.
-- **Not yet built:** §2.5 Vending Machines, §5 Atomic Dustbin special, §8.1 full guaranteed-placement procgen, §10 audio + sprite polish.
-- **Designed, NOT yet built:** §2.5 Vending Machines, §5 Atomic Dustbin, §7 Human Workers, full procedural placement (§8.1), audio (§10), sprite-art polish (§10).
+- **Built:** §2 Player (incl. §2.5 Vending Machines), §3 Power-ups, §4 Controls, §6 Enemies (**full roster**: Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner, Inventory + Dispatch Terminal) plus a `"mixed"` all-types sandbox level, §7 Human workers + rescue scoring, §8.2 level-end, §8.3 progression, parts of §10.
+- **Not yet built:** §5 Atomic Dustbin special, §8.1 full guaranteed-placement procgen, §10 audio + sprite polish.
+- **Designed, NOT yet built:** §5 Atomic Dustbin, full procedural placement (§8.1), audio (§10), sprite-art polish (§10).
 
 ---
 
@@ -65,7 +65,11 @@ decided to take action.
 
 ### 2.5 Vending Machines
 
-> **Status: DESIGNED, NOT YET BUILT.**
+> **Status: BUILT** (`vending.js`). Contact-triggered, single-use, maxHp-capped.
+> Test levels place one small + one large flush against walls; full weighted
+> procedural placement (1–3 per level) awaits §8.1. Implementation/feel decisions
+> (won't deplete at full HP; float shows actual HP gained) are in STATUS
+> "Vending machines".
 
 Vending machines are static, interactable health-restoration objects placed in each
 level. They are the sole means of restoring Dan's HP mid-run and are diegetically

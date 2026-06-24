@@ -60,6 +60,29 @@ export function randomFloorTile(minDistFromCenter){
   return { x:VIEW_W, y:VIEW_H };
 }
 
+// Like randomFloorTile, but the tile must border a wall on at least one side.
+// Returns { tx, ty, dx, dy } where (dx,dy) points from the tile toward that wall
+// (so a vending machine can sit flush against it). null if none found.
+export function randomFloorTileNearWall(minDistFromCenter){
+  const cx = CFG.COLS/2, cy = CFG.ROWS/2;
+  const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+  for (let tries = 0; tries < 400; tries++){
+    const tx = 1 + ((Math.random()*(CFG.COLS-2))|0);
+    const ty = 1 + ((Math.random()*(CFG.ROWS-2))|0);
+    if (map[ty][tx] !== 0) continue;
+    if (minDistFromCenter && Math.hypot(tx-cx, ty-cy) < minDistFromCenter) continue;
+    // Try the four sides in random order; take the first that is a wall.
+    for (let s = dirs.length - 1; s > 0; s--){           // Fisher–Yates shuffle
+      const j = (Math.random()*(s+1))|0;
+      const t = dirs[s]; dirs[s] = dirs[j]; dirs[j] = t;
+    }
+    for (const [dx, dy] of dirs){
+      if (isWall(tx+dx, ty+dy)) return { tx, ty, dx, dy };
+    }
+  }
+  return null;
+}
+
 // ---- Tile helpers used by Cleaner patrol routing ----
 export function tileFloor(tx, ty){
   return tx > 0 && ty > 0 && tx < CFG.COLS-1 && ty < CFG.ROWS-1 && map[ty][tx] === 0;

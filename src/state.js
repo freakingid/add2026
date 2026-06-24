@@ -22,6 +22,7 @@ export const G = {
   powerups:null,
   shots:[], enemies:[], terminals:[], pickups:[], marks:[], floats:[],
   ebolts:[],           // shared enemy-projectile pool (Security taser bolt is the first user)
+  vending:[],          // vending machines — contact-triggered HP restore (GDD 2.5)
   workers:[],          // human workers to rescue (GDD 7)
   rescued:0,           // workers rescued THIS level (resets each level)
   camera:{ x:0, y:0 },
