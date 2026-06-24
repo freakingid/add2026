@@ -7,8 +7,8 @@ rules, see CLAUDE.md. Section numbers here are stable — STATUS.md references t
 ### Build status index
 
 - **Built:** §2 Player, §3 Power-ups, §4 Controls, §6 Enemies (**full roster**: Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner, Inventory + Dispatch Terminal) plus a `"mixed"` all-types sandbox level, §7 Human workers + rescue scoring, §8.2 level-end, §8.3 progression, parts of §10.
-- **Not yet built:** §5 Atomic Dustbin special, §8.1 full guaranteed-placement procgen, §10 audio + sprite polish.
-- **Designed, NOT yet built:** §5 Atomic Dustbin, §7 Human Workers, full procedural placement (§8.1), audio (§10), sprite-art polish (§10).
+- **Not yet built:** §2.5 Vending Machines, §5 Atomic Dustbin special, §8.1 full guaranteed-placement procgen, §10 audio + sprite polish.
+- **Designed, NOT yet built:** §2.5 Vending Machines, §5 Atomic Dustbin, §7 Human Workers, full procedural placement (§8.1), audio (§10), sprite-art polish (§10).
 
 ---
 
@@ -62,6 +62,42 @@ decided to take action.
 | Base | Iridescent translucent soap bubbles |
 | Triple Shot active | Larger, more opaque cleaning pods |
 | Bounce active | Shots leave brief soapy trail on walls at ricochet point |
+
+### 2.5 Vending Machines
+
+> **Status: DESIGNED, NOT YET BUILT.**
+
+Vending machines are static, interactable health-restoration objects placed in each
+level. They are the sole means of restoring Dan's HP mid-run and are diegetically
+consistent with the warehouse setting (break-room / floor vending).
+
+**Two variants:**
+
+| Variant | HP Restored | Visual |
+| :---- | :---- | :---- |
+| Small | +5 HP | Shorter/narrower unit, dim glow |
+| Large | +10 HP | Taller/wider unit, brighter glow |
+
+**Placement:** Procedurally placed at level generation time, flush against walls
+(must not block corridors). Each level contains **1–3 machines**; quantity and
+placement are weighted against level size and enemy density. Suggested default
+ratio: 2 small : 1 large per level.
+
+**Interaction:** Triggered by Dan walking into contact — no button press required.
+On contact the machine immediately restores HP to Dan, capped at his 20 HP maximum.
+The machine then enters a **depleted state** and cannot be used again. Machines do
+not respawn within a level.
+
+**Robots and machines:** Robots ignore vending machines entirely. Machines are not
+destructible and do not participate in enemy pathfinding or AI behavior.
+
+**Feedback:**
+- *Active state:* lit screen / display with a soft ambient glow (suggest green or
+  blue to contrast the warehouse palette).
+- *On use:* brief flash, a dispensing sound cue, and a floating "+5" or "+10" number
+  rising from the machine.
+- *Depleted state:* screen goes dark / static, glow extinguished. Remains in level
+  as a visual landmark only.
 
 ---
 
@@ -265,7 +301,7 @@ Rescuing all 5 earns a **full clear bonus** and a celebratory callout.
 
 - **Tile-based procedural generation** per level. *(Full guaranteed-placement procgen below is NOT yet built — current builds use test placement.)*
 - Warehouse aesthetic: shelf rows, corridors, open floor, cinderblock walls.
-- **Guaranteed placement each level:** 1 exit door; 5 human workers; multiple Dispatch Terminals (scales with level); vending-machine health pickups; power-up pickups; 1 rare Atomic Dustbin pickup (possibly 0 on early levels).
+- **Guaranteed placement each level:** 1 exit door; 5 human workers; multiple Dispatch Terminals (scales with level); vending-machine health pickups (see §2.5); power-up pickups; 1 rare Atomic Dustbin pickup (possibly 0 on early levels).
 
 ### 8.2 Level End Conditions
 
