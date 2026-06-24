@@ -8,6 +8,7 @@ rules, see CLAUDE.md. Section numbers here are stable — STATUS.md references t
 
 - **Built:** §2 Player (incl. §2.5 Vending Machines), §3 Power-ups, §4 Controls (incl. §4.4 special-item deploy), §5 Atomic Dustbin special, §6 Enemies (**full roster**: Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner, Inventory + Dispatch Terminal) plus a `"mixed"` all-types sandbox level, §7 Human workers + rescue scoring, §8.2 level-end, §8.3 progression, §10 audio.
 - **Designed, NOT yet built:** full guaranteed-placement procgen (§8.1), §10 sprite-art polish.
+- **Queued balance/behavior revisions (intent below is canonical; builds pending):** see STATUS.md → "Planned changes". Touches §6.1.6 (Inventory hunts Dan once workers are gone), §6.1.7 (stronger Cleaner slow), §6.1.8 & §6.1.9 (Security/Manager missiles damage ground bots, no score), §6.1.9 (Manager missile speed ramp), §7 (workers seek Dan on LOS), §9 (no-score missile kills), §10 (worker-death + last-worker-gone audio).
 
 ---
 
@@ -231,21 +232,31 @@ Always knows Dan's location; mood flips on line of sight:
 1 HP to Dan. **(BUILT, L9.)** Dual state:
 - *Default:* wanders slowly and randomly, oblivious to Dan.
 - *Hunter:* periodically (timer or worker proximity) locks onto the nearest human worker and pursues slowly but relentlessly.
+- *Hunting Dan:* once **no human workers remain** in the level (all rescued and/or killed), the Inventory Bot turns on Dan — it pursues the player directly and deals its melee contact damage. Its worker-hunting purpose is over, so it becomes a (weak) threat to Dan.
 - **Special:** the ONLY robot capable of killing human workers. Slow, but it will find them.
 
 **6.1.7 CLEANER BOT** — debuffer / slow hazard. HP 2, 100 pts. Ranged cone spray
-ahead of it, 1 HP per tick while Dan is inside the cone, plus a **slow movement
-debuff**. Wanders slowly. Most dangerous in corridors where Dan cannot escape the cone.
+ahead of it, 1 HP per tick while Dan is inside the cone, plus a **strong slow
+movement debuff** (a heavy movement penalty while sprayed — significantly more than
+a gentle slow). Wanders slowly. Most dangerous in corridors where Dan cannot escape
+the cone.
 
 **6.1.8 SECURITY BOT** — fast ranged pursuer; mid-game primary threat. HP 3, 200
 pts. Ranged taser bolt, 2 HP per bolt. Fast, aggressive; fires direct-line bolts at
-a fast rate. Requires active dodging.
+a fast rate. Requires active dodging. **Taser bolts also damage any ground robot
+they strike** (friendly fire) — **drones are immune** (bolts travel below drone
+altitude). Robots destroyed this way award **no points** to Dan (§9).
 
 **6.1.9 MANAGER BOT** — rare, high-value, boss-tier. HP 6, 500 pts. Ranged seeking
-missile, 3 HP per hit. Rare spawn; fires slow-tracking missiles that follow Dan
-(outrun them or lure them into walls to detonate harmlessly). On death emits a
-**berserk pulse**: nearby robots gain increased movement speed + increased melee
-damage (no added ranged) for a temporary duration.
+missile, 3 HP per hit. Rare spawn; fires slow-tracking missiles that follow Dan.
+The missile **launches slow and accelerates over its flight up to a fast maximum** —
+easy to outrun at first, but it closes the gap if it chases too long, so commit to
+luring it into a wall (detonates harmlessly) before it reaches top speed. **Missiles
+also damage any ground robot they hit** (friendly fire); **drones are immune**
+(missiles fly below drone altitude), and robots killed this way award **no points**
+to Dan (§9). On death the Manager emits a **berserk pulse**: nearby robots gain
+increased movement speed + increased melee damage (no added ranged) for a temporary
+duration.
 
 **6.1.10 DISPATCH TERMINAL** — static spawner (like Gauntlet's generators). HP 4,
 300 pts. No attack (0 HP). Stationary; spawns Picker Bots on a fixed timer.
@@ -278,6 +289,10 @@ Multiple terminals may exist per level.
 
 - **Count per level:** 5. Can be killed by Inventory Bot only (§6.1.6).
 - Workers wander slowly, trying to avoid robots.
+- **Seeking rescue:** when a worker has line of sight to Dan it moves **toward** Dan
+  to make rescue easier — **unless** it is currently fleeing a nearby robot, which
+  always takes priority. Priority order: flee a nearby robot > move toward Dan on LOS
+  > wander.
 
 ### 7.2 Rescue Scoring (exponential doubling)
 
@@ -323,6 +338,11 @@ Rescuing all 5 earns a **full clear bonus** and a celebratory callout.
 Per-enemy point values are canonical in §6.2. Worker rescue values are in §7.2.
 High score is tracked and displayed on the title / game-over screen.
 
+**No-score kills:** robots destroyed by another robot's projectile — i.e. Security
+taser bolts or Manager seeking missiles striking a ground robot (§6.1.8, §6.1.9) —
+award **no points** to Dan. Only kills Dan causes (soap shots, mop, or the Atomic
+Dustbin per §5.3) score.
+
 ---
 
 ## 10. VISUAL AND AUDIO STYLE
@@ -332,6 +352,8 @@ High score is tracked and displayed on the title / game-over screen.
 - **Projectile visuals:** base iridescent soap bubbles; Triple Shot larger opaque cleaning pods; Bounce leaves a soapy trail on walls at ricochet points.
 - **Atomic Dustbin:** glowing green, spins as a floor pickup; dramatic vortex + explosion on detonation.
 - **Audio:** retro arcade SFX via Web Audio API — pop/splash on hit, alarm on Scanner trigger, explosion on dustbin detonation. *(Built — `audio.js`; 16 synthesized SFX incl. these 3 plus game-feel additions, `M` to mute. See STATUS.md → "Audio".)*
+- **Worker-death cue:** a worker being killed plays a **dramatic, prominent** sting (clearly more noticeable than a generic hit) so the loss reads unmistakably.
+- **Last-worker cue:** when the **final** worker leaves the level — by rescue *or* by being killed — a **unique** one-shot SFX signals that there are no more humans left to save.
 
 ---
 

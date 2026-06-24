@@ -184,9 +184,19 @@ export const sfx = {
     const base = 523 * Math.pow(2, Math.min(step, 5) / 12 * 2);  // ~whole-step climb
     sequence([{freq:base,dur:0.07},{freq:base*1.5,dur:0.12}], { type:"triangle", gain:0.2 }); },
 
-  // Worker lost to an Inventory Bot — short sad down-tone.
+  // Worker lost to an Inventory Bot — a dramatic, alarming death sting, much
+  // bigger than a generic hit so the loss is unmistakable. A heavy low-thud
+  // impact, an alarming two-tone descending klaxon (sawtooth, falling in pitch),
+  // and a sustained low sub-boom underneath. Rare one-shot — NOT throttled, so it
+  // always plays in full (no THROTTLE entry; the long tail won't clip rapid fire).
   workerLost(){ if (!ensure()) return;
-    tone({ type:"sine", freq:392, freqEnd:196, dur:0.3, gain:0.22 }); },
+    // Impact: a dull, filtered noise thud the moment the worker drops.
+    noise({ dur:0.35, gain:0.34, filterType:"lowpass", filtFreq:1200, filtEnd:120, Q:0.7 });
+    // Descending klaxon — two harsh sawtooth wails sweeping downward.
+    tone({ type:"sawtooth", freq:330, freqEnd:120, dur:0.45, gain:0.30, delay:0.04 });
+    tone({ type:"sawtooth", freq:247, freqEnd:90,  dur:0.55, gain:0.26, delay:0.30 });
+    // Low sub-boom under it all for weight and menace.
+    tone({ type:"sine", freq:130, freqEnd:48, dur:0.85, gain:0.30, delay:0.04 }); },
 
   // Level cleared — 4-note ascending victory jingle.
   levelClear(){ if (!ensure()) return;

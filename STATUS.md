@@ -5,6 +5,54 @@ Cross-cutting non-negotiables and the roadmap checklist are in **CLAUDE.md**;
 design intent is in **GDD.md**. Behavior described here is the source of truth for
 *reality*; where it diverges from the GDD, that divergence is intentional and noted.
 
+## Planned changes (queued — designed in GDD, build pending)
+
+Work these **one at a time, then test**. Order is simplest/most-isolated first. Each
+entry's GDD intent is canonical; the numbers below are starting suggestions to tune
+by feel. Once a change is built + tested, fold its decisions into the relevant
+"Subsystem decisions" entry and check it off here.
+
+1. ~~**Dramatic worker-death SFX** (audio only). Redesign `sfx.workerLost` in
+   `audio.js` to be longer / lower / more alarming and clearly audible (don't let the
+   shared throttle swallow it). No gameplay change. — GDD §10.~~ **DONE.**
+2. **[NEXT] "Last worker gone" SFX** (`audio.js` + `workers.js`). New one-shot cue, e.g.
+   `sfx.noWorkers()`, fired exactly once when `G.workers.length` hits 0 — from
+   **both** `rescueWorker` and `killWorker` (the two ways a worker leaves). Guard so
+   it can't double-fire and doesn't fire on level rebuild (5 reseeded). Distinct from
+   the per-rescue jingle and the all-5 callout. — GDD §7, §10.
+3. **Stronger Cleaner slow** (`config.js`). Lower `CFG.SLOW_FACTOR` from 0.5 to a
+   heavier slow (suggest **0.35**; optionally bump `slowDur` 0.9→1.1). `SLOW_FACTOR`
+   is consumed only by the Cleaner spray, so the blast radius is contained. — GDD
+   §6.1.7. ⚠ Interacts with #6 — see that entry.
+4. **Workers seek Dan on LOS** (`workers.js`). In `updateWorkers`, after the flee
+   check: if NOT fleeing a robot and `hasLineOfSight(worker, dan)`, steer toward Dan
+   at a new `seekSpeed` (suggest **60**, between `speed` 44 and `fleeSpeed` 92).
+   Priority: flee > seek-Dan > wander. — GDD §7.
+5. **Inventory bots hunt Dan when no workers** (`enemies.js`). Add a third state to
+   `updateInventory`: when `G.workers.length === 0`, target Dan and pursue (reuse the
+   hunt-pursuit logic with Dan as target, at `huntSpeed` 96 or a new `huntDanSpeed`).
+   Keeps its 1-HP melee. Re-evaluate each tick so it flips the instant workers run
+   out. — GDD §6.1.6.
+6. **Manager missile speed ramp** (`config.js` + `projectiles.js`). Give the `homing`
+   bolt a per-instance current speed starting at `missileSpeed` 90 and accelerating
+   by `missileAccel` (suggest **70 px/s²**) toward `missileSpeedMax` (suggest **210**,
+   above Dan's 185 so a straight outrun fails once it spools up). Integrate in
+   `updateHoming`; keep `missileTurnRate`. — GDD §6.1.9. ⚠ Compounds with #3: a Dan
+   slowed to ~0.35× (~65 px/s) can no longer outrun even the *base* 90 missile, so
+   once both land, walls are the only counterplay while slowed. Intended, but verify
+   the Manager fight stays fair.
+7. **Security/Manager missiles damage ground bots, no score** (`projectiles.js` +
+   `combat.js` + `config.js`). `bolt` (Security) and `homing` (Manager) now also test
+   collision vs enemies: **skip `e.flying`** (drones immune) and **skip terminals**;
+   on overlap, deal damage (suggest the bolt's Dan value: Security 2 / Manager 3) and
+   consume the projectile (homing fires its `missileBlast` AoE). Enemy deaths route
+   through a **no-score** kill path — add a flag/param to `killEnemy` (e.g.
+   `killEnemy(e, {score:false})`) that skips points + score float but still runs death
+   FX (and a caught Manager's berserk pulse). Dan collision unchanged. — GDD §6.1.8,
+   §6.1.9, §9.
+
+---
+
 ## Current state — implemented and working
 
 - Single-file HTML5 Canvas + JS game; delta-timed loop; pixelated retro warehouse look.
@@ -52,6 +100,7 @@ design intent is in **GDD.md**. Behavior described here is the source of truth f
 - **Bolt absorbed during i-frames:** a bolt overlapping Dan while he's already invulnerable is removed (counts as a blocked hit) rather than passing through to land later.
 - **Bolts die on walls** (`kind:"bolt"` sets `stopsOnWall`). Only matters when Dan ducks behind a shelf mid-flight — the intended dodge. Drone bombs set this false to ignore walls.
 - **Soap shots and enemy bolts ignore each other** — you can't currently shoot a bolt down.
+- **Enemy bolts currently ignore other enemies.** **PENDING (Planned change #7):** `bolt` (Security) and `homing` (Manager) will collide with ground robots (not `e.flying` drones, not terminals), dealing damage and a no-score kill; Dan collision unchanged.
 
 ### Sorter (L4)
 
@@ -68,7 +117,7 @@ design intent is in **GDD.md**. Behavior described here is the source of truth f
 - **Spray render is CLIPPED to walls** (`coneRayDist` raymarch per cone slice + per droplet), so the cone visually stops at shelves instead of bleeding through. Damage was already correct. Also **won't start a spray facing a wall point-blank** (`sprayMinClear` 0.4 = needs ≥40% of range open ahead).
 - **Spray DoT uses its own tick timer** (`dan.sprayTick`/`tickEvery`), NOT the melee/bolt i-frame window — DoT hazard, ignores i-frames, overlapping cones can't double-tick. Slow always refreshes while inside. Damage stays LOS-gated via `danInSprayCone`. (Alt: gate damage by i-frames.)
 - **No contact damage** (mop the bot freely; `meleeContact` 0-dmg guard).
-- **Slow = movement only** (`SLOW_FACTOR` 0.5); fire rate unaffected. `sprayRange` 108 / ~60° cone / `slowDur` 0.9 s are the feel dials.
+- **Slow = movement only** (`SLOW_FACTOR` 0.5); fire rate unaffected. `sprayRange` 108 / ~60° cone / `slowDur` 0.9 s are the feel dials. **PENDING (Planned change #3):** strengthen the slow (lower `SLOW_FACTOR`, ~0.35).
 
 ### Drone (L6)
 
@@ -82,11 +131,11 @@ design intent is in **GDD.md**. Behavior described here is the source of truth f
 
 ### Manager (L7)
 
-- **Missile is outrunnable by design.** `missileSpeed` 90 px/s vs Dan's 185 px/s — even slowed by Cleaner spray (×0.5 = 92.5 px/s) Dan can barely outpace it. `missileTurnRate` 1.4 rad/s lets it track straights; counterplay is sharp corners into shelving to lure it into a wall-AoE. Tune `missileSpeed` up (harder) or `missileTurnRate` down (easier).
+- **Missile is outrunnable by design.** `missileSpeed` 90 px/s vs Dan's 185 px/s — even slowed by Cleaner spray (×0.5 = 92.5 px/s) Dan can barely outpace it. `missileTurnRate` 1.4 rad/s lets it track straights; counterplay is sharp corners into shelving to lure it into a wall-AoE. Tune `missileSpeed` up (harder) or `missileTurnRate` down (easier). **PENDING (Planned change #6):** the missile will start at this speed and **accelerate** to `missileSpeedMax` (~210). ⚠ Compounds with **Planned change #3** (stronger Cleaner slow): a slowed Dan at ~0.35× ≈ 65 px/s can no longer outrun even the *base* 90 missile, so once both land, walls are the only counterplay while slowed. Verify the combined fight is fair.
 - **Wall impact = small AoE, not a ricochet.** Missile detonates on any wall tile with `missileBlast` 24 px radius — harmless if Dan's clear. (Alt: ricochet like bounce-shot.)
 - **Berserk refresh = max of existing vs new.** Two Managers dying near the same robot refresh the timer to whichever is longer (`Math.max(existing, berserDur)`), not stacked.
 - **L7 is a mixed-type level.** Manager terminals + 2 hardcoded Picker terminals + 3 preplaced Pickers. The spawn loop iterates all terminal types present (multi-type support generalized — any future mixed level works without further changes). Picker `max` (22) and Manager `interval` (8 s) govern their cadences.
-- **Score float on all enemy kills.** `killEnemy` calls `addFloat` for every type (previously only terminal destructions). Minor feedback improvement; revert easily.
+- **Score float on all enemy kills.** `killEnemy` calls `addFloat` for every type (previously only terminal destructions). Minor feedback improvement; revert easily. **PENDING (Planned change #7):** `killEnemy` needs a no-score variant so missile friendly-fire kills (Security/Manager) award no points/float.
 - **Manager contact damage = 0.** Pure ranged unit. Even berserk, no melee. The berserk dmg bonus only applies to enemies with `dmg > 0` (Pickers, Forklifts, Security).
 
 ### Scanner (L8)
@@ -123,12 +172,14 @@ design intent is in **GDD.md**. Behavior described here is the source of truth f
 - **Escalating value via `rescueBase·2^G.rescued`** (`G.rescued` = rescues *this level*, reset in `buildLevel`). One counter drives both the points and the HUD; the doubling is data (`CFG.WORKER.rescueBase` 100), not hardcoded per-step.
 - **Workers can't die yet.** Only the Inventory Bot (§6.1.6, unbuilt) kills workers; `updateWorkers` has no death path, so for now a worker only leaves the level by rescue. The Inventory Bot will add a kill→`G.workers.splice` (no points, gone for the level) without touching rescue.
 - **Avoidance is reactive, not pathfound.** A worker flees directly away from the single nearest robot inside `avoidRadius` (130 px) at `fleeSpeed`; otherwise it wanders (re-pick heading every `wanderMin..wanderMax` s) at `speed`. `moveBody` slides it along shelves; a fully-boxed step turns the heading. Good enough for "wander, avoid robots" flavor — no flow field. (Alt: steer from all nearby robots / flee toward open space.)
+- **PENDING (Planned change #4):** add a **seek-Dan** branch — when NOT fleeing and the worker has `hasLineOfSight` to Dan, steer toward Dan at a new `seekSpeed` (~60) to make rescue easier. Priority: flee > seek-Dan > wander.
 - Feel dials: `count` 5 / `speed` 44 / `fleeSpeed` 92 / `avoidRadius` 130 / `wander` 0.7–2.0 s / `rescueBase` 100.
 
 ### Inventory Bot (L9)
 
 - **Worker kill is centralized in `workers.js`.** `updateInventory` calls the exported `killWorker(w)` (red callout, splice, **no points / no rescue credit**) — the same module that owns `rescueWorker`, so "a worker leaves the level" lives in one place. The bot is the *only* caller; nothing else can kill a worker.
 - **Hunt acquisition = proximity OR timer.** Snaps to HUNT when the nearest worker is within `proxAcquire` (150 px), or every `huntPeriod` (6 s) regardless — so it still goes looking even when no worker is close. Loses its target (rescued by Dan or already killed) → re-locks the nearest remaining, or falls back to WANDER if none. (Alt: always-hunt — rejected; the oblivious wander is half the GDD identity and gives Dan breathing room.)
+- **PENDING (Planned change #5):** when `G.workers.length === 0` (no workers left to hunt), the bot switches to **pursuing Dan** instead of wandering, dealing its 1-HP melee. Checked each tick so it turns on Dan the instant the last worker is gone.
 - **`huntSpeed` (96) just edges worker `fleeSpeed` (92).** Workers flee it (it's a robot inside their `avoidRadius`), so on open ground it barely gains — the kills come from **cornering** against shelves. "Slow but relentless." Tune `huntSpeed` up to make it scarier, down to make workers more survivable.
 - **Melee = 1 HP to Dan** (`dmgContact`, explicit branch in the melee block; takes the berserk/alarm bonus like other melee units). HP 1 — trivially killed, but you have to *notice* it peeling off toward a worker.
 
@@ -147,7 +198,9 @@ design intent is in **GDD.md**. Behavior described here is the source of truth f
 - **Escalating rescue pitch.** `sfx.rescue(G.rescued)` is called *before* `G.rescued++`, so the 0-based step (0→4) raises the pitch with each of the 5 rescues — an audio analogue of the doubling score (capped at step 5 in `audio.js`).
 - **Autoplay policy.** AudioContext starts suspended; `unlock()` (resume) is called from the first keydown/mousedown/touchstart in `input.js`. The context is also lazily created on the first `sfx.*` call, so a sound fired before any gesture simply no-ops until unlocked rather than throwing.
 - **Throttling, not voice-capping.** A min-interval per noisy sound (`shoot` 0.05 / `pop` 0.04 / `enemyFire` 0.05 / `hurt` 0.12 s) drops duplicates fired the same frame (e.g. a Triple volley popping 3 enemies). Cheaper than counting concurrent voices; one-shot jingles aren't throttled.
+- **`workerLost` is a dramatic, prominent death sting** (GDD §10): a low-pass noise **thud** the instant the worker drops, an alarming **two-tone descending sawtooth klaxon** (330→120 then 247→90 Hz), and a sustained **low sine sub-boom** (130→48 Hz, ~0.85 s tail) underneath — deliberately longer, lower, and louder than the generic `hurt`/`pop` so a worker loss reads unmistakably. It is **deliberately kept out of `THROTTLE`** (it's a rare, important one-shot), so it always plays in full and never gets clipped by rapid combat sounds. (Replaced the old short sine down-tone.)
 - **Mute = `M` key** (`input.js`), toggling `master.gain` between `CFG.AUDIO.master` (0.35) and 0. `CFG.AUDIO.enabled` is the startup state.
+- **PENDING (Planned change #2):** add a new one-shot `sfx.noWorkers` cue fired once when the last worker leaves (from both `rescueWorker` and `killWorker`); distinct from the per-rescue jingle and the all-5 callout.
 - **Divergence from GDD §10:** the GDD specifies only the 3 SFX above; the other 13 are additions for game feel (approved). Nothing in §10 was contradicted — only extended. A sustained vortex-hum during the Dustbin attract phase was considered and **deferred** (needs a managed looping voice tied to the state machine); the one-shot `deploy` whoosh ships instead.
 
 ---
