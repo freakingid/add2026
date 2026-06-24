@@ -189,7 +189,8 @@ export const ENEMY = {
     fireCd:3.5, firstFireMin:1.0, windup:0.4,
     // --- homing missile (new kind; slow-tracking, outrunnable, lures into walls) ---
     missileSpeed:90, missileDmg:3, missileRadius:7,
-    missileRange:580, missileTurnRate:1.4,   // rad/s max steer; sprint = outrun it
+    missileAccel:70, missileSpeedMax:210,    // spools up from missileSpeed → above Dan's 185, so a straight outrun fails once it winds up
+    missileRange:580, missileTurnRate:1.4,   // rad/s max steer; sprint = outrun it (early; corner it before it spools up)
     missileBlast:24,                         // small AoE if it hits a wall or Dan
     // --- on-death berserk pulse ---
     berserRadius:220,                        // how far the pulse reaches from death point

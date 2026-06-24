@@ -30,6 +30,8 @@ export function fireEnemyHoming(e, d){
     vx: Math.cos(angle) * d.missileSpeed,
     vy: Math.sin(angle) * d.missileSpeed,
     speed:    d.missileSpeed,
+    accel:    d.missileAccel,                 // spools up each frame...
+    speedMax: d.missileSpeedMax,             // ...up to this cap (above Dan's run speed)
     turnRate: d.missileTurnRate,
     r:    d.missileRadius,
     dmg:  d.missileDmg,
@@ -180,10 +182,15 @@ function updateDrop(b, dt){
   return false;
 }
 
-// Advance a homing missile: steer toward Dan each frame by up to `turnRate` rad/s
-// (capped so it's outrunnable on straights). Stops on wall impact (small AoE) or
+// Advance a homing missile: accelerate from `speed` toward `speedMax` while
+// steering toward Dan each frame by up to `turnRate` rad/s. Outrunnable while it
+// spools up (and always lurable into walls), but it overtakes a straight runner
+// once it reaches full speed (> Dan's run). Stops on wall impact (small AoE) or
 // Dan overlap, and expires at max range. Returns true when finished.
 function updateHoming(b, dt){
+  // Spool up: accelerate toward speedMax so a straight outrun only works early.
+  b.speed = Math.min(b.speedMax, b.speed + b.accel * dt);
+
   // Steer toward Dan with a capped turn so the missile can be outrun or lured.
   const curAngle = Math.atan2(b.vy, b.vx);
   const targetAngle = Math.atan2(G.dan.y - b.y, G.dan.x - b.x);
