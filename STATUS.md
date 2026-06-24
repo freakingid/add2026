@@ -5,61 +5,24 @@ Cross-cutting non-negotiables and the roadmap checklist are in **CLAUDE.md**;
 design intent is in **GDD.md**. Behavior described here is the source of truth for
 *reality*; where it diverges from the GDD, that divergence is intentional and noted.
 
-## Planned changes (queued — designed in GDD, build pending)
+## Planned changes
 
-Work these **one at a time, then test**. Order is simplest/most-isolated first. Each
-entry's GDD intent is canonical; the numbers below are starting suggestions to tune
-by feel. Once a change is built + tested, fold its decisions into the relevant
-"Subsystem decisions" entry and check it off here.
+Work these **one at a time, then test**. Once a change is built + tested, fold its
+decisions into the relevant "Subsystem decisions" entry and remove the entry here.
 
-1. ~~**Dramatic worker-death SFX** (audio only). Redesign `sfx.workerLost` in
-   `audio.js` to be longer / lower / more alarming and clearly audible (don't let the
-   shared throttle swallow it). No gameplay change. — GDD §10.~~ **DONE.**
-2. ~~**"Last worker gone" SFX** (`audio.js` + `workers.js`). New one-shot cue, e.g.
-   `sfx.noWorkers()`, fired exactly once when `G.workers.length` hits 0 — from
-   **both** `rescueWorker` and `killWorker` (the two ways a worker leaves). Guard so
-   it can't double-fire and doesn't fire on level rebuild (5 reseeded). Distinct from
-   the per-rescue jingle and the all-5 callout. — GDD §7, §10.~~ **DONE.**
-3. ~~**Stronger Cleaner slow** (`config.js`). Lower `CFG.SLOW_FACTOR` from 0.5 to a
-   heavier slow (suggest **0.35**; optionally bump `slowDur` 0.9→1.1). `SLOW_FACTOR`
-   is consumed only by the Cleaner spray, so the blast radius is contained. — GDD
-   §6.1.7. ⚠ Interacts with #6 — see that entry.~~ **DONE** (`SLOW_FACTOR` 0.35, `slowDur` 1.1).
-4. ~~**Workers seek Dan on LOS** (`workers.js`). In `updateWorkers`, after the flee
-   check: if NOT fleeing a robot and `hasLineOfSight(worker, dan)`, steer toward Dan
-   at a new `seekSpeed` (suggest **60**, between `speed` 44 and `fleeSpeed` 92).
-   Priority: flee > seek-Dan > wander. — GDD §7.~~ **DONE** (`seekSpeed` 60).
-5. ~~**Inventory bots hunt Dan when no workers** (`enemies.js`). Add a third state to
-   `updateInventory`: when `G.workers.length === 0`, target Dan and pursue (reuse the
-   hunt-pursuit logic with Dan as target, at `huntSpeed` 96 or a new `huntDanSpeed`).
-   Keeps its 1-HP melee. Re-evaluate each tick so it flips the instant workers run
-   out. — GDD §6.1.6.~~ **DONE** (new `huntDanSpeed` 105, reuses "hunt" mode).
-6. ~~**Manager missile speed ramp** (`config.js` + `projectiles.js`). Give the `homing`
-   bolt a per-instance current speed starting at `missileSpeed` 90 and accelerating
-   by `missileAccel` (suggest **70 px/s²**) toward `missileSpeedMax` (suggest **210**,
-   above Dan's 185 so a straight outrun fails once it spools up). Integrate in
-   `updateHoming`; keep `missileTurnRate`. — GDD §6.1.9. ⚠ Compounds with #3: a Dan
-   slowed to ~0.35× (~65 px/s) can no longer outrun even the *base* 90 missile, so
-   once both land, walls are the only counterplay while slowed. Intended, but verify
-   the Manager fight stays fair.~~ **DONE** (`missileAccel` 70, `missileSpeedMax` 210).
-7. ~~**Security/Manager missiles damage ground bots, no score** (`projectiles.js` +
-   `combat.js` + `config.js`). `bolt` (Security) and `homing` (Manager) now also test
-   collision vs enemies: **skip `e.flying`** (drones immune) and **skip terminals**;
-   on overlap, deal damage (suggest the bolt's Dan value: Security 2 / Manager 3) and
-   consume the projectile (homing fires its `missileBlast` AoE). Enemy deaths route
-   through a **no-score** kill path — add a flag/param to `killEnemy` (e.g.
-   `killEnemy(e, {score:false})`) that skips points + score float but still runs death
-   FX (and a caught Manager's berserk pulse). Dan collision unchanged. — GDD §6.1.8,
-   §6.1.9, §9.~~ **DONE** (`damageEnemy` helper + `killEnemy(i, {score:false})`; reuses bolt/missile Dan damage, no new config).
-
-**Queue clear** — all 7 planned changes built.
+_(none queued — the Controls overhaul shipped; see "Controls / input" below.)_
 
 ---
 
 ## Current state — implemented and working
 
 - Single-file HTML5 Canvas + JS game; delta-timed loop; pixelated retro warehouse look.
-- **Dan:** WASD + diagonals, mouse aim/fire, 8-key keyboard directional fire
-  (`i o p` / `k l ;` / `, . /`, `l` = no-fire center — see CLAUDE.md), 20 HP,
+- **Dan:** device-agnostic controls (GDD §4) — keyboard+mouse OR gamepad, chosen on
+  the title and locked for the run (`G.inputMode`). Keyboard: WASD move (diagonals =
+  two adjacent), O/P/L/K cardinal fire (diagonals = two adjacent, vector-sum angle),
+  mouse aim + left-click fire, E/F special. Gamepad: left stick move, right stick
+  aim+fire, any bumper/trigger special. All player code reads `getMoveVec()` /
+  `getFireAngle()` / `isDeploySpecial()` (see "Controls / input"). 20 HP,
   melee-on-contact with knockback + i-frames.
 - **Soap launcher:** finite range, base cooldown, base cap 3.
 - **Power-ups (Rapid / Triple / Bounce):** shot-count based, stackable, independent
@@ -94,6 +57,50 @@ by feel. Once a change is built + tested, fold its decisions into the relevant
 ---
 
 ## Subsystem decisions (confirm if changing feel)
+
+### Controls / input (GDD §4.1, §4.3, §4.5–§4.8)
+
+- **One device per run, picked on the title.** `G.inputMode` is `null` on the title,
+  then `'keyboard'` or `'gamepad'` — set by `startRun(mode)` in `input.js` (a wrapper
+  that calls `newGame()` then assigns the mode). First valid title input wins: SPACE /
+  ENTER / click / touch → keyboard; gamepad `BTN_START` (9/0) → gamepad. The opposing
+  device is then inert (its getters return zero/null), and the game-over restart keys
+  off the active mode. GDD §4.5 rationale: keyboard snaps to 8 dirs, gamepad is 360° —
+  mixing mid-run is confusing. *(`newGame()` itself is NOT modified to reset
+  `G.inputMode`; the mode is owned entirely by `startRun`, which is the only caller of
+  `newGame`. `G.inputMode` starts `null` from `state.js`, and there is no return-to-title
+  path, so it's never stale. If a title-return is ever added, null it there.)*
+- **Device-agnostic API — no raw key/axis reads in game code.** `input.js` exports
+  `getMoveVec()` → normalized `{x,y}` (mag 0/1), `getFireAngle()` → radians or `null`,
+  `isDeploySpecial()` → edge-triggered bool. Each branches on `G.inputMode`.
+  `player.js`/`dustbin.js` call these; **never bypass `G.inputMode`**. `keys`/`mouse`
+  stay exported only for mouse-aim, the `M` mute key, and debug. Removed the old
+  `fireKeyStack`/`FIRE_ANGLES`/`keyboardFireAngle`.
+- **Diagonals are derived, not bound.** Cardinals live in `CFG.KEYS` (MOVE W/D/S/A,
+  FIRE O/P/L/K); a held diagonal is the **vector sum of two adjacent cardinals** (so
+  O+P = NE fire, W+D = NE move). Opposing fire keys (O+L) cancel to zero → no fire.
+  Remap a cardinal and the diagonals follow automatically — there are no per-diagonal
+  keys (the old `i ; , . /` single-key fire grid is gone).
+- **Aim vs. fire are separate.** `getFireAngle()` is `null` when not firing. In keyboard
+  mode `player.js` still faces Dan at the mouse cursor every frame (cursor tracking
+  always on); in gamepad mode Dan **holds his last fire heading** when the right stick
+  is centered (GDD §11). `wantFire = getFireAngle() !== null`.
+- **Gamepad is polled, not event-driven.** `pollGamepad()` (in `input.js`) runs at the
+  top of `update()` **every frame in every state** (events are unreliable across
+  browsers; title/dead need it to start/restart). It caches `navigator.getGamepads()[0]`
+  for the getters and edge-detects `BTN_START`. Left stick = axes 0/1, right = 2/3;
+  any push past `moveDeadzone`/`fireDeadzone` (0.2) acts at full magnitude (movement is
+  not pressure-sensitive, GDD §4.6). Special = any `BTN_SPECIAL` (4–7, bumpers/triggers).
+- **`isDeploySpecial()` owns the deploy edge-trigger** (moved out of `dustbin.js`'s old
+  `deployHeld`). It tracks one `prevDeploy` bool and **must be called exactly once per
+  frame** — it is, as the first term of `updateDustbin`'s deploy `if` (short-circuit
+  keeps it always-evaluated). Throw direction now comes from `getMoveVec()` (left stick
+  or WASD), so a moving deploy throws and a centered one drops in place, in either mode.
+- **Title shows both modes; the fire legend matches.** `screens.js` renders "SPACE —
+  KEYBOARD" / "A / START — GAMEPAD" and a 3×3 legend with O/P/L/K cardinals + the four
+  two-key diagonal combos (empty center). Game-over prompt is mode-keyed; level-clear
+  auto-advances (no prompt). Pure math is unit-tested in `test-input.js` (`node
+  test-input.js`); full gamepad/loop integration needs a browser.
 
 ### Ranged system (Security / `ebolts`)
 
@@ -163,7 +170,7 @@ by feel. Once a change is built + tested, fold its decisions into the relevant
 - **The pull respects walls for ground bots, ignores them for fliers.** Grounded robots are moved via `moveBody` (they slide along shelves toward the vortex — reads naturally); `e.flying` drones move freely (consistent with their no-wall identity). `pullSpeed` 150 over 2.5 s drags edge-of-radius bots (260) well inside the blast (200), so the attract reliably feeds the detonation.
 - **Detonation routes through `killEnemy`** so robots award their **normal points** (GDD §5.3) with the usual score float — and a Manager caught in the blast still emits its on-death berserk pulse (harmless, everything near it is also being detonated). `blastDmg` 99 one-shots any current type ("destroys", not "heavily damages" — simpler + more satisfying than partial damage; tune down for survivors).
 - **Dan is immune to his own blast.** GDD doesn't specify; making it a pure panic-button/crowd-control tool (no self-damage) matches the "panic button" framing. (Alt: self-damage if standing in the blast — would punish the panic use it's designed for.)
-- **Throw vs. drop is read from movement KEYS, not Dan's velocity.** Holding a WASD direction at deploy throws along it; no keys = drop in place → immediate attract. Knockback velocity is ignored so a knocked-back Dan still "drops" rather than flinging the bin. Slide uses the same per-axis wall-bounce as bounce-shots; bouncing off a far wall to settle in a mob's centre is the GDD §5.4 "advanced play".
+- **Throw vs. drop is read from movement input, not Dan's velocity.** In keyboard mode: holding a WASD direction at deploy throws along it; no keys = drop in place. In gamepad mode: left stick direction at deploy is the throw direction; stick centered = drop in place. Knockback velocity is ignored so a knocked-back Dan still "drops" rather than flinging the bin. Slide uses the same per-axis wall-bounce as bounce-shots; bouncing off a far wall to settle in a mob's centre is the GDD §5.4 "advanced play". (Previously: "holding a WASD direction at deploy throws" — now abstracted through `getMoveVec()`.)
 - **Carry persists across levels, the deployed bin does not.** `G.dan.hasDustbin` is only reset by `newGame` (like HP/power-ups/score); `buildLevel` nulls any in-flight `G.dustbin` and reseeds the floor pickup. **Floor placement is rare:** guaranteed on L1 (so a fresh run can always find/learn the special), then `spawnChance` 0.5 per level — the L1 guarantee is testing scaffolding to dial down with §8.1.
 - **One active at a time.** Deploy is gated on `!G.dustbin`, and Dan holds at most one (`hasDustbin` collection guard), so there's never more than a single vortex/blast in flight.
 - Feel dials: `r` 14 / `throwSpeed` 300 / `friction` 2.2 / `stopSpeed` 30 / `bounce` 0.7 / `attractDur` 2.5 / `attractRadius` 260 / `pullSpeed` 150 / `blastRadius` 200 / `blastDmg` 99 / `spawnChance` 0.5.
@@ -218,11 +225,11 @@ by feel. Once a change is built + tested, fold its decisions into the relevant
 
 **Module layout** (leaf-first; arrows = imports):
 
-- **`config.js`** — `CFG`, `ENEMY` (per-type stat table + ranged stats), `POWERUPS`/`POWERUP_KEYS`, `LEVEL_PLAN`. Pure data. *No imports.*
+- **`config.js`** — `CFG` (incl. `CFG.KEYS` cardinal assignments + `CFG.GAMEPAD` deadzones/button indices), `ENEMY` (per-type stat table + ranged stats), `POWERUPS`/`POWERUP_KEYS`, `LEVEL_PLAN`. Pure data. *No imports.*
 - **`palette.js`** — `COL`, `TERMINAL_TINT`. *No imports.*
 - **`canvas.js`** — `canvas`, `ctx`, `VIEW_W/H`. *No imports.*
 - **`audio.js`** — Web Audio SFX (GDD §10): the `sfx.*` sound library + `tone`/`noise`/`sequence` synth helpers, lazy AudioContext + `master` gain, `unlock`/`toggleMute`/`isMuted`, per-sound throttle. ← config (`CFG.AUDIO`) only. Called for its side-effects from player/combat/projectiles/enemies/dustbin/level/vending/workers/update; `unlock`+`toggleMute` from input.
-- **`state.js`** — `G` (the mutable container: run meta + entities `dan/shots/enemies/terminals/pickups/marks/floats/ebolts/vending/dustbin/dustbinPickups/workers/camera/exit` + `spawnTimer`/`pickupTimer`) and `levelType()`. ← config.
+- **`state.js`** — `G` (the mutable container: run meta + entities `dan/shots/enemies/terminals/pickups/marks/floats/ebolts/vending/dustbin/dustbinPickups/workers/camera/exit` + `spawnTimer`/`pickupTimer` + `inputMode`) and `levelType()`. ← config.
 - **`world.js`** — `map[][]` (exported `let`, reassigned only here), `isWall`/`isBorderTile`/`generateWarehouse`/`randomFloorTile`/`randomFloorTileNearWall` (wall-adjacent tile for flush placement)/`hasLineOfSight`/`destroyShelf`, collision `bodyHitsWall`/`moveBody`, tile helpers `tileFloor`/`tileCenter`/`tileClearRun`/`rectPerimeterClear`, `clamp`. ← config, canvas, state.
 - **`effects.js`** — `addFloat`, `updateEffects` (marks + floats lifetimes). ← state.
 - **`combat.js`** — shared damage/death: `hitDanRanged`/`hitDanArea` (i-frame + knockback), `meleeContact` (0-dmg-safe; `berserDmgBonus` when berserk), `damageEnemy` (friendly-fire damage → no-score kill), `killEnemy(index, {score})` (points + score float unless `score:false`; Manager berserk pulse either way), `destroyTerminal`. ← config, palette, state, effects.
@@ -230,13 +237,13 @@ by feel. Once a change is built + tested, fold its decisions into the relevant
 - **`enemies.js`** — `spawnEnemy` (per-type init), `updateEnemies` (dispatch + melee contact via `combat`), per-type AI `updatePicker/Forklift/Security/Sorter/Cleaner/Drone/Manager/Scanner/Inventory`, `buffSpd` (combined Manager-berserk + Scanner-alarm speed mult), Cleaner/Scanner patrol routing (`nearestWaypoint`/`buildCleanerPatrol`/`advancePatrol`) + Cleaner spray helpers (`danInSprayCone`/`coneRayDist`(exported, also clips the rendered cone)/`applySpray`). ← config, state, world, combat, projectiles, **workers** (`killWorker`, for the Inventory Bot), **dustbin** (`vortexHold`, for the attract phase).
 - **`level.js`** — `newGame` (full reset) → `buildLevel` (world + terminals + exit + 5 workers + vending machines + dustbin pickup; single-type, or the `"mixed"` branch seeding one terminal of every real type; keeps HP/powerups/score/carried-dustbin) → `nextLevel`; spawner-terminal emission `spawnFromTerminal`/`spawnWave`; pickups `spawnPickup`/`updatePickups`. ← config, state, world, enemies, vending, dustbin, effects.
 - **`vending.js`** — `placeVendingMachines` (per-level flush-against-wall placement) + `updateVending` (contact trigger, maxHp-capped heal, single-use depletion). ← config, state, world (`randomFloorTileNearWall`/`tileCenter`), effects, palette. Called from `level.js` (place) and `update.js` (update); drawn by `render.js`.
-- **`dustbin.js`** — the Atomic Dustbin special (GDD §5): `placeDustbins` (rare floor-pickup seeding), `updateDustbin` (collect + deploy E/F + slide→attract→detonate state machine), `vortexHold` (the attract-phase pull, called from `enemies.js`). ← config, state, **input** (`keys`), world, combat (`killEnemy`), effects, palette. Called from `level.js` (place) and `update.js` (update); drawn by `render.js`. NB: `dustbin → input → level → dustbin` is an import cycle, but every cross-module use is inside a function (runtime), so module evaluation is safe.
+- **`dustbin.js`** — the Atomic Dustbin special (GDD §5): `placeDustbins` (rare floor-pickup seeding), `updateDustbin` (collect + deploy E/F + slide→attract→detonate state machine), `vortexHold` (the attract-phase pull, called from `enemies.js`). ← config, state, **input** (`keys`, and after overhaul: `isDeploySpecial`/`getMoveVec`), world, combat (`killEnemy`), effects, palette. Called from `level.js` (place) and `update.js` (update); drawn by `render.js`. NB: `dustbin → input → level → dustbin` is an import cycle, but every cross-module use is inside a function (runtime), so module evaluation is safe.
 - **`workers.js`** — `updateWorkers` (wander/avoid + rescue-on-contact), `rescueWorker` (escalating points + counter + callout), and `killWorker` (exported; Inventory Bot's no-points worker kill). ← config, palette, state, world, effects.
-- **`input.js`** — `keys`, `mouse`, `fireKeyStack`, `FIRE_ANGLES`, `keyboardFireAngle`; registers key/mouse/touch listeners on import (side-effect). Also unlocks audio on the first gesture and binds `M` = mute. ← canvas, state, level (`newGame`), audio (`unlock`/`toggleMute`).
+- **`input.js`** — device-agnostic input layer. Exports `getMoveVec()`/`getFireAngle()`/`isDeploySpecial()` (route by `G.inputMode`), `pollGamepad()` (called from `update.js`), and the raw `keys`/`mouse` (mouse aim, `M` mute, debug). Registers key/mouse/touch listeners on import (side-effect), unlocks audio on the first gesture, binds `M` = mute, and starts/restarts runs via `startRun(mode)`. ← config, canvas, state, level (`newGame`), audio (`unlock`/`toggleMute`).
 - **`player.js`** — `updateDan` (slow move-scaling, decays `slow`/`sprayTick`), `fireVolley`/`fireBubble`, `updateShots` (bubble↔enemy↔terminal). ← config, state, input, world, combat.
-- **`update.js`** — `update(dt)` orchestrator (Dan → shots → **dustbin** → spawn → enemies → ebolts → pickups → vending → workers → effects → camera) + `updateCamera` + spawn/terminal/exit/death bookkeeping. ← state, config, player, enemies, projectiles, workers, vending, dustbin, level, effects, world, canvas.
+- **`update.js`** — `update(dt)` orchestrator: `pollGamepad()` first (every state), then (when playing) Dan → shots → **dustbin** → spawn → enemies → ebolts → pickups → vending → workers → effects → camera + `updateCamera` + spawn/terminal/exit/death bookkeeping. ← state, config, input (`pollGamepad`), player, enemies, projectiles, workers, vending, dustbin, level, effects, world, canvas.
 - **`render-entities.js`** — `drawEnemies` (per-type sprites + berserk aura) + `drawEbolts` (bolt/arc/drop/homing). ← canvas, state, config, palette, enemies (`coneRayDist`).
-- **`screens.js`** — `drawHUD` + `drawTitle`/`drawLevelClear`/`drawGameOver` (+ internal `drawFireLegend`). ← canvas, state, config, palette.
+- **`screens.js`** — `drawHUD` + `drawTitle` (both "SPACE — KEYBOARD" / "A / START — GAMEPAD" options + the O/P/L/K `drawFireLegend`) / `drawLevelClear` / `drawGameOver` (continue prompt keyed to `G.inputMode`). ← canvas, state, config, palette.
 - **`render.js`** — `render()` compositor + world/entity draws (`drawFloor`/`drawWalls`/`drawMarks` incl. the `"blast"` detonation ring/`drawExit`/`drawExitPointer`/`drawVending`/`drawDustbins`(floor pickups + sliding canister + attract vortex, via `drawDustbinCan`)/`drawTerminals`/`drawShots`/`drawPickups`/`drawWorkers`/`drawFloats`/`drawDan` incl. carried-dustbin cue). ← canvas, state, config, palette, world, render-entities, screens.
 - **`atomic-dustbin-dan.html`** — entry: imports `update` + `render` (+ `input` for its listeners) and runs the delta-timed `loop`. Nothing else.
 

@@ -16,6 +16,7 @@ export const G = {
   high:0,
   level:1,
   transition:0,        // countdown timer for the level-clear splash
+  inputMode:null,      // null (choose on title) | "keyboard" | "gamepad" (GDD §4.5)
 
   // entities (populated by newGame / buildLevel)
   dan:null,

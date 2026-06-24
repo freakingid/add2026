@@ -25,17 +25,37 @@ is a design decision, not a fix.
 - **Worker rescue values double: 100/200/400/800/1600** (`rescueBase·2^G.rescued`), summing to 3,100 for all 5. **Rescuing all 5 does NOT auto-complete the level** — the exit door stays the only level-end trigger (GDD §8.2 was TBD; this is the chosen resolution). `G.rescued` resets each level; score persists. Workers are killable only by the (unbuilt) Inventory Bot.
 - **After every implementation change, update STATUS.md** — the "Current state" bullet for the affected system and the relevant subsystem decisions block if reasoning changed. STATUS.md is the handoff artifact; it must reflect reality after every session.
 
-### Keyboard fire keys (canonical — matches GDD §4.3)
+### Controls (canonical — matches GDD §4.1, §4.3, §4.5–§4.8)
 
-Compass 3×3 on the right hand, `l` = no-fire center:
+**Input is device-agnostic.** Player-action code NEVER reads raw keys/axes — it calls
+`input.js`'s `getMoveVec()` / `getFireAngle()` / `isDeploySpecial()`, which route to
+keyboard or gamepad by **`G.inputMode`** (`null` on title, then `'keyboard'` or
+`'gamepad'`). **Never bypass `G.inputMode`** when reading input. Cardinal key
+assignments live in `CFG.KEYS` (`MOVE` N=W E=D S=S W=A · `FIRE` N=O E=P S=L W=K);
+**diagonals are derived at runtime** as the vector sum of two adjacent cardinals —
+there are NO dedicated single-key diagonals.
+
+**Keyboard fire** — four cardinals, diagonal = two adjacent held; fire angle is the
+normalized vector sum (opposing keys cancel → no fire). Mouse aims + left-click fires
+(keyboard mode only); Dan faces the cursor whenever no fire key is held.
 
 ```
-i o p     NW N NE
-k l ;     W  ·  E
-, . /     SW S SE
+O+K  O  O+P     NW N NE
+ K  (·) P       W  ·  E
+L+K  L  L+P     SW S SE
 ```
 
-NW=i  N=o  NE=p  W=k  E=;  SW=,  S=.  SE=/
+N=O  E=P  S=L  W=K   ·   NW=O+K  NE=O+P  SW=L+K  SE=L+P
+
+**Keyboard movement** — WASD cardinals; diagonal = two adjacent (W+A=NW, W+D=NE,
+S+A=SW, S+D=SE). **Special** (Atomic Dustbin) = E or F. **Gamepad** — left stick move
+(360°), right stick aim+fire (360°), any bumper/trigger (BTN 4–7) = special, Start/A
+(BTN 9/0) = start/restart. Deadzones + button indices in `CFG.GAMEPAD`.
+
+**Mode selection** — title offers both ("SPACE — KEYBOARD" / "A / START — GAMEPAD");
+first valid input locks the mode for the run, disabling the opposing device. Game-over
+restart keys off the active mode. `newGame()` is wrapped by `startRun(mode)` in
+`input.js`, which sets `G.inputMode` after the rebuild.
 
 Per-subsystem "confirm if changing feel" decisions (ranged/i-frames, Sorter, Cleaner,
 Drone, Manager) live in STATUS.md next to each system.

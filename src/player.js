@@ -8,32 +8,26 @@
    ========================================================================= */
 import { CFG } from "./config.js";
 import { G } from "./state.js";
-import { keys, mouse, keyboardFireAngle } from "./input.js";
+import { mouse, getMoveVec, getFireAngle } from "./input.js";
 import { moveBody, isWall } from "./world.js";
 import { killEnemy, destroyTerminal } from "./combat.js";
 import { sfx } from "./audio.js";
 
 export function updateDan(dt){
-  // Aim priority: a held keyboard fire key wins; otherwise face the mouse.
-  const kbAngle = keyboardFireAngle();
-  if (kbAngle !== null){
-    G.dan.angle = kbAngle;
-  } else {
+  // Aim: the active fire direction wins. When not firing, keyboard mode keeps Dan
+  // facing the mouse cursor; gamepad mode holds his last fire heading (GDD §11).
+  const fireAngle = getFireAngle();
+  if (fireAngle !== null){
+    G.dan.angle = fireAngle;
+  } else if (G.inputMode !== "gamepad"){
     const mwx = mouse.sx + G.camera.x;
     const mwy = mouse.sy + G.camera.y;
     G.dan.angle = Math.atan2(mwy - G.dan.y, mwx - G.dan.x);
   }
 
-  // movement input
-  let ix = 0, iy = 0;
-  if (keys["w"]) iy -= 1;
-  if (keys["s"]) iy += 1;
-  if (keys["a"]) ix -= 1;
-  if (keys["d"]) ix += 1;
-  if (ix || iy){
-    const len = Math.hypot(ix, iy);
-    ix /= len; iy /= len;
-  }
+  // movement input — already normalized (mag 0 or 1) by the input layer.
+  const mv = getMoveVec();
+  const ix = mv.x, iy = mv.y;
   // Cleaner spray slows Dan's movement while the debuff is active.
   const moveSpeed = CFG.DAN_SPEED * (G.dan.slow > 0 ? CFG.SLOW_FACTOR : 1);
   moveBody(G.dan, ix * moveSpeed * dt, iy * moveSpeed * dt);
@@ -51,8 +45,8 @@ export function updateDan(dt){
   if (G.dan.slow > 0) G.dan.slow -= dt;
   if (G.dan.sprayTick > 0) G.dan.sprayTick -= dt;
 
-  // fire — mouse held OR a directional fire key held
-  const wantFire = mouse.down || kbAngle !== null;
+  // fire — a fire direction is active (keyboard fire keys / mouse, or right stick)
+  const wantFire = fireAngle !== null;
 
   // Active power-up flags this trigger (GDD 3).
   const rf  = G.powerups.rapid  > 0;

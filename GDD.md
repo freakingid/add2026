@@ -6,9 +6,8 @@ rules, see CLAUDE.md. Section numbers here are stable — STATUS.md references t
 
 ### Build status index
 
-- **Built:** §2 Player (incl. §2.5 Vending Machines), §3 Power-ups, §4 Controls (incl. §4.4 special-item deploy), §5 Atomic Dustbin special, §6 Enemies (**full roster**: Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner, Inventory + Dispatch Terminal) plus a `"mixed"` all-types sandbox level, §7 Human workers + rescue scoring, §8.2 level-end, §8.3 progression, §10 audio.
+- **Built:** §2 Player (incl. §2.5 Vending Machines), §3 Power-ups, §4 Controls (**full**: §4.1 keyboard move, §4.2 mouse aim/fire, §4.3 keyboard directional fire O/P/L/K + two-key diagonals, §4.4 keyboard special, §4.5 input-mode selection, §4.6–§4.8 gamepad move/fire/special — device-agnostic `input.js`, see STATUS "Controls / input"), §5 Atomic Dustbin special, §6 Enemies (**full roster**: Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner, Inventory + Dispatch Terminal) plus a `"mixed"` all-types sandbox level, §7 Human workers + rescue scoring, §8.2 level-end, §8.3 progression, §10 audio.
 - **Designed, NOT yet built:** full guaranteed-placement procgen (§8.1), §10 sprite-art polish.
-- **Queued balance/behavior revisions (intent below is canonical; builds pending):** see STATUS.md → "Planned changes". Touches §6.1.6 (Inventory hunts Dan once workers are gone), §6.1.7 (stronger Cleaner slow), §6.1.8 & §6.1.9 (Security/Manager missiles damage ground bots, no score), §6.1.9 (Manager missile speed ramp), §7 (workers seek Dan on LOS), §9 (no-score missile kills), §10 (worker-death + last-worker-gone audio).
 
 ---
 
@@ -133,9 +132,21 @@ Implemented as `3 + 3·(Rapid) + 3·(Triple)`, volley-gated (see CLAUDE.md).
 
 ## 4. CONTROLS
 
-### 4.1 Movement
+### 4.1 Movement — Keyboard
 
-WASD, with diagonal movement via key combinations. W up, A left, S down, D right.
+WASD keys for four cardinal directions. North: W, East: D, South: S, West: A.
+Diagonal movement is triggered by holding two adjacent cardinal keys simultaneously.
+
+| Keys | Direction |
+| :---- | :---- |
+| W + A | Northwest |
+| W + D | Northeast |
+| S + A | Southwest |
+| S + D | Southeast |
+
+No dedicated single-key diagonal shortcuts. Movement cardinal keys are defined in
+`CFG.KEYS.MOVE` for future remapping; diagonal combos are derived automatically
+from those assignments at runtime.
 
 ### 4.2 Ranged Attack — Mouse
 
@@ -144,29 +155,68 @@ WASD, with diagonal movement via key combinations. W up, A left, S down, D right
 
 ### 4.3 Ranged Attack — Keyboard Directional Fire
 
-Eight directional fire keys arranged as a 3×3 grid on the right of the keyboard,
-mirroring a thumbstick. Center key `l` does NOT fire.
+Four cardinal fire keys; diagonal fire is activated by holding two adjacent cardinal
+fire keys simultaneously. Fire direction is the **normalized vector sum** of all
+currently held cardinal fire keys — so combos produce diagonal angles naturally,
+and holding two opposing keys (e.g. O + L) cancels to no fire.
 
-```
-i o p     NW N NE
-k l ;     W  ·  E
-, . /     SW S SE
-```
+Cardinal fire keys: North (O), East (P), South (L), West (K).
 
-| Key | Fire Direction |
+| Key(s) | Direction |
 | :---- | :---- |
-| i | Upper-left |
-| o | Up |
-| p | Upper-right |
-| k | Left |
-| ; | Right |
-| , | Lower-left |
-| . | Down |
-| / | Lower-right |
+| O | North |
+| P | East |
+| L | South |
+| K | West |
+| O + K | Northwest |
+| O + P | Northeast |
+| L + K | Southwest |
+| L + P | Southeast |
 
-### 4.4 Special Item
+Fire cardinal keys are defined in `CFG.KEYS.FIRE` for future remapping; diagonal
+combos are derived automatically from those assignments at runtime.
+
+### 4.4 Special Item — Keyboard
 
 `E` or `F` — deploy / throw the Atomic Dustbin.
+
+### 4.5 Input Mode Selection
+
+At the title screen, the player selects their input mode before play begins:
+
+- **Spacebar** → Keyboard + mouse mode
+- **A button (button 0) or Start button (button 9) on gamepad** → Gamepad mode
+
+The title screen displays both options. Once a mode is selected, the opposing input
+type is disabled for the session; to switch, the player must return to the title
+screen (on death / game over). This design is intentional: keyboard input snaps to
+8 directions while gamepad input is full 360° — mixing them mid-session would be
+confusing.
+
+On game-over and level-clear continue screens, prompts reflect the active mode:
+"SPACE to continue" in keyboard mode; "A / START to continue" in gamepad mode.
+
+`G.inputMode` is reset to `null` by `newGame()`, so returning to the title always
+allows re-selection.
+
+### 4.6 Movement — Gamepad
+
+Left analog thumbstick (axes 0, 1): move Dan in full 360 degrees. Movement is
+**normalized** — any push beyond the deadzone moves Dan at full speed regardless of
+stick depth (not proportional). `CFG.GAMEPAD.moveDeadzone = 0.2`.
+
+### 4.7 Ranged Attack — Gamepad
+
+Right analog thumbstick (axes 2, 3): aim and fire in full 360 degrees. Dan fires
+continuously whenever the stick is pushed beyond the deadzone. Fire rate respects
+the same cooldown as keyboard fire — analog input does not bypass it.
+`CFG.GAMEPAD.fireDeadzone = 0.2`.
+
+### 4.8 Special Item — Gamepad
+
+Any of: **LB** (left bumper, button 4), **RB** (right bumper, button 5), **LT**
+(left trigger, button 6), or **RT** (right trigger, button 7) — deploy / throw the
+Atomic Dustbin. Button indices per standard XInput / Browser Gamepad API mapping.
 
 ---
 
@@ -370,8 +420,10 @@ Design-level guidance; settled implementation decisions live in CLAUDE.md / STAT
 - **Atomic Dustbin physics:** velocity vector on throw from Dan's movement direction; per-frame friction; wall bounce via velocity reflection; attract phase begins at zero velocity.
 - **Enemy AI per type:** §6; each type has a distinct behavior state machine.
 - **Inventory Bot worker-hunt:** timer- or proximity-based trigger locks onto nearest living worker.
-- **Dan facing:** always faces the mouse cursor (or last keyboard fire direction if no mouse input).
+- **Dan facing:** always faces the mouse cursor (keyboard mode) or the last fire direction from the right stick (gamepad mode).
 - **Melee knockback:** fixed knockback vector away from the robot; single damage event per contact; requires re-entry to trigger again.
+- **Input abstraction:** `input.js` exports `getMoveVec()`, `getFireAngle()`, and `isDeploySpecial()` — device-agnostic functions that route to keyboard or gamepad based on `G.inputMode`. All player-action code calls these rather than reading raw key state. Cardinal key assignments live in `CFG.KEYS.MOVE` and `CFG.KEYS.FIRE` for future remapping. Diagonal combos are derived from those assignments at runtime.
+- **Gamepad polling:** `navigator.getGamepads()[0]` polled each update tick (not event-driven). Standard XInput / Browser Gamepad API button indices assumed (axes 0/1 = left stick, axes 2/3 = right stick).
 
 ---
 

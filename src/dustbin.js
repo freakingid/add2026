@@ -22,15 +22,12 @@
    ========================================================================= */
 import { CFG } from "./config.js";
 import { G } from "./state.js";
-import { keys } from "./input.js";
+import { isDeploySpecial, getMoveVec } from "./input.js";
 import { moveBody, isWall, randomFloorTile } from "./world.js";
 import { killEnemy } from "./combat.js";
 import { addFloat } from "./effects.js";
 import { COL } from "./palette.js";
 import { sfx } from "./audio.js";
-
-// Edge-trigger for the deploy key (E/F): fire once on the press, not every frame held.
-let deployHeld = false;
 
 // Seed this level's dustbin floor pickups. RARE: guaranteed on level 1 (so a fresh
 // run can always reach the special) then `spawnChance` odds per level after — the
@@ -62,10 +59,9 @@ export function updateDustbin(dt){
     }
   }
 
-  // --- deploy (E/F): throw if moving, drop if stationary; one active at a time ---
-  const wantDeploy = keys["e"] || keys["f"];
-  if (wantDeploy && !deployHeld && G.dan.hasDustbin && !G.dustbin) deployDustbin();
-  deployHeld = wantDeploy;
+  // --- deploy (E/F or gamepad bumper/trigger): throw if moving, drop if standing
+  //     still; one active at a time. isDeploySpecial() is edge-triggered. ---
+  if (isDeploySpecial() && G.dan.hasDustbin && !G.dustbin) deployDustbin();
 
   // --- active dustbin: slide -> attract -> detonate ---
   const b = G.dustbin;
@@ -88,16 +84,13 @@ export function updateDustbin(dt){
 // still (which begins the attract phase immediately).
 function deployDustbin(){
   const D = CFG.DUSTBIN;
-  let ix = 0, iy = 0;
-  if (keys["w"]) iy -= 1;
-  if (keys["s"]) iy += 1;
-  if (keys["a"]) ix -= 1;
-  if (keys["d"]) ix += 1;
-  const len = Math.hypot(ix, iy);
+  // Throw direction = current movement input (WASD or left stick), normalized;
+  // no movement -> drop in place. Knockback velocity is ignored on purpose.
+  const mv = getMoveVec();
   const b = { x:G.dan.x, y:G.dan.y, r:D.r, spin:0, vx:0, vy:0, state:"slide", timer:0 };
-  if (len > 0){
-    b.vx = (ix/len) * D.throwSpeed;
-    b.vy = (iy/len) * D.throwSpeed;
+  if (mv.x || mv.y){
+    b.vx = mv.x * D.throwSpeed;
+    b.vy = mv.y * D.throwSpeed;
   } else {
     b.state = "attract"; b.timer = D.attractDur;   // stationary deploy
   }

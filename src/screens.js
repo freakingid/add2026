@@ -148,11 +148,14 @@ export function drawTitle(){
   ctx.fillStyle = "#aeb6c0";
   ctx.fillText("THE ROBOTS HAVE TURNED. GRAB YOUR MOP.", VIEW_W/2, VIEW_H/2 + 122);
 
+  // Both input modes offered; the player's first valid input locks the mode (GDD §4.5).
   const blink = (Math.floor(performance.now()/500)%2)===0;
   if (blink){
-    ctx.fillStyle = "#fff";
     ctx.font = "bold 16px 'Courier New', monospace";
-    ctx.fillText("CLICK or PRESS SPACE to START", VIEW_W/2, VIEW_H/2 + 158);
+    ctx.fillStyle = COL.soap;
+    ctx.fillText("SPACE — KEYBOARD", VIEW_W/2, VIEW_H/2 + 150);
+    ctx.fillStyle = COL.atomic;
+    ctx.fillText("A / START — GAMEPAD", VIEW_W/2, VIEW_H/2 + 174);
   }
   if (G.high > 0){
     ctx.fillStyle = "#6f7884";
@@ -163,13 +166,14 @@ export function drawTitle(){
   drawFireLegend(28, VIEW_H - 150);
 }
 
-// Compact 3x3 reference of the keyboard fire grid (GDD 4.3).
+// Compact 3x3 reference of the keyboard fire layout (GDD §4.3): O/P/L/K cardinals,
+// diagonals = two adjacent cardinals held. Corners show the combo, center is empty.
 function drawFireLegend(ox, oy){
-  const cell = 30, gap = 4;
+  const cell = 36, gap = 4;
   const labels = [
-    ["I","↖"], ["O","↑"], ["P","↗"],
-    ["K","←"], ["L","·"], [";","→"],
-    [",","↙"], [".","↓"], ["/","↘"],
+    ["O+K","↖"], ["O","↑"],   ["O+P","↗"],
+    ["K","←"],   ["·","·"],   ["P","→"],
+    ["L+K","↙"], ["L","↓"],   ["L+P","↘"],
   ];
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillStyle = "#9aa3ae";
@@ -186,11 +190,11 @@ function drawFireLegend(ox, oy){
     ctx.lineWidth = 1;
     ctx.strokeRect(x + 0.5, y + 0.5, cell - 1, cell - 1);
     ctx.fillStyle = center ? "#5a636f" : "#dfe6ee";
-    ctx.font = "bold 12px 'Courier New', monospace";
-    ctx.fillText(labels[i][0], x + cell/2, y + cell/2 - 5);
+    ctx.font = "bold 11px 'Courier New', monospace";
+    ctx.fillText(labels[i][0], x + cell/2, y + cell/2 - 6);
     ctx.fillStyle = center ? "#5a636f" : COL.amber;
     ctx.font = "bold 12px 'Arial', sans-serif";
-    ctx.fillText(labels[i][1], x + cell/2, y + cell/2 + 7);
+    ctx.fillText(labels[i][1], x + cell/2, y + cell/2 + 8);
   }
 }
 
@@ -209,10 +213,14 @@ export function drawGameOver(){
   ctx.fillStyle = COL.amber;
   ctx.fillText("BEST   " + String(G.high).padStart(6,"0"), VIEW_W/2, VIEW_H/2 + 46);
 
+  // Continue prompt reflects the active mode (GDD §4.5) — the opposing device is inert.
   const blink = (Math.floor(performance.now()/500)%2)===0;
   if (blink){
     ctx.fillStyle = "#fff";
     ctx.font = "bold 15px 'Courier New', monospace";
-    ctx.fillText("CLICK or PRESS SPACE to TRY AGAIN", VIEW_W/2, VIEW_H/2 + 100);
+    const prompt = G.inputMode === "gamepad"
+      ? "PRESS A / START to TRY AGAIN"
+      : "CLICK or PRESS SPACE to TRY AGAIN";
+    ctx.fillText(prompt, VIEW_W/2, VIEW_H/2 + 100);
   }
 }

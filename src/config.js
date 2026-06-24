@@ -25,6 +25,25 @@ export const CFG = {
 
   TERMINAL: { hp:4, points:300 },   // Dispatch Terminal — destroyable spawner
 
+  // Controls (GDD §4) — cardinal key assignments + gamepad tuning. ALL key
+  // detection routes through these (no hardcoded key strings in logic). Diagonal
+  // combos are derived from the cardinals at runtime (two adjacent held), so
+  // remapping a cardinal here automatically produces the right diagonals.
+  //   MOVE: N=W E=D S=S W=A   FIRE: N=O E=P S=L W=K
+  KEYS: {
+    MOVE: { N:"w", E:"d", S:"s", W:"a" },
+    FIRE: { N:"o", E:"p", S:"l", W:"k" },
+  },
+  // Browser Gamepad API standard (XInput) mapping: axes 0/1 = left stick, 2/3 =
+  // right stick; buttons 9=Start 0=A, 4=LB 5=RB 6=LT 7=RT. Any push past a
+  // deadzone moves/fires at full magnitude (movement isn't pressure-sensitive).
+  GAMEPAD: {
+    moveDeadzone: 0.2,
+    fireDeadzone: 0.2,
+    BTN_START:   [9, 0],          // start a run / restart (Start or A)
+    BTN_SPECIAL: [4, 5, 6, 7],    // deploy the Atomic Dustbin (any bumper/trigger)
+  },
+
   // Vending machines (GDD 2.5) — static, contact-triggered HP restoration. Sole
   // means of healing mid-run. Two variants; single-use (deplete after one touch),
   // capped at Dan's maxHp. Robots ignore them entirely. `r` = contact radius;
