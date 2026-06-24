@@ -14,7 +14,7 @@
 import { CFG } from "./config.js";
 import { G } from "./state.js";
 import { isWall } from "./world.js";
-import { hitDanRanged, hitDanArea } from "./combat.js";
+import { hitDanRanged, hitDanArea, damageEnemy } from "./combat.js";
 import { sfx } from "./audio.js";
 
 // Fire a homing missile from Manager `e`. The missile's initial direction is toward
@@ -129,12 +129,42 @@ export function updateEbolts(dt){
       continue;
     }
 
+    // Friendly fire: a bolt also strikes any ground robot it runs into, dealing
+    // its Dan damage with a no-score death (GDD 6.1.8, §9). Skip fliers (drones)
+    // and still-spawning bots; terminals live in G.terminals, so they're skipped.
+    let consumed = false;
+    for (const e of G.enemies){
+      if (e.flying || e.spawn > 0) continue;
+      if (Math.hypot(b.x - e.x, b.y - e.y) <= b.r + e.r){
+        damageEnemy(e, b.dmg);
+        G.ebolts.splice(i, 1);
+        consumed = true;
+        break;
+      }
+    }
+    if (consumed) continue;
+
     // Hit Dan. Absorbed by an active i-frame window (counts as a blocked hit).
     if (Math.hypot(b.x - G.dan.x, b.y - G.dan.y) <= b.r + G.dan.r){
       if (G.dan.iframe <= 0) hitDanRanged(b);
       G.ebolts.splice(i, 1);
     }
   }
+}
+
+// Detonate a homing missile: small `blast` AoE that damages every ground robot
+// caught (no score — friendly fire) and Dan if he's in range and unguarded.
+// Shared by wall impact and robot-collision so an explosion behaves the same way
+// however it's triggered (GDD 6.1.9, §9).
+function detonateHoming(b){
+  G.marks.push({ x:b.x, y:b.y, life:1 });
+  for (let j = G.enemies.length - 1; j >= 0; j--){
+    const e = G.enemies[j];
+    if (e.flying || e.spawn > 0) continue;
+    if (Math.hypot(e.x - b.x, e.y - b.y) <= b.blast + e.r) damageEnemy(e, b.dmg);
+  }
+  if (G.dan.iframe <= 0 && Math.hypot(G.dan.x - b.x, G.dan.y - b.y) <= b.blast + G.dan.r)
+    hitDanArea(b.x, b.y, b.dmg);
 }
 
 // Advance a lobbed box: interpolate ground position launch->landing over `dur`
@@ -211,10 +241,15 @@ function updateHoming(b, dt){
 
   // Wall impact: small AoE burst, then remove. Harmless if Dan is out of blast.
   if (isWall((b.x / CFG.TILE)|0, (b.y / CFG.TILE)|0)){
-    G.marks.push({ x:b.x, y:b.y, life:1 });
-    if (G.dan.iframe <= 0 && Math.hypot(G.dan.x - b.x, G.dan.y - b.y) <= b.blast + G.dan.r)
-      hitDanArea(b.x, b.y, b.dmg);
+    detonateHoming(b);
     return true;
+  }
+
+  // Friendly fire: detonate on any ground robot it runs into (GDD 6.1.9, §9).
+  // Skip fliers (drones) and still-spawning bots; terminals aren't enemies.
+  for (const e of G.enemies){
+    if (e.flying || e.spawn > 0) continue;
+    if (Math.hypot(b.x - e.x, b.y - e.y) <= b.r + e.r){ detonateHoming(b); return true; }
   }
 
   // Hit Dan.

@@ -52,10 +52,28 @@ export function meleeContact(e, dx, dy, dist, dmg){
   }
 }
 
-export function killEnemy(index){
+// Friendly fire: apply projectile damage to a ground robot (enemy `e`). Death
+// routes through the no-score kill path — no points/float, but full death FX and
+// a caught Manager still pulses (GDD 6.1.8/6.1.9, §9). Returns true if it died.
+export function damageEnemy(e, dmg){
+  e.hp -= dmg;
+  e.hitFlash = 0.1;
+  if (e.hp <= 0){
+    const idx = G.enemies.indexOf(e);
+    if (idx >= 0) killEnemy(idx, { score: false });
+    return true;
+  }
+  return false;
+}
+
+// `score:false` (e.g. robot-on-robot missile/bolt friendly fire) skips the points
+// award + score float but keeps the death sound, Manager berserk pulse, and splice.
+export function killEnemy(index, { score = true } = {}){
   const e = G.enemies[index];
-  G.score += ENEMY[e.type].points;
-  addFloat(e.x, e.y - 16, "+" + ENEMY[e.type].points, COL.amber);
+  if (score){
+    G.score += ENEMY[e.type].points;
+    addFloat(e.x, e.y - 16, "+" + ENEMY[e.type].points, COL.amber);
+  }
   sfx.enemyDie();
 
   // Manager on-death: emit a berserk pulse that buffs all nearby robots (GDD 6.1.9).
