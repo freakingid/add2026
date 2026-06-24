@@ -29,6 +29,7 @@ export function render(){
   drawExit();
   drawTerminals();
   drawPickups();
+  drawWorkers();
   drawShots();
   drawEnemies();
   drawEbolts();
@@ -269,6 +270,50 @@ function drawFloats(){
     ctx.fillText(f.text, f.x, f.y);
   }
   ctx.globalAlpha = 1;
+}
+
+// Human workers to rescue (GDD 7): a small hi-vis figure — clearly NOT a robot.
+// Bobs as it walks; leans in its travel direction and shows alarm dashes when
+// fleeing a nearby robot.
+function drawWorkers(){
+  for (const w of G.workers){
+    const bobY = Math.sin(w.bob) * 1.6;
+    const x = w.x, y = w.y + bobY, r = w.r;
+
+    // panic marks above the head while fleeing
+    if (w.fleeing){
+      ctx.fillStyle = COL.chargeWarn;
+      ctx.font = "bold 10px 'Arial Black', sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("!", x, y - r * 2.1);
+    }
+
+    // legs
+    ctx.strokeStyle = "#22303a";
+    ctx.lineWidth = 2;
+    const stride = Math.sin(w.bob) * r * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(x - r*0.3, y + r*0.4); ctx.lineTo(x - r*0.3 + stride, y + r*1.1);
+    ctx.moveTo(x + r*0.3, y + r*0.4); ctx.lineTo(x + r*0.3 - stride, y + r*1.1);
+    ctx.stroke();
+    // torso (coveralls) + hi-vis vest
+    ctx.fillStyle = COL.workerBody;
+    ctx.fillRect(x - r*0.6, y - r*0.4, r*1.2, r*0.95);
+    ctx.fillStyle = COL.workerVest;
+    ctx.fillRect(x - r*0.45, y - r*0.35, r*0.9, r*0.8);
+    ctx.fillStyle = COL.workerVestDark;
+    ctx.fillRect(x - r*0.08, y - r*0.35, r*0.16, r*0.8);   // vest seam
+    // head + hard hat
+    ctx.fillStyle = COL.workerSkin;
+    ctx.beginPath(); ctx.arc(x, y - r*0.7, r*0.42, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = COL.workerHelmet;
+    ctx.beginPath(); ctx.arc(x, y - r*0.8, r*0.46, Math.PI, 0); ctx.fill();
+    ctx.fillRect(x - r*0.5, y - r*0.82, r, r*0.12);        // hat brim
+    // outline
+    ctx.strokeStyle = "#15202a";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - r*0.6, y - r*0.4, r*1.2, r*0.95);
+  }
 }
 
 

@@ -13,6 +13,7 @@ import { clamp } from "./world.js";
 import { updateDan, updateShots } from "./player.js";
 import { updateEnemies } from "./enemies.js";
 import { updateEbolts } from "./projectiles.js";
+import { updateWorkers } from "./workers.js";
 import { updateEffects } from "./effects.js";
 import { nextLevel, spawnWave, spawnPickup, updatePickups } from "./level.js";
 
@@ -42,6 +43,7 @@ export function update(dt){
   updateEnemies(dt);
   updateEbolts(dt);
   updatePickups(dt);
+  updateWorkers(dt);
   updateEffects(dt);
   updateCamera();
 

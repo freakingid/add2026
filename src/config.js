@@ -31,6 +31,18 @@ export const CFG = {
   RAPID_MULT: 2,               // fire-rate multiplier while Rapid Fire active
   MAX_PICKUPS: 5,              // power-up pickups present in the level at once
   PICKUP_RESPAWN: 6,          // sec between topping the level back up to MAX
+
+  // Human workers (GDD 7) — wander slowly avoiding robots; Dan rescues by contact
+  // for escalating points (rescueBase doubles each: 100/200/400/800/1600 = 3100).
+  WORKER: {
+    count: 5,                  // guaranteed per level (GDD 8.1)
+    radius: 9,
+    speed: 44,                 // slow idle wander
+    fleeSpeed: 92,             // quicker scurry while avoiding a robot
+    avoidRadius: 130,          // starts fleeing a robot within this range
+    wanderMin: 0.7, wanderMax: 2.0,   // re-pick wander heading every [min,max] sec
+    rescueBase: 100,           // 1st rescue value; doubles per rescue (GDD 7.2)
+  },
 };
 
 // Power-up pickup definitions (color + glyph for the badge + HUD)

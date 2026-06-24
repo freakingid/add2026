@@ -6,7 +6,7 @@ rules, see CLAUDE.md. Section numbers here are stable — STATUS.md references t
 
 ### Build status index
 
-- **Built:** §2 Player, §3 Power-ups, §4 Controls, §6 Enemies (Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner — Inventory pending, needs human workers), §8.2 level-end, §8.3 progression, parts of §10.
+- **Built:** §2 Player, §3 Power-ups, §4 Controls, §6 Enemies (Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner — Inventory pending), §7 Human workers + rescue scoring, §8.2 level-end, §8.3 progression, parts of §10.
 - **Designed, NOT yet built:** §5 Atomic Dustbin, §7 Human Workers, full procedural placement (§8.1), audio (§10), sprite-art polish (§10).
 
 ---
@@ -231,7 +231,8 @@ Multiple terminals may exist per level.
 
 ## 7. HUMAN WORKERS
 
-> **Status: DESIGNED, NOT yet built.** Inventory Bot (§6.1.6) depends on this feature.
+> **Status: BUILT** (`workers.js`) — wander/flee + rescue scoring. Killing workers
+> awaits the Inventory Bot (§6.1.6); until then a worker only leaves by rescue.
 
 ### 7.1 Basics
 
@@ -268,7 +269,7 @@ Rescuing all 5 earns a **full clear bonus** and a celebratory callout.
 ### 8.2 Level End Conditions
 
 1. **Find the Exit Door:** Dan reaches the exit and leaves. Level ends immediately; unrescued workers and uncollected points are forfeited.
-2. **Rescue All 5 Workers:** full 3,100-point rescue bonus awarded. Whether Dan must then reach the exit or the level auto-completes is **TBD during implementation.**
+2. **Rescue All 5 Workers:** full 3,100-point rescue bonus awarded (the escalating per-rescue values; §7.2) plus a celebratory callout. **Resolved:** this does **not** auto-complete the level — the exit door remains the only level-end trigger (see STATUS "Human workers & rescue").
 
 ### 8.3 Level Progression
 

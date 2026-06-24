@@ -22,6 +22,8 @@ export const G = {
   powerups:null,
   shots:[], enemies:[], terminals:[], pickups:[], marks:[], floats:[],
   ebolts:[],           // shared enemy-projectile pool (Security taser bolt is the first user)
+  workers:[],          // human workers to rescue (GDD 7)
+  rescued:0,           // workers rescued THIS level (resets each level)
   camera:{ x:0, y:0 },
   exit:null,
   spawnTimer:0,

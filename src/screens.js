@@ -75,6 +75,12 @@ export function drawHUD(){
   ctx.fillStyle = COL.amber;
   const typeName = { picker:"PICKER BOT", forklift:"FORKLIFT BOT", security:"SECURITY BOT", sorter:"SORTER BOT", cleaner:"CLEANER BOT", drone:"DRONE", manager:"MANAGER BOT", scanner:"SCANNER BOT" }[levelType()] || "";
   ctx.fillText("LEVEL " + G.level + "  ·  " + typeName, VIEW_W/2, pad + 14);
+
+  // Workers rescued this level (GDD 7). Total = rescued + still-present.
+  const total = G.rescued + G.workers.length;
+  ctx.font = "bold 11px 'Courier New', monospace";
+  ctx.fillStyle = G.rescued === total && total > 0 ? COL.atomic : "#aeb6c0";
+  ctx.fillText("WORKERS  " + G.rescued + " / " + total + " RESCUED", VIEW_W/2, pad + 30);
 }
 
 export function drawLevelClear(){

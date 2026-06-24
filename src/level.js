@@ -51,6 +51,8 @@ function buildLevel(){
   G.marks = [];
   G.floats = [];
   G.ebolts = [];
+  G.workers = [];
+  G.rescued = 0;
   G.spawnTimer = 0.6;
   G.pickupTimer = 0;
 
@@ -79,6 +81,15 @@ function buildLevel(){
         hp:CFG.TERMINAL.hp, hitFlash:0, type:"picker" });
     }
     for (let i = 0; i < 3; i++) spawnFromTerminal("picker");
+  }
+
+  // Human workers to rescue — 5 per level, scattered away from Dan's spawn (GDD 7/8.1).
+  for (let i = 0; i < CFG.WORKER.count; i++){
+    const wp = randomFloorTile(5);
+    G.workers.push({
+      x:wp.x, y:wp.y, r:CFG.WORKER.radius,
+      heading:Math.random()*Math.PI*2, wanderT:0, bob:Math.random()*Math.PI*2, fleeing:false,
+    });
   }
 
   // One exit door, placed away from Dan's spawn (GDD 8.1).

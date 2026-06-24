@@ -23,6 +23,7 @@ export const COL = {
   managerBody:"#1e2d40", managerDark:"#111c28", managerTrim:"#8090a8", managerEye:"#e04020",
   missile:"#703020", missileFin:"#9aa0a8", missileWarhead:"#ff5020",
   scannerBody:"#3a4a6a", scannerDark:"#26324a", scannerDish:"#cfd6df", scannerSweep:"#7fe0ff", scannerAlarm:"#ff5b4d",
+  workerBody:"#2f7d8f", workerVest:"#ffd23f", workerVestDark:"#caa01f", workerSkin:"#e3b58a", workerHelmet:"#ff8a3b",
   terminal:"#3a4250", terminalLit:"#5dff8f",
   amber:"#ffb627", soap:"#5fd2ff", atomic:"#5dff8f", text:"#e8ebef",
 };

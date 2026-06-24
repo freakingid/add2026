@@ -27,6 +27,7 @@ design intent is in **GDD.md**. Behavior described here is the source of truth f
 - **Dan status effects:** `dan.slow` (sec) scales move speed by `CFG.SLOW_FACTOR` while active; `dan.sprayTick` rate-limits spray DoT so overlapping cones can't multi-tick. Both decay in `updateDan`, reset per level. Visual: green aura + drips while slowed.
 - **Shared enemy-projectile system (`ebolts`):** one pool drives every robot's ranged attack; each projectile carries a `kind` selecting motion + expiry. Implemented: `bolt` (Security — straight, dies on walls), `arc` (Sorter — time-based lob, ignores walls, AoE on landing), `drop` (Drone — descends vertically onto a FIXED point, ignores walls, AoE on landing), `homing` (Manager — slow-tracking missile, steers toward Dan each frame, stops on wall with small AoE). Cone (Cleaner) is handled outside the pool. Dan-collision funnels through the shared i-frame window via `hitDanRanged` (point) / `hitDanArea` (blast).
 - **Spawner-terminals (all enemies):** every level places destroyable spawner-terminals (HP 4, 300 pts, HP pips, hit flash) of its enemy type; **all enemies emerge from terminals** (no floor placement). Emitter light is tinted per enemy type; brief white pulse on each emit. Destroying all terminals of a type stops its spawns.
+- **Human workers + rescue scoring** (GDD §7) — 5 per level, scattered away from Dan's spawn. They **wander slowly and flee robots** within `avoidRadius` (scurrying faster while fleeing); pure flavor for now since only the (unbuilt) Inventory Bot can kill them. Dan **rescues by walking into one** for **escalating points** — 100 / 200 / 400 / 800 / 1600 (doubling, `rescueBase·2^n`), summing to **3,100** for all five, with a celebratory "ALL 5 SAVED!" callout on the last. HUD shows `WORKERS n/5 RESCUED`. The rescue counter (`G.rescued`) resets each level; the score persists. Drawn as a hi-vis hard-hat figure (clearly not a robot), with a "!" while fleeing.
 - **Level system:** procedural warehouse, camera, EXIT door + off-screen pointer, level-clear splash, endless progression. **HP, power-ups, and score persist across levels.**
 - **States:** `title` / `playing` / `levelclear` / `dead`.
 
@@ -92,6 +93,14 @@ design intent is in **GDD.md**. Behavior described here is the source of truth f
 - **No contact damage.** Added `scanner` to the zero-dmg melee list; like the Manager, its buff bonus only lands on enemies that already deal melee (`dmg > 0`). Still mop-able (HP 2 — dies to one mop hit + a soap shot, or two shots).
 - Feel dials: `sight` 340 / `alarmRadius` 300 / `alarmGrace` 0.8 / `alarmHold` 0.25 / `alarmSpeedMult` 1.4 / `alarmDmgBonus` 1 / `speed` 60 / `max` 4 / `interval` 3 s.
 
+### Human workers & rescue (GDD 7)
+
+- **Rescuing all 5 does NOT auto-complete the level** (GDD §8.2 left this TBD). The exit door stays the only level-end trigger; the escalating per-rescue points (100/200/400/800/1600 = 3,100) *are* the "full clear bonus", and the 5th rescue fires a celebratory callout. Rationale: keeps a single level-end path and doesn't strand a player who's cleared the rescue objective but still wants to fight/collect. (Alt: auto-advance on the 5th rescue, or award a separate lump bonus on top — both easy to add later.)
+- **Escalating value via `rescueBase·2^G.rescued`** (`G.rescued` = rescues *this level*, reset in `buildLevel`). One counter drives both the points and the HUD; the doubling is data (`CFG.WORKER.rescueBase` 100), not hardcoded per-step.
+- **Workers can't die yet.** Only the Inventory Bot (§6.1.6, unbuilt) kills workers; `updateWorkers` has no death path, so for now a worker only leaves the level by rescue. The Inventory Bot will add a kill→`G.workers.splice` (no points, gone for the level) without touching rescue.
+- **Avoidance is reactive, not pathfound.** A worker flees directly away from the single nearest robot inside `avoidRadius` (130 px) at `fleeSpeed`; otherwise it wanders (re-pick heading every `wanderMin..wanderMax` s) at `speed`. `moveBody` slides it along shelves; a fully-boxed step turns the heading. Good enough for "wander, avoid robots" flavor — no flow field. (Alt: steer from all nearby robots / flee toward open space.)
+- Feel dials: `count` 5 / `speed` 44 / `fleeSpeed` 92 / `avoidRadius` 130 / `wander` 0.7–2.0 s / `rescueBase` 100.
+
 ---
 
 ## Architecture map (where things live)
@@ -114,13 +123,14 @@ design intent is in **GDD.md**. Behavior described here is the source of truth f
 - **`combat.js`** — shared damage/death: `hitDanRanged`/`hitDanArea` (i-frame + knockback), `meleeContact` (0-dmg-safe; `berserDmgBonus` when berserk), `killEnemy` (points, score float for all kills, Manager berserk pulse), `destroyTerminal`. ← config, palette, state, effects.
 - **`projectiles.js`** — the `G.ebolts` pool: `fireEnemyBolt/Arc/Drop/Homing` + `updateEbolts` dispatching by `kind` (`bolt`/`arc`/`drop`/`homing`; `updateArc/Drop/Homing` helpers). ← config, state, world, combat.
 - **`enemies.js`** — `spawnEnemy` (per-type init), `updateEnemies` (dispatch + melee contact via `combat`), per-type AI `updatePicker/Forklift/Security/Sorter/Cleaner/Drone/Manager/Scanner`, `buffSpd` (combined Manager-berserk + Scanner-alarm speed mult), Cleaner/Scanner patrol routing (`nearestWaypoint`/`buildCleanerPatrol`/`advancePatrol`) + Cleaner spray helpers (`danInSprayCone`/`coneRayDist`(exported, also clips the rendered cone)/`applySpray`). ← config, state, world, combat, projectiles.
-- **`level.js`** — `newGame` (full reset) → `buildLevel` (world + terminals + exit; keeps HP/powerups/score) → `nextLevel`; spawner-terminal emission `spawnFromTerminal`/`spawnWave`; pickups `spawnPickup`/`updatePickups`. ← config, state, world, enemies, effects.
+- **`level.js`** — `newGame` (full reset) → `buildLevel` (world + terminals + exit + 5 workers; keeps HP/powerups/score) → `nextLevel`; spawner-terminal emission `spawnFromTerminal`/`spawnWave`; pickups `spawnPickup`/`updatePickups`. ← config, state, world, enemies, effects.
+- **`workers.js`** — `updateWorkers` (wander/avoid + rescue-on-contact) and `rescueWorker` (escalating points + counter + callout). ← config, palette, state, world, effects.
 - **`input.js`** — `keys`, `mouse`, `fireKeyStack`, `FIRE_ANGLES`, `keyboardFireAngle`; registers key/mouse/touch listeners on import (side-effect). ← canvas, state, level (`newGame`).
 - **`player.js`** — `updateDan` (slow move-scaling, decays `slow`/`sprayTick`), `fireVolley`/`fireBubble`, `updateShots` (bubble↔enemy↔terminal). ← config, state, input, world, combat.
-- **`update.js`** — `update(dt)` orchestrator + `updateCamera` + spawn/terminal/exit/death bookkeeping. ← state, config, player, enemies, projectiles, level, effects, world, canvas.
+- **`update.js`** — `update(dt)` orchestrator + `updateCamera` + spawn/terminal/exit/death bookkeeping. ← state, config, player, enemies, projectiles, workers, level, effects, world, canvas.
 - **`render-entities.js`** — `drawEnemies` (per-type sprites + berserk aura) + `drawEbolts` (bolt/arc/drop/homing). ← canvas, state, config, palette, enemies (`coneRayDist`).
 - **`screens.js`** — `drawHUD` + `drawTitle`/`drawLevelClear`/`drawGameOver` (+ internal `drawFireLegend`). ← canvas, state, config, palette.
-- **`render.js`** — `render()` compositor + world/entity draws (`drawFloor`/`drawWalls`/`drawMarks`/`drawExit`/`drawExitPointer`/`drawTerminals`/`drawShots`/`drawPickups`/`drawFloats`/`drawDan`). ← canvas, state, config, palette, world, render-entities, screens.
+- **`render.js`** — `render()` compositor + world/entity draws (`drawFloor`/`drawWalls`/`drawMarks`/`drawExit`/`drawExitPointer`/`drawTerminals`/`drawShots`/`drawPickups`/`drawWorkers`/`drawFloats`/`drawDan`). ← canvas, state, config, palette, world, render-entities, screens.
 - **`atomic-dustbin-dan.html`** — entry: imports `update` + `render` (+ `input` for its listeners) and runs the delta-timed `loop`. Nothing else.
 
 ---
