@@ -48,6 +48,20 @@ decisions into the relevant "Subsystem decisions" entry and remove the entry her
 - **Audio** (GDD §10) — retro arcade SFX **synthesized live via the Web Audio API** (no asset files; single-file/ES-module constraint holds). Lives in `audio.js`, a cross-cutting leaf (imports only `CFG`) exposing a named `sfx.*` API; every gameplay event adds a one-line call at its source (the same pattern as `addFloat`). **17 one-shots + 1 looping bed:** the 3 GDD-mandated (`pop` soap-hit, `alarm` Scanner klaxon, `detonate` Dustbin blast) plus game-feel additions — `shoot`, `terminalHit`/`terminalDie`, `enemyDie`, `hurt` (all 3 Dan-damage paths), `enemyFire` (all 4 ranged kinds), `deploy`, `powerup`, `heal`, `rescue` (**pitch climbs with `G.rescued`**), `workerLost`, `noWorkers` (last worker gone), `levelClear`, `gameOver`, and the **sustained `conveyor` belt hum** (a single managed looping voice that fades in/out as Dan steps on/off a belt — see "Conveyors"). AudioContext is lazily created and **resumed on the first user gesture** (`unlock()` from `input.js` keydown/mousedown/touchstart — browser autoplay policy). **`M` toggles mute.** A small per-sound throttle (`shoot`/`pop`/`enemyFire`/`hurt`) prevents clipping when many fire in one frame. Master gain + startup-enabled in `CFG.AUDIO`.
 - **Level Definition format + loader** (GDD §8.1) — **every** level (generated OR hand-authored) is now a plain-data **Level Definition** consumed by **one loader** (`loadLevel` in `level.js`), the sole entry point to a playable level. Three thin layers + fixed placements: **tiles** (row-major char grid; the only collision/LOS geometry — flags from `CFG.TILES`), **conveyors** (axis-aligned push strips; parsed + baked into `world.pushField` per §8.1.4, and the push is now **applied** every frame to Dan + ground robots — see "Conveyors" below), **zones** (tagged `spawn`/`cover`/`combat`/`danger` placement-hint rects), **placements** (fixed set pieces; always `player` + `exit`), and **spawnRules** (drop `count` of a `type` into a zone `role`, optional `avoid`, never on a solid). The procgen is now a **producer** of Level Definitions (`generateLevelDef`) that hands off to the same loader — a **behavior-preserving refactor** (all 12 level types compose identically; verified headless). `CFG.TILES` defines per-type **solid / blocksLOS / destructible** flags (§8.1.1) so collision/LOS/destructibility are data-driven (`isWall`/`blocksLOS`/`isDestructible`); the Forklift now smashes by the `destructible` flag, not by border position. Grid dims are loader-set (`CFG.COLS/ROWS` ← grid), so authored levels can be any size. Validation rejects malformed defs (missing/duplicate player, no exit, unknown zone role, ragged grid). **Headless smoke tests in `test-loader.js`** (`node test-loader.js`).
 - **Conveyor PUSH mechanic** (GDD §8.1.2) — the baked `world.pushField` is now **consumed every frame**. Each affected entity adds the belt vector at its current cell to its own movement: **Dan** (his move vector + belt, with the net magnitude **clamped** to `CFG.DAN_NET_SPEED_MAX` so a fast belt can't fling him) and **all ground robots** (push added *after* the AI decides its move, collision-resolved via `moveBody`). **Drones are immune** (`e.flying` — they ride above the belt). **Projectiles and the Atomic Dustbin are unaffected** (they never read the field). Crossing strips push **diagonally** through the already-summed field — no intersection-specific code. Belts render as a dark rubber band with **animated chevrons scrolling in the push direction** (diagonal at intersections), and a **looping conveyor hum** plays while Dan rides one. A hand-authored demo level (`conveyorTestLevelDef`, gated by `CFG.CONVEYOR_TEST_LEVEL`) shows a mandatory full-width E–W crossing + an N–S belt crossing it. **Headless tests in `test-conveyor.js`** (`node test-conveyor.js`). See "Conveyors" below.
+- **Hand-authored levels** (GDD §8.1) — five fixed Level Definitions in
+  **`src/levels/authored-levels.js`** (`AUTHORED_LEVELS`), each consumed by the SAME
+  `loadLevel` the generator feeds (the generator is untouched): **Receiving Dock**
+  (pallet bays / full-width belt / open staging), **Pick-and-Pack** (5 shelf rows ×
+  2 cross-aisles), **Cold Storage Vault** (divider wall + single choke, pallet cover
+  maze, top-right exit), **Mezzanine Ring** (inner wall rectangle with 4 doorways
+  around a central arena), **Conveyor Hub** (two intersecting belts → 4 quadrants).
+  A debug key — **`]`** (in `input.js`, playing-only) — cycles them through `loadLevel`
+  so each can be walked without playing to it (shows a "▶ name" float; leaves `G.level`
+  untouched, so reaching the exit returns to normal generated progression). **Headless
+  tests in `test-authored-levels.js`** (`node test-authored-levels.js`, 77 checks): each
+  loads cleanly, populates correctly, lands nothing on a solid, and is **walkable**
+  (flood-fill from Dan's spawn reaches the exit + every terminal). See the loader
+  subsystem note below for the two handoff-format adaptations.
 - **Level system:** procedural warehouse, camera, EXIT door + off-screen pointer, level-clear splash, endless progression. **HP, power-ups, and score persist across levels.**
 - **States:** `title` / `playing` / `levelclear` / `dead`.
 
@@ -262,6 +276,29 @@ decisions into the relevant "Subsystem decisions" entry and remove the entry her
 - **Hand-authored proof + tests.** `test-loader.js` (`node test-loader.js`) loads a
   small fixed authored layout through the same loader and checks: valid generated level,
   no entity on a solid, validation rejections, and the push-field sum/cancel. 35 checks.
+- **The five authored levels (`authored-levels.js`) made two handoff-format
+  adaptations.** The design handoff (`src/levels/level-designs-handoff.md`) was written
+  against an idealized schema; two things had to change to match the real
+  `runSpawnRule`/loader contract:
+  (1) **`dispatchTerminal` → `terminal`.** The handoff used a generic
+  `{ type:"dispatchTerminal" }` rule, but the loader only knows
+  `{ type:"terminal", enemy:<ENEMY key>, preplace }` — an unmatched `dispatchTerminal`
+  hits `runSpawnRule`'s default branch and silently places **zero** terminals (an
+  enemy-less level). So each level's terminals carry the enemy type(s) **named in its
+  tactical premise** (Receiving Dock→picker+forklift, Pick-and-Pack→sorter+scanner,
+  Cold Storage→forklift+sorter, Mezzanine Ring→security+drone, Conveyor Hub→drone+manager;
+  premise-named two-type levels split one terminal each), `preplace:1` so the level isn't
+  empty on arrival. (Alt: keep `dispatchTerminal` literal — rejected; it loads "cleanly"
+  but produces a level with no enemies, contradicting "Two Dispatch Terminals sit…".)
+  (2) **L4 (Mezzanine Ring) tile grid rebuilt** from the handoff's in-design "NOTE FOR
+  IMPLEMENTER" (its ASCII was a flagged approximation): a closed inner-wall rectangle
+  (cols 4–24, rows 6–25) with four doorways (N/S cols 12–17, W col 4 rows 10–12, E col 24
+  rows 22–24), open arena inside, mezzanine ring outside, shelf alcoves in the ring's four
+  corners. Everything else (tiles/conveyors/zones/placements, and the non-terminal spawn
+  rules) is transcribed as-authored, with row widths normalized to a rectangular 30×34
+  (several handoff rows were 29 wide; `loadTileGrid` throws on a ragged grid).
+  `G.level` is **not** consulted — `levelType()`'s interval is just a cadence number; the
+  spawn loop emits off the authored terminals' own `enemy` types, so any mix works.
 
 ### Conveyors — the PUSH mechanic (GDD §8.1.2)
 

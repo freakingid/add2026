@@ -16,8 +16,10 @@
 import { CFG } from "./config.js";
 import { canvas, VIEW_W, VIEW_H } from "./canvas.js";
 import { G } from "./state.js";
-import { newGame } from "./level.js";
+import { newGame, loadLevel } from "./level.js";
 import { unlock, toggleMute } from "./audio.js";
+import { AUTHORED_LEVELS } from "./levels/authored-levels.js";
+import { addFloat } from "./effects.js";
 
 /* ---- Raw input state (still exported: mouse aim, M mute, debug) ---------- */
 export const keys = {};
@@ -126,11 +128,27 @@ function startRun(mode){
   G.inputMode = mode;
 }
 
+/* ---- Debug: cycle the hand-authored levels (src/levels/authored-levels.js) --
+   `]` loads the next AUTHORED_LEVELS entry through the SAME loader the game uses,
+   so each can be walked/inspected without playing through generated levels to
+   reach it. Playing-only: loadLevel repositions the existing Dan but never
+   allocates one (G.dan is null on the title). G.level is left untouched, so the
+   spawn cadence keeps running off the authored terminals' own enemy types. */
+const AUTHORED_KEYS = Object.keys(AUTHORED_LEVELS);
+let authoredIdx = -1;
+function cycleAuthoredLevel(){
+  authoredIdx = (authoredIdx + 1) % AUTHORED_KEYS.length;
+  const key = AUTHORED_KEYS[authoredIdx];
+  loadLevel(AUTHORED_LEVELS[key]);
+  addFloat(G.dan.x, G.dan.y - 22, "▶ " + key, "#7fd1ff");
+}
+
 /* ---- Listeners ---------------------------------------------------------- */
 addEventListener("keydown", e => {
   const k = e.key.toLowerCase();
   unlock();                          // resume AudioContext on first gesture (autoplay policy)
   if (k === "m" && !e.repeat) toggleMute();   // M = mute toggle (GDD §10 audio)
+  if (k === "]" && !e.repeat && G.state === "playing") cycleAuthoredLevel();   // debug: cycle authored levels
   if (G.state === "playing" && HANDLED_KEYS.has(k)) e.preventDefault();
   keys[k] = true;
   // Title: SPACE/ENTER selects keyboard+mouse mode and starts. Dead: same key
