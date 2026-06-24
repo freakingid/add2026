@@ -18,6 +18,7 @@ import { updateVending } from "./vending.js";
 import { updateDustbin } from "./dustbin.js";
 import { updateEffects } from "./effects.js";
 import { nextLevel, spawnWave, spawnPickup, updatePickups } from "./level.js";
+import { sfx } from "./audio.js";
 
 export function update(dt){
   // Level-clear splash: freeze the world, then build the next level.
@@ -63,6 +64,7 @@ export function update(dt){
     G.high = Math.max(G.high, G.score);
     G.state = "levelclear";
     G.transition = 1.6;
+    sfx.levelClear();
     return;
   }
 
@@ -76,6 +78,7 @@ export function update(dt){
   if (G.dan.hp <= 0){
     G.high = Math.max(G.high, G.score);
     G.state = "dead";
+    sfx.gameOver();
   }
 }
 

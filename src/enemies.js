@@ -17,6 +17,7 @@ import { meleeContact } from "./combat.js";
 import { fireEnemyBolt, fireEnemyArc, fireEnemyDrop, fireEnemyHoming } from "./projectiles.js";
 import { killWorker } from "./workers.js";
 import { vortexHold } from "./dustbin.js";
+import { sfx } from "./audio.js";
 
 // Flips each drone spawn so successive drones orbit Dan in opposite directions
 // (they cross paths — harder to dodge several at once).
@@ -573,7 +574,9 @@ function updateScanner(e, dt){
     }
   }
   if (e.alarmT > 0) e.alarmT -= dt;
+  const wasAlarming = e.alarming;
   e.alarming = e.alarmT > 0;
+  if (e.alarming && !wasAlarming) sfx.alarm();   // klaxon on the rising edge only
 
   // Broadcast: refresh a short buff timer on every robot in range each frame.
   if (e.alarming){

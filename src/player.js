@@ -11,6 +11,7 @@ import { G } from "./state.js";
 import { keys, mouse, keyboardFireAngle } from "./input.js";
 import { moveBody, isWall } from "./world.js";
 import { killEnemy, destroyTerminal } from "./combat.js";
+import { sfx } from "./audio.js";
 
 export function updateDan(dt){
   // Aim priority: a held keyboard fire key wins; otherwise face the mouse.
@@ -76,6 +77,7 @@ export function updateDan(dt){
 
 // Fire one trigger event: 3-projectile fan if Triple, else single.
 function fireVolley(angle, triple, bounce){
+  sfx.shoot();   // one bloop per trigger, not per pellet
   if (triple){
     const s = CFG.TRIPLE_SPREAD;
     fireBubble(angle - s, triple, bounce);
@@ -143,6 +145,7 @@ export function updateShots(dt){
       if (e.spawn > 0) continue;
       if (Math.hypot(e.x - s.x, e.y - s.y) <= e.r + s.r){
         e.hp -= 1; e.hitFlash = 0.1;
+        sfx.pop();   // soap bubble pops on a robot
         G.shots.splice(i, 1);
         if (e.hp <= 0) killEnemy(j);
         consumed = true;
@@ -154,6 +157,7 @@ export function updateShots(dt){
       const t = G.terminals[k];
       if (Math.hypot(t.x - s.x, t.y - s.y) <= t.r + s.r){
         t.hp -= 1; t.hitFlash = 0.12;
+        sfx.terminalHit();
         G.shots.splice(i, 1);
         if (t.hp <= 0) destroyTerminal(k);
         break;

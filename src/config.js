@@ -78,6 +78,15 @@ export const CFG = {
     wanderMin: 0.7, wanderMax: 2.0,   // re-pick wander heading every [min,max] sec
     rescueBase: 100,           // 1st rescue value; doubles per rescue (GDD 7.2)
   },
+
+  // Audio (GDD §10) — retro arcade SFX synthesized live via Web Audio (no assets,
+  // single-file constraint holds). `master` is the global gain into the output;
+  // `enabled` is the startup mute state (toggle live with the M key). Per-sound
+  // envelopes/pitches live in audio.js (code, not balance data).
+  AUDIO: {
+    enabled: true,
+    master: 0.35,              // global output gain (keeps the layered synth tame)
+  },
 };
 
 // Power-up pickup definitions (color + glyph for the badge + HUD)

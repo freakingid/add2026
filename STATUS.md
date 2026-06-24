@@ -32,6 +32,7 @@ design intent is in **GDD.md**. Behavior described here is the source of truth f
 - **Shared enemy-projectile system (`ebolts`):** one pool drives every robot's ranged attack; each projectile carries a `kind` selecting motion + expiry. Implemented: `bolt` (Security — straight, dies on walls), `arc` (Sorter — time-based lob, ignores walls, AoE on landing), `drop` (Drone — descends vertically onto a FIXED point, ignores walls, AoE on landing), `homing` (Manager — slow-tracking missile, steers toward Dan each frame, stops on wall with small AoE). Cone (Cleaner) is handled outside the pool. Dan-collision funnels through the shared i-frame window via `hitDanRanged` (point) / `hitDanArea` (blast).
 - **Spawner-terminals (all enemies):** every level places destroyable spawner-terminals (HP 4, 300 pts, HP pips, hit flash) of its enemy type; **all enemies emerge from terminals** (no floor placement). Emitter light is tinted per enemy type; brief white pulse on each emit. Destroying all terminals of a type stops its spawns.
 - **Human workers + rescue scoring** (GDD §7) — 5 per level, scattered away from Dan's spawn. They **wander slowly and flee robots** within `avoidRadius` (scurrying faster while fleeing); pure flavor for now since only the (unbuilt) Inventory Bot can kill them. Dan **rescues by walking into one** for **escalating points** — 100 / 200 / 400 / 800 / 1600 (doubling, `rescueBase·2^n`), summing to **3,100** for all five, with a celebratory "ALL 5 SAVED!" callout on the last. HUD shows `WORKERS n/5 RESCUED`. The rescue counter (`G.rescued`) resets each level; the score persists. Drawn as a hi-vis hard-hat figure (clearly not a robot), with a "!" while fleeing.
+- **Audio** (GDD §10) — retro arcade SFX **synthesized live via the Web Audio API** (no asset files; single-file/ES-module constraint holds). Lives in `audio.js`, a cross-cutting leaf (imports only `CFG`) exposing a named `sfx.*` API; every gameplay event adds a one-line call at its source (the same pattern as `addFloat`). **16 sounds:** the 3 GDD-mandated (`pop` soap-hit, `alarm` Scanner klaxon, `detonate` Dustbin blast) plus game-feel additions — `shoot`, `terminalHit`/`terminalDie`, `enemyDie`, `hurt` (all 3 Dan-damage paths), `enemyFire` (all 4 ranged kinds), `deploy`, `powerup`, `heal`, `rescue` (**pitch climbs with `G.rescued`**), `workerLost`, `levelClear`, `gameOver`. AudioContext is lazily created and **resumed on the first user gesture** (`unlock()` from `input.js` keydown/mousedown/touchstart — browser autoplay policy). **`M` toggles mute.** A small per-sound throttle (`shoot`/`pop`/`enemyFire`/`hurt`) prevents clipping when many fire in one frame. Master gain + startup-enabled in `CFG.AUDIO`.
 - **Level system:** procedural warehouse, camera, EXIT door + off-screen pointer, level-clear splash, endless progression. **HP, power-ups, and score persist across levels.**
 - **States:** `title` / `playing` / `levelclear` / `dead`.
 
@@ -137,6 +138,18 @@ design intent is in **GDD.md**. Behavior described here is the source of truth f
 - **Reuses the generalized multi-type spawn loop** (built for the Manager/Scanner mixed levels): each global tick emits one of every terminal type present, each capped by its own `max`. The sandbox is just "every terminal type at once."
 - **Endless tail.** It's the last `LEVEL_PLAN` entry, so all levels ≥ L10 are mixed — the game's endless mode becomes the all-types arena. Inventory bots + workers make the rescue/hunt subplot run there too.
 
+### Audio (GDD §10)
+
+- **Live synthesis, no assets.** Every SFX is built per call from oscillators + filtered noise + gain envelopes (`tone`/`noise`/`sequence` helpers in `audio.js`). No sample files — keeps the single-file/ES-module constraint and makes sounds tunable as code. Nodes are fire-and-forget (`stop()` + `onended` disconnect); no pooling.
+- **`audio.js` is a leaf, called like `addFloat`.** It imports only `CFG` (no game state), so wiring is a one-line `sfx.x()` at each event's source module — no central event bus. This mirrors how `effects.js` is used and avoids threading audio through `update.js`. (Alt: an event queue drained each frame — more indirection for no benefit at this scale.)
+- **Sounds fire at the state change, not in the renderer.** Kept out of `render*.js` so they trigger once per event (e.g. `killEnemy`, not per-frame while a death animation plays). Scanner `alarm` is **edge-triggered** (`alarming && !wasAlarming`) so it sounds once when LOS opens, not every frame it holds. `shoot` fires in `fireVolley` (once per trigger), **not** per pellet, so a Triple shot is one bloop.
+- **Damage = one `hurt` for all three paths.** `meleeContact` / `hitDanRanged` / `hitDanArea` each call `sfx.hurt()`; the i-frame guard in `meleeContact` means a blocked touch is silent, matching the no-damage behavior. `enemyFire` covers all four ranged `kind`s with one zap (per-kind variants deferred — flagged, not built).
+- **Escalating rescue pitch.** `sfx.rescue(G.rescued)` is called *before* `G.rescued++`, so the 0-based step (0→4) raises the pitch with each of the 5 rescues — an audio analogue of the doubling score (capped at step 5 in `audio.js`).
+- **Autoplay policy.** AudioContext starts suspended; `unlock()` (resume) is called from the first keydown/mousedown/touchstart in `input.js`. The context is also lazily created on the first `sfx.*` call, so a sound fired before any gesture simply no-ops until unlocked rather than throwing.
+- **Throttling, not voice-capping.** A min-interval per noisy sound (`shoot` 0.05 / `pop` 0.04 / `enemyFire` 0.05 / `hurt` 0.12 s) drops duplicates fired the same frame (e.g. a Triple volley popping 3 enemies). Cheaper than counting concurrent voices; one-shot jingles aren't throttled.
+- **Mute = `M` key** (`input.js`), toggling `master.gain` between `CFG.AUDIO.master` (0.35) and 0. `CFG.AUDIO.enabled` is the startup state.
+- **Divergence from GDD §10:** the GDD specifies only the 3 SFX above; the other 13 are additions for game feel (approved). Nothing in §10 was contradicted — only extended. A sustained vortex-hum during the Dustbin attract phase was considered and **deferred** (needs a managed looping voice tied to the state machine); the one-shot `deploy` whoosh ships instead.
+
 ---
 
 ## Architecture map (where things live)
@@ -153,6 +166,7 @@ design intent is in **GDD.md**. Behavior described here is the source of truth f
 - **`config.js`** — `CFG`, `ENEMY` (per-type stat table + ranged stats), `POWERUPS`/`POWERUP_KEYS`, `LEVEL_PLAN`. Pure data. *No imports.*
 - **`palette.js`** — `COL`, `TERMINAL_TINT`. *No imports.*
 - **`canvas.js`** — `canvas`, `ctx`, `VIEW_W/H`. *No imports.*
+- **`audio.js`** — Web Audio SFX (GDD §10): the `sfx.*` sound library + `tone`/`noise`/`sequence` synth helpers, lazy AudioContext + `master` gain, `unlock`/`toggleMute`/`isMuted`, per-sound throttle. ← config (`CFG.AUDIO`) only. Called for its side-effects from player/combat/projectiles/enemies/dustbin/level/vending/workers/update; `unlock`+`toggleMute` from input.
 - **`state.js`** — `G` (the mutable container: run meta + entities `dan/shots/enemies/terminals/pickups/marks/floats/ebolts/vending/dustbin/dustbinPickups/workers/camera/exit` + `spawnTimer`/`pickupTimer`) and `levelType()`. ← config.
 - **`world.js`** — `map[][]` (exported `let`, reassigned only here), `isWall`/`isBorderTile`/`generateWarehouse`/`randomFloorTile`/`randomFloorTileNearWall` (wall-adjacent tile for flush placement)/`hasLineOfSight`/`destroyShelf`, collision `bodyHitsWall`/`moveBody`, tile helpers `tileFloor`/`tileCenter`/`tileClearRun`/`rectPerimeterClear`, `clamp`. ← config, canvas, state.
 - **`effects.js`** — `addFloat`, `updateEffects` (marks + floats lifetimes). ← state.
@@ -163,7 +177,7 @@ design intent is in **GDD.md**. Behavior described here is the source of truth f
 - **`vending.js`** — `placeVendingMachines` (per-level flush-against-wall placement) + `updateVending` (contact trigger, maxHp-capped heal, single-use depletion). ← config, state, world (`randomFloorTileNearWall`/`tileCenter`), effects, palette. Called from `level.js` (place) and `update.js` (update); drawn by `render.js`.
 - **`dustbin.js`** — the Atomic Dustbin special (GDD §5): `placeDustbins` (rare floor-pickup seeding), `updateDustbin` (collect + deploy E/F + slide→attract→detonate state machine), `vortexHold` (the attract-phase pull, called from `enemies.js`). ← config, state, **input** (`keys`), world, combat (`killEnemy`), effects, palette. Called from `level.js` (place) and `update.js` (update); drawn by `render.js`. NB: `dustbin → input → level → dustbin` is an import cycle, but every cross-module use is inside a function (runtime), so module evaluation is safe.
 - **`workers.js`** — `updateWorkers` (wander/avoid + rescue-on-contact), `rescueWorker` (escalating points + counter + callout), and `killWorker` (exported; Inventory Bot's no-points worker kill). ← config, palette, state, world, effects.
-- **`input.js`** — `keys`, `mouse`, `fireKeyStack`, `FIRE_ANGLES`, `keyboardFireAngle`; registers key/mouse/touch listeners on import (side-effect). ← canvas, state, level (`newGame`).
+- **`input.js`** — `keys`, `mouse`, `fireKeyStack`, `FIRE_ANGLES`, `keyboardFireAngle`; registers key/mouse/touch listeners on import (side-effect). Also unlocks audio on the first gesture and binds `M` = mute. ← canvas, state, level (`newGame`), audio (`unlock`/`toggleMute`).
 - **`player.js`** — `updateDan` (slow move-scaling, decays `slow`/`sprayTick`), `fireVolley`/`fireBubble`, `updateShots` (bubble↔enemy↔terminal). ← config, state, input, world, combat.
 - **`update.js`** — `update(dt)` orchestrator (Dan → shots → **dustbin** → spawn → enemies → ebolts → pickups → vending → workers → effects → camera) + `updateCamera` + spawn/terminal/exit/death bookkeeping. ← state, config, player, enemies, projectiles, workers, vending, dustbin, level, effects, world, canvas.
 - **`render-entities.js`** — `drawEnemies` (per-type sprites + berserk aura) + `drawEbolts` (bolt/arc/drop/homing). ← canvas, state, config, palette, enemies (`coneRayDist`).
@@ -185,9 +199,9 @@ design intent is in **GDD.md**. Behavior described here is the source of truth f
 
 All 9 GDD enemies (Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager,
 Scanner, Inventory) + the Dispatch Terminal are built, plus the `"mixed"` all-types
-sandbox. The Atomic Dustbin special (§5) is **DONE** (`dustbin.js`). The **remaining
-larger GDD features** are the next valuable work:
+sandbox. The Atomic Dustbin special (§5) is **DONE** (`dustbin.js`) and the **audio
+system (§10) is DONE** (`audio.js`). The **remaining larger GDD features** are the
+next valuable work:
 
 - **Full guaranteed-placement procgen (§8.1)** — the current world gen is the test layout; §8.1 wants guaranteed exit/worker/terminal/pickup placement with better shelf structure.
-- **Audio (§10)** — Web Audio SFX (hit/splash, Scanner alarm, dustbin detonation). None built.
-- **Sprite-art polish (§10).**
+- **Sprite-art polish (§10)** — chunky pixel-art pass; the §10 *audio* half is now built.

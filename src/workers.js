@@ -12,6 +12,7 @@ import { COL } from "./palette.js";
 import { G } from "./state.js";
 import { moveBody } from "./world.js";
 import { addFloat } from "./effects.js";
+import { sfx } from "./audio.js";
 
 export function updateWorkers(dt){
   const d = CFG.WORKER;
@@ -58,6 +59,7 @@ export function killWorker(w){
   const i = G.workers.indexOf(w);
   if (i < 0) return;
   addFloat(w.x, w.y - 14, "WORKER LOST", COL.chargeWarn);
+  sfx.workerLost();
   G.workers.splice(i, 1);
 }
 
@@ -66,6 +68,7 @@ function rescueWorker(i){
   const w = G.workers[i], d = CFG.WORKER;
   const pts = d.rescueBase * Math.pow(2, G.rescued);   // 100, 200, 400, 800, 1600
   G.score += pts;
+  sfx.rescue(G.rescued);   // pitch climbs with each rescue this level (0-based)
   G.rescued++;
   addFloat(w.x, w.y - 14, "+" + pts + " SAVED", COL.atomic);
   G.workers.splice(i, 1);

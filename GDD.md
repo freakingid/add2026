@@ -6,8 +6,8 @@ rules, see CLAUDE.md. Section numbers here are stable — STATUS.md references t
 
 ### Build status index
 
-- **Built:** §2 Player (incl. §2.5 Vending Machines), §3 Power-ups, §4 Controls (incl. §4.4 special-item deploy), §5 Atomic Dustbin special, §6 Enemies (**full roster**: Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner, Inventory + Dispatch Terminal) plus a `"mixed"` all-types sandbox level, §7 Human workers + rescue scoring, §8.2 level-end, §8.3 progression, parts of §10.
-- **Designed, NOT yet built:** full guaranteed-placement procgen (§8.1), audio (§10), sprite-art polish (§10).
+- **Built:** §2 Player (incl. §2.5 Vending Machines), §3 Power-ups, §4 Controls (incl. §4.4 special-item deploy), §5 Atomic Dustbin special, §6 Enemies (**full roster**: Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner, Inventory + Dispatch Terminal) plus a `"mixed"` all-types sandbox level, §7 Human workers + rescue scoring, §8.2 level-end, §8.3 progression, §10 audio.
+- **Designed, NOT yet built:** full guaranteed-placement procgen (§8.1), §10 sprite-art polish.
 
 ---
 
@@ -331,7 +331,7 @@ High score is tracked and displayed on the title / game-over screen.
 - **Setting:** warehouse interior — shelving, concrete floors, loading zones, break-room elements.
 - **Projectile visuals:** base iridescent soap bubbles; Triple Shot larger opaque cleaning pods; Bounce leaves a soapy trail on walls at ricochet points.
 - **Atomic Dustbin:** glowing green, spins as a floor pickup; dramatic vortex + explosion on detonation.
-- **Audio:** retro arcade SFX via Web Audio API — pop/splash on hit, alarm on Scanner trigger, explosion on dustbin detonation. *(Audio NOT yet built.)*
+- **Audio:** retro arcade SFX via Web Audio API — pop/splash on hit, alarm on Scanner trigger, explosion on dustbin detonation. *(Built — `audio.js`; 16 synthesized SFX incl. these 3 plus game-feel additions, `M` to mute. See STATUS.md → "Audio".)*
 
 ---
 

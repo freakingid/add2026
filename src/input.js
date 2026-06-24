@@ -7,6 +7,7 @@
 import { canvas, VIEW_W, VIEW_H } from "./canvas.js";
 import { G } from "./state.js";
 import { newGame } from "./level.js";
+import { unlock, toggleMute } from "./audio.js";
 
 /* ---- Input -------------------------------------------------------------- */
 export const keys = {};
@@ -32,6 +33,8 @@ const HANDLED_KEYS = new Set(["w","a","s","d","e","f", ...Object.keys(FIRE_ANGLE
 
 addEventListener("keydown", e => {
   const k = e.key.toLowerCase();
+  unlock();                          // resume AudioContext on first gesture (autoplay policy)
+  if (k === "m" && !e.repeat) toggleMute();   // M = mute toggle (GDD §10 audio)
   if (G.state === "playing" && HANDLED_KEYS.has(k)) e.preventDefault();
   if (!keys[k] && k in FIRE_ANGLES){
     const i = fireKeyStack.indexOf(k);
@@ -63,11 +66,13 @@ canvas.addEventListener("mousemove", e => {
 });
 canvas.addEventListener("mousedown", () => {
   mouse.down = true;
+  unlock();                          // resume AudioContext on first gesture (autoplay policy)
   if (G.state === "title" || G.state === "dead") newGame();
 });
 addEventListener("mouseup", () => { mouse.down = false; });
 // Touch fallback so it isn't dead on mobile
 canvas.addEventListener("touchstart", e => {
   e.preventDefault();
+  unlock();                          // resume AudioContext on first gesture (autoplay policy)
   if (G.state === "title" || G.state === "dead") newGame();
 }, {passive:false});

@@ -15,10 +15,12 @@ import { CFG } from "./config.js";
 import { G } from "./state.js";
 import { isWall } from "./world.js";
 import { hitDanRanged, hitDanArea } from "./combat.js";
+import { sfx } from "./audio.js";
 
 // Fire a homing missile from Manager `e`. The missile's initial direction is toward
 // Dan, but it can steer each frame (capped turn rate — outrunnable, lure-into-walls).
 export function fireEnemyHoming(e, d){
+  sfx.enemyFire();
   const angle = Math.atan2(G.dan.y - e.y, G.dan.x - e.x);
   const muzzle = e.r + 6;
   G.ebolts.push({
@@ -41,6 +43,7 @@ export function fireEnemyHoming(e, d){
 // Spawn one bolt from enemy `e` traveling along `angle`. `d` = that type's
 // ENEMY entry (supplies boltSpeed / boltDmg / boltRadius / boltRange).
 export function fireEnemyBolt(e, angle, d){
+  sfx.enemyFire();
   const muzzle = e.r + 4;
   G.ebolts.push({
     kind: "bolt",
@@ -59,6 +62,7 @@ export function fireEnemyBolt(e, angle, d){
 // Lob a cardboard box from `e` toward (tx,ty) — Dan's position at fire time.
 // The arc clears walls and lands after `arcDur`, then checks a blast radius.
 export function fireEnemyArc(e, tx, ty, d){
+  sfx.enemyFire();
   const dist = Math.hypot(tx - e.x, ty - e.y);
   G.ebolts.push({
     kind: "arc",
@@ -79,6 +83,7 @@ export function fireEnemyArc(e, tx, ty, d){
 // shadow are the telegraph. Ignores walls (stopsOnWall:false), so cover is no
 // defense.
 export function fireEnemyDrop(e, tx, ty, d){
+  sfx.enemyFire();
   const fall = Math.max(d.dropMinFall, ty - e.y);   // start at the drone's height
   G.ebolts.push({
     kind: "drop",

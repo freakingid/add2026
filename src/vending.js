@@ -15,6 +15,7 @@ import { G } from "./state.js";
 import { randomFloorTileNearWall, tileCenter } from "./world.js";
 import { addFloat } from "./effects.js";
 import { COL } from "./palette.js";
+import { sfx } from "./audio.js";
 
 // Place the level's vending machines flush against walls. Test levels use a
 // fixed CFG.VENDING.testPlacement list (manual 1–2 machines); full weighted
@@ -61,6 +62,7 @@ export function updateVending(dt){
       m.flash = 0.25;
       const color = m.variant === "large" ? COL.vendLarge : COL.vendSmall;
       addFloat(m.x, m.y - 20, "+" + gained, color);
+      sfx.heal();
     }
   }
 }

@@ -27,6 +27,7 @@ import { moveBody, isWall, randomFloorTile } from "./world.js";
 import { killEnemy } from "./combat.js";
 import { addFloat } from "./effects.js";
 import { COL } from "./palette.js";
+import { sfx } from "./audio.js";
 
 // Edge-trigger for the deploy key (E/F): fire once on the press, not every frame held.
 let deployHeld = false;
@@ -102,6 +103,7 @@ function deployDustbin(){
   }
   G.dustbin = b;
   G.dan.hasDustbin = false;
+  sfx.deploy();
 }
 
 // Slide with exponential friction + per-axis wall bounce (mirrors the bounce-shot
@@ -159,5 +161,6 @@ function detonate(b){
     G.marks.push({ x:b.x + Math.cos(a)*r, y:b.y + Math.sin(a)*r, life:1, kind:"debris", size:5 + Math.random()*6 });
   }
   addFloat(b.x, b.y - 24, "DAN'S SPECIAL!", COL.atomic);
+  sfx.detonate();
   G.dustbin = null;
 }

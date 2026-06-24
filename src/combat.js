@@ -9,11 +9,13 @@ import { CFG, ENEMY } from "./config.js";
 import { COL } from "./palette.js";
 import { G } from "./state.js";
 import { addFloat } from "./effects.js";
+import { sfx } from "./audio.js";
 
 // Apply a ranged hit to Dan: shared i-frame + a lighter knockback along the
 // bolt's travel direction.
 export function hitDanRanged(b){
   G.dan.hp -= b.dmg;
+  sfx.hurt();
   G.dan.iframe = CFG.DAN_IFRAME;
   const a = Math.atan2(b.vy, b.vx);
   G.dan.kvx = Math.cos(a) * CFG.KNOCKBACK_SPEED * 0.6;
@@ -24,6 +26,7 @@ export function hitDanRanged(b){
 // blast center.
 export function hitDanArea(x, y, dmg){
   G.dan.hp -= dmg;
+  sfx.hurt();
   G.dan.iframe = CFG.DAN_IFRAME;
   const a = Math.atan2(G.dan.y - y, G.dan.x - x);
   G.dan.kvx = Math.cos(a) * CFG.KNOCKBACK_SPEED * 0.6;
@@ -37,6 +40,7 @@ export function meleeContact(e, dx, dy, dist, dmg){
 
   if (dmg > 0 && G.dan.iframe <= 0){
     G.dan.hp -= dmg;
+    sfx.hurt();
     G.dan.iframe = CFG.DAN_IFRAME;
     G.dan.kvx = (dx/dist) * CFG.KNOCKBACK_SPEED;
     G.dan.kvy = (dy/dist) * CFG.KNOCKBACK_SPEED;
@@ -52,6 +56,7 @@ export function killEnemy(index){
   const e = G.enemies[index];
   G.score += ENEMY[e.type].points;
   addFloat(e.x, e.y - 16, "+" + ENEMY[e.type].points, COL.amber);
+  sfx.enemyDie();
 
   // Manager on-death: emit a berserk pulse that buffs all nearby robots (GDD 6.1.9).
   // Berserk effect: increased speed + increased melee damage for `berserDur` seconds.
@@ -75,5 +80,6 @@ export function destroyTerminal(index){
   const t = G.terminals[index];
   G.score += CFG.TERMINAL.points;
   addFloat(t.x, t.y - 18, "+" + CFG.TERMINAL.points, COL.atomic);
+  sfx.terminalDie();
   G.terminals.splice(index, 1);
 }

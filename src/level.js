@@ -12,6 +12,7 @@ import { spawnEnemy } from "./enemies.js";
 import { placeVendingMachines } from "./vending.js";
 import { placeDustbins } from "./dustbin.js";
 import { addFloat } from "./effects.js";
+import { sfx } from "./audio.js";
 
 // Full reset — new run from level 1. HP, power-ups, score all cleared.
 export function newGame(){
@@ -155,6 +156,7 @@ export function updatePickups(dt){
       G.powerups[p.type] += CFG.POWERUP_SHOTS;
       const def = POWERUPS[p.type];
       addFloat(p.x, p.y - 14, "+" + def.label, def.color);
+      sfx.powerup();
       G.pickups.splice(i, 1);
     }
   }
