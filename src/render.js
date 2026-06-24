@@ -28,6 +28,7 @@ export function render(){
   drawMarks();
   drawExit();
   drawVending();
+  drawDustbins();
   drawTerminals();
   drawPickups();
   drawWorkers();
@@ -210,6 +211,109 @@ function drawVending(){
   }
 }
 
+// Atomic Dustbin special (GDD 5): glowing-green floor pickups + the one active
+// deployed dustbin (sliding canister, or an open vortex during the attract phase).
+function drawDustbins(){
+  const t = performance.now() * 0.001;
+
+  // Floor pickups — spinning, bobbing, glowing green.
+  for (const p of G.dustbinPickups){
+    const y = p.y + Math.sin(p.bob) * 3;
+    const glow = 0.5 + 0.5 * Math.sin(p.bob * 2);
+    ctx.globalAlpha = 0.22 + 0.18 * glow;
+    ctx.fillStyle = COL.atomic;
+    ctx.beginPath();
+    ctx.arc(p.x, y, p.r + 8, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    drawDustbinCan(p.x, y, p.r, p.spin, true);
+  }
+
+  const b = G.dustbin;
+  if (!b) return;
+
+  if (b.state === "attract"){
+    // Faint pull-radius ring so the player reads the danger zone.
+    ctx.strokeStyle = "rgba(93,255,143,0.18)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, CFG.DUSTBIN.attractRadius, 0, Math.PI*2);
+    ctx.stroke();
+
+    // Swirling vortex: arms spiralling inward, accelerating as detonation nears.
+    const urgency = 1 - b.timer / CFG.DUSTBIN.attractDur;     // 0 -> 1
+    const spin = t * (3 + urgency * 9);
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    for (let arm = 0; arm < 4; arm++){
+      ctx.strokeStyle = "rgba(93,255,143," + (0.35 + 0.4*urgency).toFixed(2) + ")";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let s = 0; s <= 1; s += 0.1){
+        const rr = CFG.DUSTBIN.attractRadius * 0.85 * (1 - s);
+        const aa = spin + arm * Math.PI/2 + s * 5;
+        const px = Math.cos(aa) * rr, py = Math.sin(aa) * rr;
+        if (s === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Bright pulsing core at the mouth of the open bin.
+    const pulse = 0.5 + 0.5 * Math.sin(t * (8 + urgency * 16));
+    ctx.globalAlpha = 0.5 + 0.5 * pulse;
+    ctx.fillStyle = "#dfffe8";
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r * (0.5 + 0.3*pulse), 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    drawDustbinCan(b.x, b.y, b.r, b.spin, true, true);
+  } else {
+    // Sliding / settling — a thrown canister tumbling across the floor.
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = COL.atomic;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r + 5, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    drawDustbinCan(b.x, b.y, b.r, b.spin, true);
+  }
+}
+
+// A small radioactive trash canister. `lit` = green glow accents; `open` lifts the
+// lid (attract phase). Rotated by `spin` so it reads as spinning/tumbling.
+function drawDustbinCan(x, y, r, spin, lit, open){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(Math.sin(spin) * 0.25);          // gentle wobble rather than full spin
+  const w = r * 1.5, h = r * 1.8;
+  // body
+  ctx.fillStyle = "#1d3a28";
+  ctx.fillRect(-w/2, -h/2, w, h);
+  ctx.strokeStyle = lit ? COL.atomic : "#2a4a36";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(-w/2 + 1, -h/2 + 1, w - 2, h - 2);
+  // hazard band
+  ctx.fillStyle = lit ? COL.atomic : "#3a6a4a";
+  ctx.fillRect(-w/2, -h*0.12, w, h*0.24);
+  // radioactive trefoil (three wedges around a hub) on the band
+  ctx.fillStyle = "#0c130d";
+  for (let i = 0; i < 3; i++){
+    const a = i * (Math.PI*2/3) - Math.PI/2;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, r*0.42, a - 0.45, a + 0.45);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.beginPath(); ctx.arc(0, 0, r*0.14, 0, Math.PI*2); ctx.fill();
+  // lid (lifted + ajar while open/attracting)
+  ctx.fillStyle = "#2a4a36";
+  const lidY = open ? -h/2 - r*0.55 : -h/2 - 2;
+  ctx.fillRect(-w*0.6, lidY, w*1.2, r*0.35);
+  ctx.restore();
+}
+
 function drawTerminals(){
   for (const t of G.terminals){
     const glow = 0.5 + 0.5 * Math.sin(t.pulse);
@@ -272,6 +376,21 @@ function drawMarks(){
       const rad = progress * 200;
       ctx.strokeStyle = "rgba(255,100,20," + (m.life / 1.5 * 0.75).toFixed(2) + ")";
       ctx.lineWidth = 4 - progress * 2.5;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, Math.max(1, rad), 0, Math.PI*2);
+      ctx.stroke();
+    } else if (m.kind === "blast"){
+      // Atomic Dustbin detonation: a bright shockwave ring flashing out to blastRadius.
+      const progress = 1 - m.life / 1.5;            // 0 at detonation -> 1 at end
+      const rad = progress * CFG.DUSTBIN.blastRadius;
+      // filled flash core, fading fast
+      ctx.fillStyle = "rgba(93,255,143," + (m.life / 1.5 * 0.30).toFixed(3) + ")";
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, Math.max(1, rad), 0, Math.PI*2);
+      ctx.fill();
+      // leading shock ring
+      ctx.strokeStyle = "rgba(220,255,235," + (m.life / 1.5 * 0.9).toFixed(2) + ")";
+      ctx.lineWidth = 6 - progress * 4;
       ctx.beginPath();
       ctx.arc(m.x, m.y, Math.max(1, rad), 0, Math.PI*2);
       ctx.stroke();
@@ -428,6 +547,20 @@ function drawDan(){
   ctx.beginPath();
   ctx.arc(0, 0, G.dan.r, 0, Math.PI*2);
   ctx.stroke();
+
+  // Carried Atomic Dustbin (GDD 5): a small glowing canister bobbing over his head.
+  if (G.dan.hasDustbin){
+    const by = -G.dan.r - 9 + Math.sin(performance.now() * 0.005) * 1.5;
+    ctx.fillStyle = "rgba(93,255,143,0.35)";
+    ctx.beginPath(); ctx.arc(0, by, 7, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#1d3a28";
+    ctx.fillRect(-4, by - 4, 8, 9);
+    ctx.fillStyle = COL.atomic;
+    ctx.fillRect(-4, by - 1, 8, 2);
+    ctx.strokeStyle = COL.atomic;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-4, by - 4, 8, 9);
+  }
 
   ctx.restore();
 }

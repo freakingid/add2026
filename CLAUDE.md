@@ -52,7 +52,7 @@ and responsibilities) is in **STATUS.md → "Architecture map"**. Quick orientat
 - **Data/leaves:** `config.js` (`CFG`, `ENEMY`, `POWERUPS`, `LEVEL_PLAN`), `palette.js` (`COL`), `canvas.js` (`ctx`/view dims).
 - **State:** `state.js` — the single mutable `G` object (run meta + all entities `dan/shots/enemies/terminals/pickups/marks/floats/ebolts/camera/exit` + timers) and `levelType()`. Modules read/mutate `G.*`; whole-value resets (`G.shots = []`) live in `level.js`.
 - **World:** `world.js` — `map`, collision (`moveBody`), geometry/LOS, `destroyShelf`.
-- **Sim:** `player.js` (Dan + soap shots), `enemies.js` (spawn + per-type AI incl. Inventory worker-hunter; `buffSpd` combines Manager berserk + Scanner alarm), `projectiles.js` (`G.ebolts` pool; `kind`: `bolt`/`arc`/`drop`/`homing`), `combat.js` (damage/kill/berserk), `workers.js` (human workers wander/flee + `rescueWorker`/`killWorker`), `level.js` (newGame/buildLevel/nextLevel + terminals + pickups + 5 workers; `"mixed"` branch), `effects.js`. `update.js` orchestrates one frame.
+- **Sim:** `player.js` (Dan + soap shots), `enemies.js` (spawn + per-type AI incl. Inventory worker-hunter; `buffSpd` combines Manager berserk + Scanner alarm), `projectiles.js` (`G.ebolts` pool; `kind`: `bolt`/`arc`/`drop`/`homing`), `combat.js` (damage/kill/berserk), `workers.js` (human workers wander/flee + `rescueWorker`/`killWorker`), `dustbin.js` (Atomic Dustbin special §5 — carry/throw/slide/attract/detonate + `vortexHold`), `level.js` (newGame/buildLevel/nextLevel + terminals + pickups + 5 workers; `"mixed"` branch), `effects.js`. `update.js` orchestrates one frame.
 - **Render:** `render.js` (compositor + world draws), `render-entities.js` (enemy/ebolt sprites), `screens.js` (HUD + title/levelclear/gameover). `input.js` registers listeners on import.
 - States: `title` / `playing` / `levelclear` / `dead`.
 - **Adding an enemy:** stats in `config.js` (`ENEMY` + `LEVEL_PLAN`), color in `palette.js`, spawn-init + AI in `enemies.js`, sprite in `render-entities.js`, any new projectile `kind` in `projectiles.js`.
@@ -76,9 +76,9 @@ are in STATUS.md.
 9. Inventory Bot (wanderer/worker-hunter; ONLY robot that kills workers) — **DONE (L9)**
 
 **Enemy roster COMPLETE** (all 9 + Dispatch Terminal). Human workers + rescue scoring
-(§7) **DONE** (`workers.js`); the **`"mixed"` all-types sandbox** is L10+. Remaining
-larger GDD features: Atomic Dustbin special (§5), full guaranteed-placement procgen
-(§8.1), audio (§10), sprite polish (§10).
+(§7) **DONE** (`workers.js`); the **`"mixed"` all-types sandbox** is L10+; the **Atomic
+Dustbin special (§5) DONE** (`dustbin.js`). Remaining larger GDD features:
+full guaranteed-placement procgen (§8.1), audio (§10), sprite polish (§10).
 
-**Larger unbuilt GDD features:** human workers + rescue scoring (§7), Atomic Dustbin
-special (§5), full procedural placement (§8.1), audio (§10), sprite-art polish (§10).
+**Larger unbuilt GDD features:** full procedural placement (§8.1), audio (§10),
+sprite-art polish (§10).

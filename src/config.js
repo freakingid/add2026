@@ -39,6 +39,26 @@ export const CFG = {
     minDistFromCenter: 4,                        // keep off Dan's central spawn pocket
   },
 
+  // Atomic Dustbin special (GDD §5) — a rare, glowing-green deployable Dan carries
+  // one at a time. Stationary deploy drops it in place; moving deploy THROWS it (it
+  // slides with friction and bounces off walls). Once stopped it opens a vortex
+  // (attract phase) pulling/holding robots in `attractRadius`, then detonates for a
+  // big AoE in `blastRadius`. `blastDmg` is high enough to destroy any current type.
+  DUSTBIN: {
+    r: 14,                  // pickup + deployed contact/visual radius
+    throwSpeed: 300,        // initial slide speed when thrown while moving (px/s)
+    friction: 2.2,          // exponential velocity decay rate while sliding
+    stopSpeed: 30,          // below this slide speed it settles -> attract begins
+    bounce: 0.7,            // fraction of speed kept per wall bounce
+    attractDur: 2.5,        // attract-phase length (GDD §5.2)
+    attractRadius: 260,     // robots within this are pulled toward it and can't act
+    pullSpeed: 150,         // how fast caught robots are sucked toward the vortex
+    blastRadius: 200,       // detonation AoE (also large; destroys most nearby bots)
+    blastDmg: 99,           // heavy enough to destroy any current robot type
+    spawnChance: 0.5,       // odds of a dustbin pickup per level (L1 always seeds one)
+    pickupMinDist: 6,       // keep the floor pickup off Dan's spawn pocket
+  },
+
   // Power-ups (GDD 3) — shot-count based, fully stackable
   POWERUP_SHOTS: 75,            // enhanced shots granted per pickup
   TRIPLE_SPREAD: 0.22,         // rad between fan projectiles

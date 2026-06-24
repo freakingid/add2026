@@ -15,6 +15,7 @@ import { updateEnemies } from "./enemies.js";
 import { updateEbolts } from "./projectiles.js";
 import { updateWorkers } from "./workers.js";
 import { updateVending } from "./vending.js";
+import { updateDustbin } from "./dustbin.js";
 import { updateEffects } from "./effects.js";
 import { nextLevel, spawnWave, spawnPickup, updatePickups } from "./level.js";
 
@@ -30,6 +31,7 @@ export function update(dt){
 
   updateDan(dt);
   updateShots(dt);
+  updateDustbin(dt);   // deploy/collect + slide/attract/detonate, before enemies see the vortex
 
   // Spawn from every terminal type present in the level, each capped by its own max.
   // Pure levels have one type; mixed levels (e.g. Manager + Pickers) cycle both.

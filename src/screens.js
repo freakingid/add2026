@@ -59,6 +59,27 @@ export function drawHUD(){
     py += ph + 4;
   }
 
+  // Atomic Dustbin special carried? (GDD 5) — a green pill prompting the deploy key.
+  if (G.dan.hasDustbin){
+    const pw = 132, ph = 16;
+    ctx.fillStyle = "#0c0e12";
+    ctx.fillRect(pad, py, pw, ph);
+    ctx.fillStyle = COL.atomic;
+    ctx.fillRect(pad + 2, py + 2, 12, ph - 4);
+    ctx.fillStyle = "#11141a";
+    ctx.font = "bold 11px 'Arial Black', sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("☢", pad + 8, py + ph/2 + 1);
+    ctx.fillStyle = COL.atomic;
+    ctx.font = "bold 11px 'Courier New', monospace";
+    ctx.textAlign = "left";
+    ctx.fillText("DUSTBIN", pad + 20, py + ph/2 + 1);
+    ctx.fillStyle = COL.text;
+    ctx.textAlign = "right";
+    ctx.fillText("[E]", pad + pw - 6, py + ph/2 + 1);
+    py += ph + 4;
+  }
+
   // Score
   ctx.textAlign = "right";
   ctx.textBaseline = "alphabetic";

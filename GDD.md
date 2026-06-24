@@ -6,9 +6,8 @@ rules, see CLAUDE.md. Section numbers here are stable — STATUS.md references t
 
 ### Build status index
 
-- **Built:** §2 Player (incl. §2.5 Vending Machines), §3 Power-ups, §4 Controls, §6 Enemies (**full roster**: Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner, Inventory + Dispatch Terminal) plus a `"mixed"` all-types sandbox level, §7 Human workers + rescue scoring, §8.2 level-end, §8.3 progression, parts of §10.
-- **Not yet built:** §5 Atomic Dustbin special, §8.1 full guaranteed-placement procgen, §10 audio + sprite polish.
-- **Designed, NOT yet built:** §5 Atomic Dustbin, full procedural placement (§8.1), audio (§10), sprite-art polish (§10).
+- **Built:** §2 Player (incl. §2.5 Vending Machines), §3 Power-ups, §4 Controls (incl. §4.4 special-item deploy), §5 Atomic Dustbin special, §6 Enemies (**full roster**: Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner, Inventory + Dispatch Terminal) plus a `"mixed"` all-types sandbox level, §7 Human workers + rescue scoring, §8.2 level-end, §8.3 progression, parts of §10.
+- **Designed, NOT yet built:** full guaranteed-placement procgen (§8.1), audio (§10), sprite-art polish (§10).
 
 ---
 
@@ -172,7 +171,7 @@ k l ;     W  ·  E
 
 ## 5. SPECIAL ITEM — THE ATOMIC DUSTBIN
 
-> **Status: DESIGNED, NOT YET BUILT.** (Note `e.flying` already flags drones for the attract phase.)
+> **Status: BUILT** (`dustbin.js`). Implementation/feel decisions are in STATUS.md → "Atomic Dustbin special". `e.flying` flags drones so the attract phase pulls them too.
 
 A rare, glowing green deployable pickup. Dan carries **one at a time**. Glows green,
 spins slowly when sitting on the floor as a pickup.

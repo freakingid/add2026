@@ -16,6 +16,7 @@ import {
 import { meleeContact } from "./combat.js";
 import { fireEnemyBolt, fireEnemyArc, fireEnemyDrop, fireEnemyHoming } from "./projectiles.js";
 import { killWorker } from "./workers.js";
+import { vortexHold } from "./dustbin.js";
 
 // Flips each drone spawn so successive drones orbit Dan in opposite directions
 // (they cross paths — harder to dodge several at once).
@@ -179,6 +180,10 @@ export function updateEnemies(dt){
     e.bob += dt * 8;
     if (e.berserk > 0) e.berserk -= dt;   // decay on any enemy that received the pulse
     if (e.alarmed > 0) e.alarmed -= dt;   // Scanner alarm buff (refreshed each frame in range)
+
+    // Atomic Dustbin attract phase (GDD 5.2): a caught robot is pulled toward the
+    // vortex and skips its whole AI tick — so it can't move on its own OR fire.
+    if (vortexHold(e, dt)) continue;
 
     if (e.type === "forklift") updateForklift(e, dt);
     else if (e.type === "security") updateSecurity(e, dt);

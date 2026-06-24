@@ -10,6 +10,7 @@ import { G, levelType } from "./state.js";
 import { generateWarehouse, randomFloorTile } from "./world.js";
 import { spawnEnemy } from "./enemies.js";
 import { placeVendingMachines } from "./vending.js";
+import { placeDustbins } from "./dustbin.js";
 import { addFloat } from "./effects.js";
 
 // Full reset — new run from level 1. HP, power-ups, score all cleared.
@@ -19,6 +20,7 @@ export function newGame(){
     hp:CFG.DAN_HP, maxHp:CFG.DAN_HP,
     angle:0, cooldown:0, iframe:0, kvx:0, kvy:0,
     slow:0, sprayTick:0,        // Cleaner debuff: slow timer + DoT tick gate
+    hasDustbin:false,           // carrying an Atomic Dustbin special? (GDD 5)
   };
   G.powerups = { rapid:0, triple:0, bounce:0 };
   G.score = 0;
@@ -53,6 +55,7 @@ function buildLevel(){
   G.floats = [];
   G.ebolts = [];
   G.vending = [];
+  G.dustbin = null;           // any in-flight dustbin doesn't carry across levels
   G.workers = [];
   G.rescued = 0;
   G.spawnTimer = 0.6;
@@ -102,6 +105,10 @@ function buildLevel(){
 
   // Vending machines — contact-triggered HP restore, flush against walls (GDD 2.5).
   placeVendingMachines();
+
+  // Atomic Dustbin special — rare glowing-green floor pickup (GDD 5). A carried
+  // dustbin (G.dan.hasDustbin) persists across levels; only the floor pickup reseeds.
+  placeDustbins();
 
   // One exit door, placed away from Dan's spawn (GDD 8.1).
   const ep = randomFloorTile(8);
