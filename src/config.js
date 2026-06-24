@@ -74,6 +74,7 @@ export const CFG = {
     radius: 9,
     speed: 44,                 // slow idle wander
     fleeSpeed: 92,             // quicker scurry while avoiding a robot
+    seekSpeed: 60,             // moves toward Dan on LOS when not fleeing (GDD 7.1)
     avoidRadius: 130,          // starts fleeing a robot within this range
     wanderMin: 0.7, wanderMax: 2.0,   // re-pick wander heading every [min,max] sec
     rescueBase: 100,           // 1st rescue value; doubles per rescue (GDD 7.2)

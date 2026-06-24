@@ -10,7 +10,7 @@
 import { CFG } from "./config.js";
 import { COL } from "./palette.js";
 import { G } from "./state.js";
-import { moveBody } from "./world.js";
+import { moveBody, hasLineOfSight } from "./world.js";
 import { addFloat } from "./effects.js";
 import { sfx } from "./audio.js";
 
@@ -28,11 +28,16 @@ export function updateWorkers(dt){
       if (dd < bd){ bd = dd; threat = e; }
     }
 
+    // Priority (GDD 7.1): flee a nearby robot > move toward Dan on LOS > wander.
     let speed;
     if (threat){
       w.fleeing = true;
       w.heading = Math.atan2(w.y - threat.y, w.x - threat.x) + (Math.random() - 0.5) * 0.4;
       speed = d.fleeSpeed;
+    } else if (hasLineOfSight(w.x, w.y, G.dan.x, G.dan.y)){
+      w.fleeing = false;
+      w.heading = Math.atan2(G.dan.y - w.y, G.dan.x - w.x);   // seek Dan to ease rescue
+      speed = d.seekSpeed;
     } else {
       w.fleeing = false;
       w.wanderT -= dt;
