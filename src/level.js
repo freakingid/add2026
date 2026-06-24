@@ -69,9 +69,10 @@ function buildLevel(){
   // Initial population emerges from the terminals (not floor-placed).
   for (let i = 0; i < (d.preplace || 0); i++) spawnFromTerminal(type);
 
-  // Manager level: also seed a couple of Picker terminals so the berserk pulse
-  // has targets to buff. This is the first mixed-type level (GDD intent).
-  if (type === "manager"){
+  // Manager / Scanner levels are mixed-type: also seed a couple of Picker
+  // terminals so the Manager's berserk pulse / the Scanner's alarm have targets
+  // to buff (GDD intent — support enemies need a cluster to amplify).
+  if (type === "manager" || type === "scanner"){
     for (let i = 0; i < 2; i++){
       const pp = randomFloorTile(6);
       G.terminals.push({ x:pp.x, y:pp.y, r:14, pulse:Math.random()*Math.PI*2,

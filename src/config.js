@@ -141,8 +141,26 @@ export const ENEMY = {
     berserDmgBonus:2,                        // added to melee damage while berserk
     spawners:1, max:2, interval:8.0, preplace:1,
   },
+  scanner: {
+    hp:2, speed:60, radius:13, points:150,   // GDD 6.1.3: support / alarm emitter
+    dmgContact:0,                            // pure support — no direct attack
+    // Patrols a FIXED route (reuses the Cleaner's patrol routing). While it has
+    // LOS to Dan it broadcasts an ALARM: nearby robots get faster + hit harder
+    // (lighter than the Manager's berserk, and CONTINUOUS while in range). The
+    // buff is a short per-robot timer refreshed each frame, so it fades almost
+    // instantly when the Scanner dies or the robot leaves range — kill it first.
+    sight:340,                               // LOS range at which it alarms
+    losCheckEvery:0.2,                       // throttled LOS poll
+    alarmGrace:0.8,                          // alarm lingers this long after LOS breaks
+    alarmRadius:300,                         // buff reaches robots within this radius
+    alarmHold:0.25,                          // per-robot buff timer (refreshed each frame in range)
+    alarmSpeedMult:1.4,                      // speed mult while alarmed (Manager berserk = 1.7)
+    alarmDmgBonus:1,                         // melee dmg added while alarmed (Manager berserk = +2)
+    sweepRate:3.2,                           // radar-dish sweep angular speed (visual)
+    spawners:2, max:4, interval:3.0, preplace:2,
+  },
 };
 
 // Which single enemy type populates each test level (one type per level).
 // Extend as enemies are added; levels beyond the list reuse the last entry.
-export const LEVEL_PLAN = ["picker", "forklift", "security", "sorter", "cleaner", "drone", "manager"];
+export const LEVEL_PLAN = ["picker", "forklift", "security", "sorter", "cleaner", "drone", "manager", "scanner"];

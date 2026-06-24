@@ -6,7 +6,7 @@ rules, see CLAUDE.md. Section numbers here are stable — STATUS.md references t
 
 ### Build status index
 
-- **Built:** §2 Player, §3 Power-ups, §4 Controls, §6 Enemies (Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager — Scanner & Inventory pending), §8.2 level-end, §8.3 progression, parts of §10.
+- **Built:** §2 Player, §3 Power-ups, §4 Controls, §6 Enemies (Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner — Inventory pending, needs human workers), §8.2 level-end, §8.3 progression, parts of §10.
 - **Designed, NOT yet built:** §5 Atomic Dustbin, §7 Human Workers, full procedural placement (§8.1), audio (§10), sprite-art polish (§10).
 
 ---

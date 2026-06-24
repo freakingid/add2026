@@ -22,12 +22,21 @@ export function drawEnemies(){
       ctx.arc(e.x, e.y, e.r + 7 + pulse * 3, 0, Math.PI*2);
       ctx.fill();
     }
+    // Alarm aura: cyan pulsing ring around any robot buffed by a Scanner's alarm.
+    if (e.alarmed > 0 && e.spawn <= 0){
+      const pulse = 0.5 + 0.5 * Math.sin(e.bob * 5);
+      ctx.fillStyle = "rgba(127,224,255," + (0.12 + 0.10*pulse).toFixed(2) + ")";
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r + 6 + pulse * 3, 0, Math.PI*2);
+      ctx.fill();
+    }
     if (e.type === "forklift") drawForklift(e);
     else if (e.type === "security") drawSecurity(e);
     else if (e.type === "sorter") drawSorter(e);
     else if (e.type === "cleaner") drawCleaner(e);
     else if (e.type === "drone") drawDrone(e);
     else if (e.type === "manager") drawManager(e);
+    else if (e.type === "scanner") drawScanner(e);
     else drawPicker(e);
   }
 }
@@ -477,6 +486,62 @@ function drawManager(e){
   for (let h = 0; h < max; h++){
     ctx.fillStyle = h < e.hp ? COL.managerEye : "#1a1020";
     ctx.fillRect(x - r + h*pw, y - r - 11, pw - 2, 4);
+  }
+}
+
+// Support / alarm emitter. Round chassis with a rotating radar dish + sweep wedge;
+// while alarming, the chassis flushes red and an expanding alarm ring broadcasts.
+function drawScanner(e){
+  const grow = e.spawn > 0 ? (1 - e.spawn/0.4) : 1;
+  const r = e.r * grow;
+  const x = e.x, y = e.y;
+  const flash = e.hitFlash > 0;
+  const alarming = e.alarming;
+
+  // Alarm broadcast: expanding red pulse ring while active.
+  if (alarming){
+    const t = (e.bob * 0.5) % 1;
+    ctx.strokeStyle = "rgba(255,91,77," + (0.55 * (1 - t)).toFixed(2) + ")";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, r + 4 + t * 26, 0, Math.PI*2);
+    ctx.stroke();
+  }
+
+  ctx.save();
+  ctx.translate(x, y);
+
+  // round chassis (flushes red while alarming)
+  ctx.fillStyle = flash ? "#ffffff" : (alarming ? COL.scannerAlarm : COL.scannerBody);
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = flash ? "#ffffff" : COL.scannerDark;
+  ctx.fillRect(-r*0.85, r*0.1, r*1.7, r*0.7);          // lower band
+  ctx.strokeStyle = "#161c2a"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.stroke();
+
+  // rotating radar dish + sweep wedge
+  ctx.save();
+  ctx.rotate(e.sweep);
+  ctx.fillStyle = alarming ? "rgba(255,91,77,0.16)" : "rgba(127,224,255,0.14)";
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, r*1.45, -0.38, 0.38); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = alarming ? COL.scannerAlarm : COL.scannerSweep;
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(r*0.95, 0); ctx.stroke();   // dish arm
+  ctx.fillStyle = alarming ? COL.scannerAlarm : COL.scannerDish;
+  ctx.beginPath(); ctx.arc(r*0.95, 0, r*0.22, 0, Math.PI*2); ctx.fill();    // dish head
+  ctx.restore();
+
+  // central sensor eye
+  ctx.fillStyle = flash ? "#ffffff" : (alarming ? "#ffd23f" : COL.scannerSweep);
+  ctx.beginPath(); ctx.arc(0, 0, r*0.22, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // HP pips above (2)
+  const max = ENEMY.scanner.hp;
+  const pw = (2*r) / max;
+  for (let h = 0; h < max; h++){
+    ctx.fillStyle = h < e.hp ? COL.scannerSweep : "#222a3a";
+    ctx.fillRect(x - r + h*pw, y - r - 10, pw - 2, 3);
   }
 }
 

@@ -3,7 +3,7 @@
    patrol routing + spray helpers.
 
    updateEnemies dispatches by e.type to the per-type updaters; each mover
-   applies berserSpd(e) so a Manager's on-death pulse speeds nearby robots.
+   applies buffSpd(e) so a Manager's on-death pulse speeds nearby robots.
    spawnEnemy is the factory (per-type init); coneRayDist is shared with the
    Cleaner's renderer to clip its spray cone to walls.
    ========================================================================= */
@@ -150,7 +150,16 @@ export function spawnEnemy(type, pos){
     e.fireCd = d.firstFireMin + Math.random() * 0.8;   // stagger opening shot
     e.winding = 0;      // >0 = telegraphing launch; aim latched in e.aim
     e.aim = 0;
-    // e.berserk starts undefined; berserSpd/berserDmg handle that gracefully
+    // e.berserk starts undefined; buffSpd/berserDmg handle that gracefully
+  }
+  if (type === "scanner"){
+    buildCleanerPatrol(e);                  // reuse the Cleaner's fixed-route patrol
+    e.wpTimer = ENEMY.cleaner.wpTimeout;
+    const w = e.waypoints[e.wpIndex];       // face toward the first waypoint
+    e.face = Math.atan2(w.y - e.y, w.x - e.x);
+    e.losCheck = Math.random() * d.losCheckEvery;
+    e.alarmT = 0; e.alarming = false;       // alarm timer + state (set by LOS to Dan)
+    e.sweep = Math.random() * Math.PI * 2;  // radar-dish sweep phase
   }
   G.enemies.push(e);
 }
@@ -161,6 +170,7 @@ export function updateEnemies(dt){
     if (e.spawn > 0){ e.spawn -= dt; continue; }
     e.bob += dt * 8;
     if (e.berserk > 0) e.berserk -= dt;   // decay on any enemy that received the pulse
+    if (e.alarmed > 0) e.alarmed -= dt;   // Scanner alarm buff (refreshed each frame in range)
 
     if (e.type === "forklift") updateForklift(e, dt);
     else if (e.type === "security") updateSecurity(e, dt);
@@ -168,6 +178,7 @@ export function updateEnemies(dt){
     else if (e.type === "cleaner") updateCleaner(e, dt);
     else if (e.type === "drone") updateDrone(e, dt);
     else if (e.type === "manager") updateManager(e, dt);
+    else if (e.type === "scanner") updateScanner(e, dt);
     else updatePicker(e, dt);
 
     // melee contact with Dan (single event; re-entry needed via knockback)
@@ -179,26 +190,33 @@ export function updateEnemies(dt){
         dmg = (e.mode === "charge") ? ENEMY.forklift.dmgCharge : ENEMY.forklift.dmgContact;
       else if (e.type === "security")
         dmg = ENEMY.security.dmgContact;   // light contact zap (ranged unit)
-      else if (e.type === "sorter" || e.type === "cleaner" || e.type === "drone" || e.type === "manager")
-        dmg = 0;                           // hazard/ranged units: no contact damage (GDD 6)
+      else if (e.type === "sorter" || e.type === "cleaner" || e.type === "drone" || e.type === "manager" || e.type === "scanner")
+        dmg = 0;                           // hazard/ranged/support units: no contact damage (GDD 6)
       else
         dmg = ENEMY.picker.dmg;
-      // Berserk bonus: pulse from a dying Manager buffs nearby robots' melee (GDD 6.1.9)
+      // Buff bonuses to melee: Manager berserk pulse (GDD 6.1.9) and Scanner alarm (GDD 6.1.3).
       if (dmg > 0 && e.berserk > 0) dmg += ENEMY.manager.berserDmgBonus;
+      if (dmg > 0 && e.alarmed > 0) dmg += ENEMY.scanner.alarmDmgBonus;
       meleeContact(e, dx, dy, dist, dmg);
     }
   }
 }
 
-// Speed multiplier from the Manager's berserk pulse. Safe for any enemy type:
-// e.berserk is undefined on spawns and undefined > 0 is false.
-function berserSpd(e){ return (e.berserk > 0) ? ENEMY.manager.berserSpeedMult : 1; }
+// Combined speed multiplier from active buffs: the Manager's on-death berserk
+// pulse and the Scanner's continuous alarm (they stack). Safe for any enemy type:
+// e.berserk / e.alarmed are undefined on spawns and undefined > 0 is false.
+function buffSpd(e){
+  let m = 1;
+  if (e.berserk > 0) m *= ENEMY.manager.berserSpeedMult;
+  if (e.alarmed > 0) m *= ENEMY.scanner.alarmSpeedMult;
+  return m;
+}
 
 // Basic chaser (Picker).
 function updatePicker(e, dt){
   const dx = G.dan.x - e.x, dy = G.dan.y - e.y;
   const dist = Math.hypot(dx, dy) || 1;
-  moveBody(e, (dx/dist) * e.speed * berserSpd(e) * dt, (dy/dist) * e.speed * berserSpd(e) * dt);
+  moveBody(e, (dx/dist) * e.speed * buffSpd(e) * dt, (dy/dist) * e.speed * buffSpd(e) * dt);
 }
 
 // Slow tank that locks line-of-sight and charges, smashing shelves (GDD 6).
@@ -249,7 +267,7 @@ function updateSecurity(e, dt){
   const dist = Math.hypot(dx, dy) || 1;
 
   // Aggressive pursuit — always close on Dan (it fires while moving).
-  moveBody(e, (dx/dist) * e.speed * berserSpd(e) * dt, (dy/dist) * e.speed * berserSpd(e) * dt);
+  moveBody(e, (dx/dist) * e.speed * buffSpd(e) * dt, (dy/dist) * e.speed * buffSpd(e) * dt);
 
   // Throttled line-of-sight check (reuses the Forklift's LOS helper).
   e.losCheck -= dt;
@@ -295,11 +313,11 @@ function updateSorter(e, dt){
     e.wander += (Math.random() - 0.5) * d.fleeJitter * dt * 6;
     const away = Math.atan2(-dy, -dx);
     const ang = away + Math.sin(e.wander) * 0.9;
-    const fl = d.fleeSpeed * berserSpd(e);
+    const fl = d.fleeSpeed * buffSpd(e);
     moveBody(e, Math.cos(ang) * fl * dt, Math.sin(ang) * fl * dt);
   } else {
     // In cover -> advance toward Dan, and bombard once within lob range.
-    moveBody(e, (dx/dist) * e.speed * berserSpd(e) * dt, (dy/dist) * e.speed * berserSpd(e) * dt);
+    moveBody(e, (dx/dist) * e.speed * buffSpd(e) * dt, (dy/dist) * e.speed * buffSpd(e) * dt);
     e.fireCd -= dt;
     if (e.fireCd <= 0 && dist <= d.fireRange){
       fireEnemyArc(e, G.dan.x, G.dan.y, d);   // target Dan's position at lob time
@@ -338,7 +356,7 @@ function updateCleaner(e, dt){
   const dx = w.x - e.x, dy = w.y - e.y;
   const dist = Math.hypot(dx, dy) || 1;
   e.face = Math.atan2(dy, dx);                       // face the direction of travel
-  moveBody(e, (dx/dist) * e.speed * berserSpd(e) * dt, (dy/dist) * e.speed * berserSpd(e) * dt);
+  moveBody(e, (dx/dist) * e.speed * buffSpd(e) * dt, (dy/dist) * e.speed * buffSpd(e) * dt);
 
   // Advance on arrival, or if stuck against geometry for too long.
   e.wpTimer -= dt;
@@ -481,7 +499,7 @@ function updateManager(e, dt){
   const dist = Math.hypot(dx, dy) || 1;
 
   // Slow ground pursuer — berserk also boosts its own speed (rare: two Managers)
-  moveBody(e, (dx/dist) * e.speed * berserSpd(e) * dt, (dy/dist) * e.speed * berserSpd(e) * dt);
+  moveBody(e, (dx/dist) * e.speed * buffSpd(e) * dt, (dy/dist) * e.speed * buffSpd(e) * dt);
 
   // Throttled LOS check
   e.losCheck -= dt;
@@ -502,6 +520,52 @@ function updateManager(e, dt){
     if (e.fireCd <= 0 && e.canSee && dist <= d.fireRange){
       e.aim = Math.atan2(dy, dx);   // latch initial heading; missile steers from there
       e.winding = d.windup;
+    }
+  }
+}
+
+// Support / alarm emitter (GDD 6.1.3). Patrols a fixed route (same routing as the
+// Cleaner) with NO direct attack. While it has line-of-sight to Dan it broadcasts
+// an ALARM: every robot within alarmRadius gets a short e.alarmed timer (refreshed
+// each frame), which buffSpd reads for a speed boost and the melee block reads for
+// a damage bonus — lighter than the Manager's berserk and continuous while in
+// range. The alarm lingers alarmGrace after LOS breaks, and fades almost instantly
+// (alarmHold) when the Scanner dies or a robot leaves range. Kill it first.
+function updateScanner(e, dt){
+  const d = ENEMY.scanner;
+
+  // Patrol along the fixed route (same waypoint follow as the Cleaner).
+  const w = e.waypoints[e.wpIndex];
+  const dx = w.x - e.x, dy = w.y - e.y;
+  const dist = Math.hypot(dx, dy) || 1;
+  e.face = Math.atan2(dy, dx);
+  moveBody(e, (dx/dist) * e.speed * buffSpd(e) * dt, (dy/dist) * e.speed * buffSpd(e) * dt);
+  e.wpTimer -= dt;
+  if (dist <= ENEMY.cleaner.arriveDist || e.wpTimer <= 0){
+    advancePatrol(e);
+    e.wpTimer = ENEMY.cleaner.wpTimeout;
+  }
+
+  // Radar sweep (visual) + throttled LOS poll that (re)arms the alarm.
+  e.sweep += dt * d.sweepRate;
+  e.losCheck -= dt;
+  if (e.losCheck <= 0){
+    e.losCheck = d.losCheckEvery;
+    if (Math.hypot(G.dan.x - e.x, G.dan.y - e.y) < d.sight &&
+        hasLineOfSight(e.x, e.y, G.dan.x, G.dan.y)){
+      e.alarmT = d.alarmGrace;            // refresh; lingers alarmGrace after LOS breaks
+    }
+  }
+  if (e.alarmT > 0) e.alarmT -= dt;
+  e.alarming = e.alarmT > 0;
+
+  // Broadcast: refresh a short buff timer on every robot in range each frame.
+  if (e.alarming){
+    for (const other of G.enemies){
+      if (other === e || other.spawn > 0) continue;
+      if (Math.hypot(other.x - e.x, other.y - e.y) <= d.alarmRadius){
+        other.alarmed = d.alarmHold;
+      }
     }
   }
 }

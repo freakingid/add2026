@@ -73,7 +73,7 @@ export function drawHUD(){
   ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
   ctx.font = "bold 16px 'Arial Black', sans-serif";
   ctx.fillStyle = COL.amber;
-  const typeName = { picker:"PICKER BOT", forklift:"FORKLIFT BOT", security:"SECURITY BOT", sorter:"SORTER BOT", cleaner:"CLEANER BOT", drone:"DRONE", manager:"MANAGER BOT" }[levelType()] || "";
+  const typeName = { picker:"PICKER BOT", forklift:"FORKLIFT BOT", security:"SECURITY BOT", sorter:"SORTER BOT", cleaner:"CLEANER BOT", drone:"DRONE", manager:"MANAGER BOT", scanner:"SCANNER BOT" }[levelType()] || "";
   ctx.fillText("LEVEL " + G.level + "  ·  " + typeName, VIEW_W/2, pad + 14);
 }
 

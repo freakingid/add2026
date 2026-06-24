@@ -22,6 +22,7 @@ export const COL = {
   bomb:"#b5742e", bombDark:"#7c4d1a", bombStripe:"#ffd23f", bombLight:"#ff4d4d",
   managerBody:"#1e2d40", managerDark:"#111c28", managerTrim:"#8090a8", managerEye:"#e04020",
   missile:"#703020", missileFin:"#9aa0a8", missileWarhead:"#ff5020",
+  scannerBody:"#3a4a6a", scannerDark:"#26324a", scannerDish:"#cfd6df", scannerSweep:"#7fe0ff", scannerAlarm:"#ff5b4d",
   terminal:"#3a4250", terminalLit:"#5dff8f",
   amber:"#ffb627", soap:"#5fd2ff", atomic:"#5dff8f", text:"#e8ebef",
 };
@@ -30,5 +31,5 @@ export const COL = {
 // when levels eventually mix types). Falls back to the generic green.
 export const TERMINAL_TINT = {
   picker: "#ff6a5a", forklift: "#ffc24a", security: COL.bolt, sorter: "#b7c98a",
-  cleaner: COL.spray, drone: "#a6c8ff", manager: "#ff7020",
+  cleaner: COL.spray, drone: "#a6c8ff", manager: "#ff7020", scanner: "#9fb4ff",
 };
