@@ -27,11 +27,15 @@ export const CFG = {
     "o": { name:"pillar", solid:true,  blocksLOS:true,  destructible:false },
   },
   TILE_FLOOR: ".",               // char a destroyed shelf / carved pocket resets a cell to
-  CONVEYOR_SPEED: 60,            // px/s per unit of a strip's `speed` (push is BAKED only — §8.1.4;
-                                 // no entity reads the push field yet, that lands next session)
+  CONVEYOR_SPEED: 60,            // px/s per unit of a strip's `speed` (§8.1.2). The baked push
+                                 // field is now APPLIED to Dan + ground robots every frame.
+  CONVEYOR_TEST_LEVEL: 0,        // if G.level === this, buildLevel loads the hand-authored
+                                 // conveyor demo (level.js) instead of generating. 0 = off.
 
   DAN_RADIUS: 12,
   DAN_SPEED: 185,               // px/sec
+  DAN_NET_SPEED_MAX: 320,       // clamp on Dan's move+belt net speed so a fast conveyor can't
+                                 // fling him (just above DAN_SPEED so normal travel is uncapped)
   DAN_HP: 20,
   DAN_IFRAME: 0.45,             // sec invulnerable after a melee hit
   KNOCKBACK_SPEED: 520,         // initial knockback velocity

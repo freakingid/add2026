@@ -10,7 +10,7 @@ import { ctx, VIEW_W, VIEW_H } from "./canvas.js";
 import { G } from "./state.js";
 import { CFG, POWERUPS } from "./config.js";
 import { COL, TERMINAL_TINT } from "./palette.js";
-import { isWall, clamp } from "./world.js";
+import { isWall, clamp, pushAt } from "./world.js";
 import { drawEnemies, drawEbolts } from "./render-entities.js";
 import { drawHUD, drawTitle, drawLevelClear, drawGameOver } from "./screens.js";
 
@@ -24,6 +24,7 @@ export function render(){
   ctx.translate(-Math.round(G.camera.x), -Math.round(G.camera.y));
 
   drawFloor();
+  drawConveyors();
   drawWalls();
   drawMarks();
   drawExit();
@@ -125,6 +126,60 @@ function drawFloor(){
       ctx.strokeStyle = COL.grid;
       ctx.lineWidth = 1;
       ctx.strokeRect(tx*T + 0.5, ty*T + 0.5, T-1, T-1);
+    }
+  }
+}
+
+// Conveyor belts (§8.1.2): any floor cell with a non-zero baked push vector is a
+// belt. Drawn as a dark rubber band over the floor with bright chevrons scrolling
+// in the push direction (a dash-style marquee), so the direction is readable at a
+// glance and the scroll speed tracks the belt's strength. At an INTERSECTION the
+// baked vector is already the diagonal sum, so the single resultant chevron set
+// points diagonally — the crossing reads as "both directions" with no special case.
+function drawConveyors(){
+  const T = CFG.TILE;
+  const t = performance.now() * 0.001;
+  const x0 = Math.floor(G.camera.x / T), x1 = Math.ceil((G.camera.x + VIEW_W) / T);
+  const y0 = Math.floor(G.camera.y / T), y1 = Math.ceil((G.camera.y + VIEW_H) / T);
+  for (let ty = y0; ty < y1; ty++){
+    for (let tx = x0; tx < x1; tx++){
+      if (tx<0||ty<0||tx>=CFG.COLS||ty>=CFG.ROWS) continue;
+      if (isWall(tx, ty)) continue;
+      const p = pushAt(tx, ty);
+      if (p.dx === 0 && p.dy === 0) continue;
+      const mag = Math.hypot(p.dx, p.dy);
+      const ang = Math.atan2(p.dy, p.dx);
+      const px = tx*T, py = ty*T;
+
+      // rubber band base + side rails (rails run perpendicular to motion)
+      ctx.fillStyle = COL.beltBase;
+      ctx.fillRect(px, py, T, T);
+
+      ctx.save();
+      ctx.beginPath(); ctx.rect(px, py, T, T); ctx.clip();   // keep chevrons inside the tile
+      ctx.translate(px + T/2, py + T/2);
+      ctx.rotate(ang);                                       // +x now points down-belt
+
+      // side rails along the belt edges
+      ctx.fillStyle = COL.beltRail;
+      ctx.fillRect(-T, -T/2, T*2, 3);
+      ctx.fillRect(-T,  T/2 - 3, T*2, 3);
+
+      // scrolling chevrons (a marquee of ">" pointing down-belt). Scroll offset
+      // advances with time * belt magnitude, so a stronger belt visibly runs faster.
+      const period = 13;
+      const scroll = ((t * mag) % period + period) % period;
+      ctx.strokeStyle = COL.beltArrow;
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      for (let cx = -T - period + scroll; cx < T + period; cx += period){
+        ctx.beginPath();
+        ctx.moveTo(cx - 4, -5);
+        ctx.lineTo(cx + 2, 0);
+        ctx.lineTo(cx - 4, 5);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
   }
 }

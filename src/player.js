@@ -9,7 +9,7 @@
 import { CFG } from "./config.js";
 import { G } from "./state.js";
 import { mouse, getMoveVec, getFireAngle } from "./input.js";
-import { moveBody, isWall } from "./world.js";
+import { moveBody, isWall, pushAtWorld, clampNet } from "./world.js";
 import { killEnemy, destroyTerminal } from "./combat.js";
 import { sfx } from "./audio.js";
 
@@ -27,10 +27,16 @@ export function updateDan(dt){
 
   // movement input — already normalized (mag 0 or 1) by the input layer.
   const mv = getMoveVec();
-  const ix = mv.x, iy = mv.y;
   // Cleaner spray slows Dan's movement while the debuff is active.
   const moveSpeed = CFG.DAN_SPEED * (G.dan.slow > 0 ? CFG.SLOW_FACTOR : 1);
-  moveBody(G.dan, ix * moveSpeed * dt, iy * moveSpeed * dt);
+  // Conveyor belt (§8.1.2): Dan's net velocity is his own move vector PLUS the
+  // belt push at his cell, so riding with it speeds him up and pushing against it
+  // slows him but still makes headway. Clamp the net so a fast belt can't fling
+  // him. The belt acts even when standing still (mv = 0). onBelt drives the hum.
+  const belt = pushAtWorld(G.dan.x, G.dan.y);
+  G.dan.onBelt = belt.dx !== 0 || belt.dy !== 0;
+  const net = clampNet(mv.x * moveSpeed + belt.dx, mv.y * moveSpeed + belt.dy, CFG.DAN_NET_SPEED_MAX);
+  moveBody(G.dan, net.x * dt, net.y * dt);
 
   // knockback velocity (decays via friction)
   if (G.dan.kvx || G.dan.kvy){

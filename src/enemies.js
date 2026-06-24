@@ -11,7 +11,7 @@ import { CFG, ENEMY } from "./config.js";
 import { G } from "./state.js";
 import {
   moveBody, isWall, hasLineOfSight, destroyShelf, isDestructible,
-  tileFloor, tileCenter, tileClearRun, rectPerimeterClear, clamp,
+  tileFloor, tileCenter, tileClearRun, rectPerimeterClear, clamp, applyBeltPush,
 } from "./world.js";
 import { meleeContact } from "./combat.js";
 import { fireEnemyBolt, fireEnemyArc, fireEnemyDrop, fireEnemyHoming } from "./projectiles.js";
@@ -195,6 +195,11 @@ export function updateEnemies(dt){
     else if (e.type === "scanner") updateScanner(e, dt);
     else if (e.type === "inventory") updateInventory(e, dt);
     else updatePicker(e, dt);
+
+    // Conveyor belt (§8.1.2): add the belt push to this enemy's position AFTER its
+    // AI has decided its own move. applyBeltPush skips fliers (drones ride above the
+    // belt) and is collision-resolved, so crossing strips push diagonally for free.
+    applyBeltPush(e, dt);
 
     // melee contact with Dan (single event; re-entry needed via knockback)
     const dx = G.dan.x - e.x, dy = G.dan.y - e.y;

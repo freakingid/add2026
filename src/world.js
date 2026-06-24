@@ -16,8 +16,8 @@ import { G } from "./state.js";
 export let map = [];
 
 // Baked conveyor push field (§8.1.4): pushField[y][x] = {dx,dy}, the vector sum of
-// every strip covering that cell. O(1) runtime lookup via pushAt. NOTHING reads it
-// yet — the push mechanic lands next session; we bake it now to prove the data path.
+// every strip covering that cell. O(1) runtime lookup via pushAt. Consumed each
+// frame by applyBeltPush (ground robots) and player.js (Dan, with a net clamp).
 export let pushField = [];
 
 function tileDef(tx, ty){ return CFG.TILES[map[ty][tx]]; }
@@ -91,6 +91,29 @@ export function bakeConveyors(conveyors){
 export function pushAt(tx, ty){
   if (tx < 0 || ty < 0 || tx >= CFG.COLS || ty >= CFG.ROWS) return { dx:0, dy:0 };
   return pushField[ty][tx];
+}
+// Belt push at a body's CURRENT cell (world-pixel position). The summed field
+// already resolves crossing strips into a diagonal, so no intersection handling.
+export function pushAtWorld(x, y){
+  return pushAt((x / CFG.TILE)|0, (y / CFG.TILE)|0);
+}
+// Apply the conveyor push to a GROUND body for this frame, additively on top of
+// whatever its own movement already did (§8.1.2). Flying bodies (drones) ride above
+// the belt and ignore the field entirely (§6.1.5). Collision-resolved via moveBody
+// so the belt can't shove a body through a wall. Returns true iff a push landed
+// (i.e. the body is standing on a belt — used to gate the conveyor hum / FX).
+export function applyBeltPush(b, dt){
+  if (b.flying) return false;
+  const p = pushAtWorld(b.x, b.y);
+  if (p.dx === 0 && p.dy === 0) return false;
+  moveBody(b, p.dx * dt, p.dy * dt);
+  return true;
+}
+// Clamp a velocity to a maximum magnitude (used for Dan's move+belt net speed).
+export function clampNet(vx, vy, max){
+  const m = Math.hypot(vx, vy);
+  if (m > max){ const k = max / m; return { x:vx*k, y:vy*k }; }
+  return { x:vx, y:vy };
 }
 
 // A random interior non-solid tile (tile coords). Optionally at least

@@ -29,6 +29,8 @@ export const COL = {
   vendBody:"#2c333f", vendDark:"#171c24", vendTrim:"#5b6675",
   vendSmall:"#5dff8f", vendLarge:"#5fd2ff", vendDepleted:"#1b1f27",
   amber:"#ffb627", soap:"#5fd2ff", atomic:"#5dff8f", text:"#e8ebef",
+  // Conveyor belt: dark rubber band base, lighter side rails, bright scrolling chevrons.
+  beltBase:"#22272f", beltRail:"#363d48", beltArrow:"#f0a83a", beltArrowDim:"#7a5e2a",
 };
 
 // Spawner-terminal emitter tint by the enemy type it produces (readability for

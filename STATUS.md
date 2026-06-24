@@ -10,12 +10,7 @@ design intent is in **GDD.md**. Behavior described here is the source of truth f
 Work these **one at a time, then test**. Once a change is built + tested, fold its
 decisions into the relevant "Subsystem decisions" entry and remove the entry here.
 
-- **Conveyor PUSH mechanic** — the §8.1 loader already **bakes** the per-cell push
-  field (`world.pushField`, O(1) via `pushAt`), but no entity reads it yet. Next:
-  apply the push in `moveBody`/`updateDan` (ground entities only — drones fly above
-  it, §6.1.5), add the belt to the renderer, and seed conveyor strips from the
-  generator. The data path + bake are proven (see `test-loader.js`); this is the
-  consume side. Folds into a "Conveyors" subsystem entry when done.
+- _(none queued — the conveyor PUSH mechanic just landed; see "Conveyors" below.)_
 
 ---
 
@@ -50,8 +45,9 @@ decisions into the relevant "Subsystem decisions" entry and remove the entry her
 - **Shared enemy-projectile system (`ebolts`):** one pool drives every robot's ranged attack; each projectile carries a `kind` selecting motion + expiry. Implemented: `bolt` (Security — straight, dies on walls), `arc` (Sorter — time-based lob, ignores walls, AoE on landing), `drop` (Drone — descends vertically onto a FIXED point, ignores walls, AoE on landing), `homing` (Manager — slow-tracking missile, steers toward Dan each frame, stops on wall with small AoE). Cone (Cleaner) is handled outside the pool. Dan-collision funnels through the shared i-frame window via `hitDanRanged` (point) / `hitDanArea` (blast).
 - **Spawner-terminals (all enemies):** every level places destroyable spawner-terminals (HP 4, 300 pts, HP pips, hit flash) of its enemy type; **all enemies emerge from terminals** (no floor placement). Emitter light is tinted per enemy type; brief white pulse on each emit. Destroying all terminals of a type stops its spawns.
 - **Human workers + rescue scoring** (GDD §7) — 5 per level, scattered away from Dan's spawn. They **wander slowly, flee robots** within `avoidRadius` (scurrying faster while fleeing), and — when not fleeing and they have line of sight to Dan — **move toward Dan** at `seekSpeed` to make rescue easier (priority: flee > seek-Dan > wander). Dan **rescues by walking into one** for **escalating points** — 100 / 200 / 400 / 800 / 1600 (doubling, `rescueBase·2^n`), summing to **3,100** for all five, with a celebratory "ALL 5 SAVED!" callout on the last. HUD shows `WORKERS n/5 RESCUED`. The rescue counter (`G.rescued`) resets each level; the score persists. Drawn as a hi-vis hard-hat figure (clearly not a robot), with a "!" while fleeing.
-- **Audio** (GDD §10) — retro arcade SFX **synthesized live via the Web Audio API** (no asset files; single-file/ES-module constraint holds). Lives in `audio.js`, a cross-cutting leaf (imports only `CFG`) exposing a named `sfx.*` API; every gameplay event adds a one-line call at its source (the same pattern as `addFloat`). **17 sounds:** the 3 GDD-mandated (`pop` soap-hit, `alarm` Scanner klaxon, `detonate` Dustbin blast) plus game-feel additions — `shoot`, `terminalHit`/`terminalDie`, `enemyDie`, `hurt` (all 3 Dan-damage paths), `enemyFire` (all 4 ranged kinds), `deploy`, `powerup`, `heal`, `rescue` (**pitch climbs with `G.rescued`**), `workerLost`, `noWorkers` (last worker gone), `levelClear`, `gameOver`. AudioContext is lazily created and **resumed on the first user gesture** (`unlock()` from `input.js` keydown/mousedown/touchstart — browser autoplay policy). **`M` toggles mute.** A small per-sound throttle (`shoot`/`pop`/`enemyFire`/`hurt`) prevents clipping when many fire in one frame. Master gain + startup-enabled in `CFG.AUDIO`.
-- **Level Definition format + loader** (GDD §8.1) — **every** level (generated OR hand-authored) is now a plain-data **Level Definition** consumed by **one loader** (`loadLevel` in `level.js`), the sole entry point to a playable level. Three thin layers + fixed placements: **tiles** (row-major char grid; the only collision/LOS geometry — flags from `CFG.TILES`), **conveyors** (axis-aligned push strips; **parsed + baked** into `world.pushField` per §8.1.4, but **push is not applied yet** — that's the next session), **zones** (tagged `spawn`/`cover`/`combat`/`danger` placement-hint rects), **placements** (fixed set pieces; always `player` + `exit`), and **spawnRules** (drop `count` of a `type` into a zone `role`, optional `avoid`, never on a solid). The procgen is now a **producer** of Level Definitions (`generateLevelDef`) that hands off to the same loader — a **behavior-preserving refactor** (all 12 level types compose identically; verified headless). `CFG.TILES` defines per-type **solid / blocksLOS / destructible** flags (§8.1.1) so collision/LOS/destructibility are data-driven (`isWall`/`blocksLOS`/`isDestructible`); the Forklift now smashes by the `destructible` flag, not by border position. Grid dims are loader-set (`CFG.COLS/ROWS` ← grid), so authored levels can be any size. Validation rejects malformed defs (missing/duplicate player, no exit, unknown zone role, ragged grid). **Headless smoke tests in `test-loader.js`** (`node test-loader.js`).
+- **Audio** (GDD §10) — retro arcade SFX **synthesized live via the Web Audio API** (no asset files; single-file/ES-module constraint holds). Lives in `audio.js`, a cross-cutting leaf (imports only `CFG`) exposing a named `sfx.*` API; every gameplay event adds a one-line call at its source (the same pattern as `addFloat`). **17 one-shots + 1 looping bed:** the 3 GDD-mandated (`pop` soap-hit, `alarm` Scanner klaxon, `detonate` Dustbin blast) plus game-feel additions — `shoot`, `terminalHit`/`terminalDie`, `enemyDie`, `hurt` (all 3 Dan-damage paths), `enemyFire` (all 4 ranged kinds), `deploy`, `powerup`, `heal`, `rescue` (**pitch climbs with `G.rescued`**), `workerLost`, `noWorkers` (last worker gone), `levelClear`, `gameOver`, and the **sustained `conveyor` belt hum** (a single managed looping voice that fades in/out as Dan steps on/off a belt — see "Conveyors"). AudioContext is lazily created and **resumed on the first user gesture** (`unlock()` from `input.js` keydown/mousedown/touchstart — browser autoplay policy). **`M` toggles mute.** A small per-sound throttle (`shoot`/`pop`/`enemyFire`/`hurt`) prevents clipping when many fire in one frame. Master gain + startup-enabled in `CFG.AUDIO`.
+- **Level Definition format + loader** (GDD §8.1) — **every** level (generated OR hand-authored) is now a plain-data **Level Definition** consumed by **one loader** (`loadLevel` in `level.js`), the sole entry point to a playable level. Three thin layers + fixed placements: **tiles** (row-major char grid; the only collision/LOS geometry — flags from `CFG.TILES`), **conveyors** (axis-aligned push strips; parsed + baked into `world.pushField` per §8.1.4, and the push is now **applied** every frame to Dan + ground robots — see "Conveyors" below), **zones** (tagged `spawn`/`cover`/`combat`/`danger` placement-hint rects), **placements** (fixed set pieces; always `player` + `exit`), and **spawnRules** (drop `count` of a `type` into a zone `role`, optional `avoid`, never on a solid). The procgen is now a **producer** of Level Definitions (`generateLevelDef`) that hands off to the same loader — a **behavior-preserving refactor** (all 12 level types compose identically; verified headless). `CFG.TILES` defines per-type **solid / blocksLOS / destructible** flags (§8.1.1) so collision/LOS/destructibility are data-driven (`isWall`/`blocksLOS`/`isDestructible`); the Forklift now smashes by the `destructible` flag, not by border position. Grid dims are loader-set (`CFG.COLS/ROWS` ← grid), so authored levels can be any size. Validation rejects malformed defs (missing/duplicate player, no exit, unknown zone role, ragged grid). **Headless smoke tests in `test-loader.js`** (`node test-loader.js`).
+- **Conveyor PUSH mechanic** (GDD §8.1.2) — the baked `world.pushField` is now **consumed every frame**. Each affected entity adds the belt vector at its current cell to its own movement: **Dan** (his move vector + belt, with the net magnitude **clamped** to `CFG.DAN_NET_SPEED_MAX` so a fast belt can't fling him) and **all ground robots** (push added *after* the AI decides its move, collision-resolved via `moveBody`). **Drones are immune** (`e.flying` — they ride above the belt). **Projectiles and the Atomic Dustbin are unaffected** (they never read the field). Crossing strips push **diagonally** through the already-summed field — no intersection-specific code. Belts render as a dark rubber band with **animated chevrons scrolling in the push direction** (diagonal at intersections), and a **looping conveyor hum** plays while Dan rides one. A hand-authored demo level (`conveyorTestLevelDef`, gated by `CFG.CONVEYOR_TEST_LEVEL`) shows a mandatory full-width E–W crossing + an N–S belt crossing it. **Headless tests in `test-conveyor.js`** (`node test-conveyor.js`). See "Conveyors" below.
 - **Level system:** procedural warehouse, camera, EXIT door + off-screen pointer, level-clear splash, endless progression. **HP, power-ups, and score persist across levels.**
 - **States:** `title` / `playing` / `levelclear` / `dead`.
 
@@ -239,12 +235,12 @@ decisions into the relevant "Subsystem decisions" entry and remove the entry her
   tolerates worlds smaller than the viewport). The generator sizes itself from a
   **separate** `CFG.GEN_COLS/GEN_ROWS` (40×30) so loading a small authored level can't
   make the *next* generated level inherit that size.
-- **Conveyors: baked, not applied.** `bakeConveyors` sums every covering strip's
-  `dir×speed×CFG.CONVEYOR_SPEED` into a `cols×rows` `pushField` of `{dx,dy}`, so
-  crossing strips yield a diagonal at the overlap with **no special intersection type**
-  and opposing strips cancel (§8.1.2/§8.1.4). **Nothing reads it yet** — proving the
-  data path ahead of the push mechanic (see Planned changes). `pushAt(tx,ty)` is the
-  O(1) lookup.
+- **Conveyors: baked here, applied in "Conveyors".** `bakeConveyors` sums every
+  covering strip's `dir×speed×CFG.CONVEYOR_SPEED` into a `cols×rows` `pushField` of
+  `{dx,dy}`, so crossing strips yield a diagonal at the overlap with **no special
+  intersection type** and opposing strips cancel (§8.1.2/§8.1.4). `pushAt(tx,ty)` is the
+  O(1) lookup; the field is now **consumed every frame** by the push mechanic (see the
+  "Conveyors" subsystem entry).
 - **Spawn-rule placement honors zone + avoid, never lands on a solid.** Each rule drops
   `count` of a `type` into a random non-solid tile of its zone role, skipping any
   `avoid`-role tile, with a guaranteed floor-tile fallback so a rule always places
@@ -267,6 +263,55 @@ decisions into the relevant "Subsystem decisions" entry and remove the entry her
   small fixed authored layout through the same loader and checks: valid generated level,
   no entity on a solid, validation rejections, and the push-field sum/cancel. 35 checks.
 
+### Conveyors — the PUSH mechanic (GDD §8.1.2)
+
+- **Consume the already-baked field; no new geometry.** The loader bakes
+  `world.pushField` (sum of every covering strip; built last session). Activation is
+  purely the read side: `pushAtWorld(x,y)` looks up a body's current cell, and
+  `applyBeltPush(b, dt)` adds that vector via `moveBody` (collision-resolved, so the
+  belt can't shove a body through a shelf). **Crossing strips are already summed into a
+  diagonal at the overlap**, so an East×North overlap pushes NE with *zero*
+  intersection-specific code — verified through the existing field, per the task.
+- **Ground robots: push added AFTER the AI.** In `updateEnemies`, each per-type updater
+  runs unchanged, then `applyBeltPush(e, dt)` is called additively. **Drones are immune**
+  — the flying check lives **inside** `applyBeltPush` (`if (b.flying) return false`), so
+  the single call site needs no guard and the immunity is unit-testable. (Alt: gate at
+  the call site — rejected; the helper is the one place every caller shares.)
+- **Dan: move + belt, then clamp the net.** `player.js` computes
+  `net = clampNet(move·speed + belt, DAN_NET_SPEED_MAX)` and moves once. So riding with
+  the belt speeds him up, pushing against it slows him *but still makes headway*, and a
+  fast belt can't fling him past `CFG.DAN_NET_SPEED_MAX` (320, just above `DAN_SPEED`
+  185 so normal travel is uncapped). The belt acts even when standing still. `G.dan.onBelt`
+  (set each frame) drives the hum. (Alt: apply belt as a second `moveBody` like enemies —
+  rejected; Dan needs the *combined* vector clamped, not two independent shoves.)
+- **Projectiles + the Atomic Dustbin are untouched.** Neither reads the field — soap
+  shots, `ebolts`, and the sliding/attracting bin keep their own motion (GDD: the belt
+  moves *entities*, not airborne ordnance / the special). Asserted positively in tests
+  (a bolt on a belt moves only by its velocity; a settled bin doesn't drift).
+- **Render: animated chevrons in the resultant direction.** `drawConveyors` (render.js,
+  between floor and walls) draws any non-zero-push floor cell as a dark rubber band with
+  side rails and a marquee of chevrons scrolling along `atan2(dy,dx)`, scroll speed ∝ the
+  belt magnitude. At an intersection the resultant is the **diagonal sum**, so the single
+  chevron set points diagonally — the crossing reads as "both directions" (the GDD's
+  allowed "or a diagonal"), again with no special case. Palette: `belt*` in `palette.js`.
+- **Audio: one managed looping voice, not a one-shot.** `sfx.conveyor(active)` (audio.js)
+  lazily builds a single persistent hum (looping filtered-noise rumble + a low sawtooth
+  motor) and only **ramps its gain** in/out (`setTargetAtTime`) on a state *change*, so
+  the per-frame call from `update.js` is cheap and idempotent. It connects through
+  `master`, so the **M mute** silences it. `update.js` calls `conveyor(!!G.dan.onBelt)`
+  while playing and `conveyor(false)` in every non-playing branch (so it fades on
+  level-clear / death). This is the sustained-loop voice the §10 vortex-hum note deferred.
+- **Test level is opt-in.** `conveyorTestLevelDef()` (level.js, exported) is a fixed
+  Level Definition with (a) a full-width E–W belt band that fully divides the player room
+  from the exit room — crossing it is the only route — and (b) a full-height N–S belt
+  crossing it for the diagonal. `buildLevel` loads it through the **same loader** when
+  `G.level === CFG.CONVEYOR_TEST_LEVEL` (default **0 = off**, so normal play and the
+  one-type-per-level plan are untouched; set it to a level number to walk the demo).
+- **Tests.** `test-conveyor.js` (`node test-conveyor.js`, 25 checks): push applied to
+  ground bodies + summed diagonally at an intersection, ignored by fliers; Dan's net
+  speed clamped + with-belt faster than against; ground enemy carried via `updateEnemies`;
+  bolt + settled dustbin unaffected; the demo level loads with belts/diagonal correct.
+
 ---
 
 ## Architecture map (where things live)
@@ -285,7 +330,7 @@ decisions into the relevant "Subsystem decisions" entry and remove the entry her
 - **`canvas.js`** — `canvas`, `ctx`, `VIEW_W/H`. *No imports.*
 - **`audio.js`** — Web Audio SFX (GDD §10): the `sfx.*` sound library + `tone`/`noise`/`sequence` synth helpers, lazy AudioContext + `master` gain, `unlock`/`toggleMute`/`isMuted`, per-sound throttle. ← config (`CFG.AUDIO`) only. Called for its side-effects from player/combat/projectiles/enemies/dustbin/level/vending/workers/update; `unlock`+`toggleMute` from input.
 - **`state.js`** — `G` (the mutable container: run meta + entities `dan/shots/enemies/terminals/pickups/marks/floats/ebolts/vending/dustbin/dustbinPickups/workers/camera/exit` + `spawnTimer`/`pickupTimer` + `inputMode`) and `levelType()`. ← config.
-- **`world.js`** — `map[][]` (exported `let`, char grid, reassigned only by `loadTileGrid`) + the §8.1 loader primitives: **`loadTileGrid`** (grid→`map`, sets `CFG.COLS/ROWS`), **`bakeConveyors`**/**`pushField`**/**`pushAt`** (per-cell push field), and `CFG.TILES`-driven `isWall`/`blocksLOS`/`isDestructible`. Plus `randomFloorTile`/`randomFloorTileTC`/`randomFloorTileNearWall` (wall-adjacent tile for flush placement)/`hasLineOfSight`/`destroyShelf` (destructible-only), collision `bodyHitsWall`/`moveBody`, tile helpers `tileFloor`/`tileCenter`/`tileClearRun`/`rectPerimeterClear`, `clamp`, `isBorderTile`. ← config, state. (No longer imports canvas — decoupled from the DOM.)
+- **`world.js`** — `map[][]` (exported `let`, char grid, reassigned only by `loadTileGrid`) + the §8.1 loader primitives: **`loadTileGrid`** (grid→`map`, sets `CFG.COLS/ROWS`), **`bakeConveyors`**/**`pushField`**/**`pushAt`** (per-cell push field) + the consume-side helpers **`pushAtWorld`** (push at a body's cell), **`applyBeltPush`** (additive belt move for a ground body; skips fliers), **`clampNet`** (Dan's move+belt net-speed clamp), and `CFG.TILES`-driven `isWall`/`blocksLOS`/`isDestructible`. Plus `randomFloorTile`/`randomFloorTileTC`/`randomFloorTileNearWall` (wall-adjacent tile for flush placement)/`hasLineOfSight`/`destroyShelf` (destructible-only), collision `bodyHitsWall`/`moveBody`, tile helpers `tileFloor`/`tileCenter`/`tileClearRun`/`rectPerimeterClear`, `clamp`, `isBorderTile`. ← config, state. (No longer imports canvas — decoupled from the DOM.)
 - **`effects.js`** — `addFloat`, `updateEffects` (marks + floats lifetimes). ← state.
 - **`combat.js`** — shared damage/death: `hitDanRanged`/`hitDanArea` (i-frame + knockback), `meleeContact` (0-dmg-safe; `berserDmgBonus` when berserk), `damageEnemy` (friendly-fire damage → no-score kill), `killEnemy(index, {score})` (points + score float unless `score:false`; Manager berserk pulse either way), `destroyTerminal`. ← config, palette, state, effects.
 - **`projectiles.js`** — the `G.ebolts` pool: `fireEnemyBolt/Arc/Drop/Homing` + `updateEbolts` dispatching by `kind` (`bolt`/`arc`/`drop`/`homing`; `updateArc/Drop/Homing` helpers, `detonateHoming` blast). `bolt`/`homing` also friendly-fire ground robots (skip fliers/terminals) via `damageEnemy`. ← config, state, world, combat.
@@ -321,5 +366,5 @@ sandbox. The Atomic Dustbin special (§5) is **DONE** (`dustbin.js`) and the **a
 system (§10) is DONE** (`audio.js`). The **remaining larger GDD features** are the
 next valuable work:
 
-- **§8.1 Level Definition format + loader — DONE** (`level.js` generator + loader, `world.js` tile/conveyor primitives, `CFG.TILES`). Generated and authored levels share one loader; conveyor data is parsed + **baked** (push not applied yet — see Planned changes). **Remaining §8.1-adjacent work:** the conveyor **push** mechanic + belt rendering, and richer generator geometry / guaranteed-placement tuning (the loader contract itself is complete).
+- **§8.1 Level Definition format + loader — DONE** (`level.js` generator + loader, `world.js` tile/conveyor primitives, `CFG.TILES`). Generated and authored levels share one loader; conveyor data is parsed + **baked** + now **applied** (the push mechanic + belt rendering + hum — see "Conveyors"). **Remaining §8.1-adjacent work:** seeding conveyor strips from the *generator* (so generated levels get belts, not just authored ones) and richer generator geometry / guaranteed-placement tuning (the loader contract itself is complete).
 - **Sprite-art polish (§10)** — chunky pixel-art pass; the §10 *audio* half is now built.

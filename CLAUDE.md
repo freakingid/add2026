@@ -21,7 +21,7 @@ is a design decision, not a fix.
 - **Bounce** reflects per-axis off walls; a shot lives until its travel range expires.
 - **One enemy type per level** (testing), set by `LEVEL_PLAN` — except the Manager/Scanner levels (seed a Picker cluster) and the trailing **`"mixed"` sandbox** (L10+: one terminal of every real type). `"mixed"` is a pseudo-type with **no `ENEMY` entry**; only `buildLevel` + `update.js` special-case it. Levels reachable in sequence via the exit door.
 - **All enemies spawn from destroyable terminals** (generalized Dispatch Terminal). A single GLOBAL spawn cadence per level (`spawnTimer` + the type's `interval`) emits from a random matching terminal, capped by the type's `max`. Destroying ALL a type's terminals stops its spawns; thinning some does NOT slow the rate.
-- **Levels load through ONE loader** (GDD §8.1). Every level is a plain-data **Level Definition**; `loadLevel` (`level.js`) is the sole entry point to a playable level, and procgen is just a *producer* of these objects (`generateLevelDef`) — never generate a playable level directly, bypassing the loader. `map` holds a **tile char**, and collision/LOS/destructibility read per-type flags from **`CFG.TILES`** (`isWall`/`blocksLOS`/`isDestructible`) — do not revert to a 0/1 grid or hardcode tile behavior. Conveyor strips are parsed + **baked** into `world.pushField`, but the **push is not applied yet** (next session); don't assume belts move entities. `CFG.COLS/ROWS` are loader-set from the grid (procgen sizes itself from `CFG.GEN_COLS/ROWS`).
+- **Levels load through ONE loader** (GDD §8.1). Every level is a plain-data **Level Definition**; `loadLevel` (`level.js`) is the sole entry point to a playable level, and procgen is just a *producer* of these objects (`generateLevelDef`) — never generate a playable level directly, bypassing the loader. `map` holds a **tile char**, and collision/LOS/destructibility read per-type flags from **`CFG.TILES`** (`isWall`/`blocksLOS`/`isDestructible`) — do not revert to a 0/1 grid or hardcode tile behavior. Conveyor strips are parsed + **baked** into `world.pushField` and the **push is applied** each frame to Dan + ground robots (drones immune; projectiles/Dustbin unaffected; net Dan speed clamped) — see STATUS "Conveyors". `CFG.COLS/ROWS` are loader-set from the grid (procgen sizes itself from `CFG.GEN_COLS/ROWS`).
 - **Knockback** is `+dx/dist` — pushes Dan AWAY from the enemy.
 - **Worker rescue values double: 100/200/400/800/1600** (`rescueBase·2^G.rescued`), summing to 3,100 for all 5. **Rescuing all 5 does NOT auto-complete the level** — the exit door stays the only level-end trigger (GDD §8.2 was TBD; this is the chosen resolution). `G.rescued` resets each level; score persists. Workers are killable only by the (unbuilt) Inventory Bot.
 - **After every implementation change, update STATUS.md** — the "Current state" bullet for the affected system and the relevant subsystem decisions block if reasoning changed. STATUS.md is the handoff artifact; it must reflect reality after every session.
@@ -103,6 +103,8 @@ Dustbin special (§5) DONE** (`dustbin.js`); the **audio system (§10) DONE** (`
 the **§8.1 Level Definition format + loader DONE** (`level.js` generator+loader, `world.js`
 tile/conveyor primitives, `CFG.TILES`) — see STATUS "Level Definition format & loader".
 
-**Larger unbuilt GDD features:** conveyor **push** mechanic (the §8.1 push field is
-baked but not yet applied — queued in STATUS), richer generator geometry /
+**Conveyor PUSH mechanic DONE** (`world.applyBeltPush`/`clampNet`, belt render in
+`render.js`, hum in `audio.js`; demo `conveyorTestLevelDef` gated by `CFG.CONVEYOR_TEST_LEVEL`)
+— see STATUS "Conveyors". **Larger unbuilt GDD features:** seeding conveyor strips from the
+*generator* (so generated levels get belts), richer generator geometry /
 guaranteed-placement tuning (the §8.1 *loader contract* is done), sprite-art polish (§10).

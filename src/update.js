@@ -28,14 +28,16 @@ export function update(dt){
 
   // Level-clear splash: freeze the world, then build the next level.
   if (G.state === "levelclear"){
+    sfx.conveyor(false);   // belt hum off while the world is frozen
     G.transition -= dt;
     if (G.transition <= 0) nextLevel();
     return;
   }
 
-  if (G.state !== "playing") return;
+  if (G.state !== "playing"){ sfx.conveyor(false); return; }
 
   updateDan(dt);
+  sfx.conveyor(!!G.dan.onBelt);   // hum while Dan rides a conveyor, fades when he steps off
   updateShots(dt);
   updateDustbin(dt);   // deploy/collect + slide/attract/detonate, before enemies see the vortex
 

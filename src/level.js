@@ -54,9 +54,72 @@ export function nextLevel(){
 
 // Generate this level's definition, then load it. The generator is a PRODUCER of
 // Level Definitions; loadLevel is the only entry point to a playable level. Dan's
-// hp/powerups/score are untouched (loadLevel only repositions him).
+// hp/powerups/score are untouched (loadLevel only repositions him). When
+// CFG.CONVEYOR_TEST_LEVEL matches the current level, the hand-authored conveyor
+// demo is loaded instead — through the SAME loader (default 0 = never, so normal
+// play is untouched; set it to a level number to walk the belt level).
 function buildLevel(){
-  loadLevel(generateLevelDef());
+  const def = (G.level === CFG.CONVEYOR_TEST_LEVEL) ? conveyorTestLevelDef() : generateLevelDef();
+  loadLevel(def);
+}
+
+/* =========================================================================
+   Hand-authored conveyor demo (GDD §8.1.2) — a fixed Level Definition that
+   exercises both belt cases through the normal loader:
+     (a) a full-width E–W belt band that fully divides the south (player) room
+         from the north (exit) room, so crossing the belt is the ONLY route to the
+         exit — and the belt shoves Dan sideways as he crosses it; and
+     (b) a full-height N–S belt that CROSSES the E–W band: at the overlap the baked
+         push field sums to a NE diagonal, so an entity there is pushed diagonally
+         with no intersection-specific code.
+   Exported so the headless smoke tests load the same data the game would.
+   ========================================================================= */
+export function conveyorTestLevelDef(){
+  const tiles = [
+    "########################",  //  0  border
+    "#......................#",  //  1
+    "#......................#",  //  2  exit at (19,2)
+    "#...SS...........SS....#",  //  3  shelves (off the belts)
+    "#...SS...........SS....#",  //  4
+    "#......................#",  //  5
+    "#......................#",  //  6
+    "#......................#",  //  7
+    "#......................#",  //  8  E–W belt band (rows 8–9), full interior width
+    "#......................#",  //  9
+    "#......................#",  // 10
+    "#......................#",  // 11
+    "#.....SS........SS.....#",  // 12  shelves (off the belts)
+    "#.....SS........SS.....#",  // 13
+    "#......................#",  // 14  player at (4,14)
+    "#......................#",  // 15
+    "#......................#",  // 16
+    "########################",  // 17  border
+  ];
+  const conveyors = [
+    // Full-width E–W belt band: the sole crossing between the two rooms.
+    { x:1,  y:8, w:22, h:2,  dir:"E", speed:2.0 },
+    // Full-height N–S belt that crosses it at cols 11–12 (diagonal at the overlap).
+    { x:11, y:1, w:2,  h:16, dir:"N", speed:2.0 },
+  ];
+  const interior = { x:1, y:1, w:22, h:16 };
+  const zones = [
+    { role:"spawn",  x:2, y:11, w:6, h:6 },   // player pocket — rule placements avoid it
+    { ...interior, role:"combat" },
+    { ...interior, role:"cover"  },
+    { ...interior, role:"danger" },
+  ];
+  const placements = [
+    { type:"player", x:4,  y:14 },            // south room, off both belts
+    { type:"exit",   x:19, y:2  },            // north room, off both belts
+  ];
+  const spawnRules = [
+    { type:"terminal", enemy:"picker", count:2, preplace:2, zone:"combat", avoid:"spawn" },
+    { type:"worker",        count:3, zone:"combat", avoid:"spawn" },
+    { type:"powerup",       count:2, zone:"combat", avoid:"spawn" },
+    { type:"vendingSmall",  count:1, zone:"cover",  avoid:"spawn" },
+    { type:"atomicDustbin", count:1, zone:"combat", avoid:"spawn" },
+  ];
+  return { cols:24, rows:18, tiles, conveyors, zones, placements, spawnRules };
 }
 
 /* =========================================================================

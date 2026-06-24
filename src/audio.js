@@ -115,6 +115,40 @@ function sequence(notes, { type = "sine", gain = 0.5, gap = 0 } = {}){
   }
 }
 
+/* ---- Looping conveyor hum (managed voice) -------------------------------- */
+// Unlike the one-shot sounds above, the conveyor belt is a SUSTAINED ambience: a
+// single persistent voice (looping filtered noise rumble + a low mechanical hum)
+// built once and left running, with only its gain fading in/out as Dan steps on /
+// off a belt. It connects through `master`, so the M mute still silences it.
+let conv = null;          // { g } persistent nodes, or null until first built
+let convOn = false;       // current target state (so we only ramp on a change)
+const CONV_GAIN = 0.10;   // hum level when fully on (kept low — it's a background bed)
+
+function buildConveyor(){
+  // Looping low-frequency noise bed for the belt rumble.
+  const dur = 1.0;
+  const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+  const src = ctx.createBufferSource();
+  src.buffer = buf; src.loop = true;
+  const filt = ctx.createBiquadFilter();
+  filt.type = "lowpass"; filt.frequency.value = 360; filt.Q.value = 0.7;
+  // A low sawtooth gives the rumble a mechanical, motorised edge.
+  const hum = ctx.createOscillator();
+  hum.type = "sawtooth"; hum.frequency.value = 56;
+  const humFilt = ctx.createBiquadFilter();
+  humFilt.type = "lowpass"; humFilt.frequency.value = 180;
+  const g = ctx.createGain();
+  g.gain.value = 0;
+  src.connect(filt).connect(g);
+  hum.connect(humFilt).connect(g);
+  g.connect(master);
+  src.start(); hum.start();
+  conv = { g };
+}
+
 /* ---- Sound library ------------------------------------------------------- */
 /* Each method is a one-call event sound. Synthesis notes inline. All guard on a
    live context and (where listed) a throttle window. */
@@ -217,4 +251,18 @@ export const sfx = {
   gameOver(){ if (!ensure()) return;
     sequence([{freq:440,dur:0.18},{freq:349,dur:0.18},{freq:262,dur:0.34}],
       { type:"sawtooth", gain:0.2 }); },
+
+  // Conveyor belt hum — a SUSTAINED looping voice, not a one-shot. Call every frame
+  // with whether Dan is on a belt; it fades the hum in when he steps on and out when
+  // he steps off. Idempotent: re-ramps only on a state change, so per-frame calls are
+  // cheap. Built lazily on the first call (after a user gesture has unlocked audio).
+  conveyor(active){ if (!ensure()) return;
+    if (!conv) buildConveyor();
+    if (active === convOn) return;                 // no change -> don't reschedule
+    convOn = active;
+    const t = ctx.currentTime;
+    conv.g.gain.cancelScheduledValues(t);
+    // setTargetAtTime smoothly approaches the target without needing the live value.
+    conv.g.gain.setTargetAtTime(active ? CONV_GAIN : 0, t, active ? 0.05 : 0.12);
+  },
 };

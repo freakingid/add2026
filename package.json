@@ -5,6 +5,6 @@
   "type": "module",
   "description": "Atomic Dustbin Dan — top-down twin-stick arcade shooter (single-file HTML5 Canvas + ES modules). Serve over http(s); file:// blocks module loads.",
   "scripts": {
-    "test": "node test-input.js && node test-loader.js"
+    "test": "node test-input.js && node test-loader.js && node test-conveyor.js"
   }
 }
