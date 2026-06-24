@@ -14,7 +14,7 @@ export const CFG = {
   DAN_IFRAME: 0.45,             // sec invulnerable after a melee hit
   KNOCKBACK_SPEED: 520,         // initial knockback velocity
   KNOCKBACK_FRICTION: 9,        // higher = stops sooner
-  SLOW_FACTOR: 0.5,             // Dan's move speed multiplier while sprayed (Cleaner)
+  SLOW_FACTOR: 0.35,            // Dan's move speed multiplier while sprayed (Cleaner) — heavy slow
 
   SHOT_SPEED: 470,
   SHOT_RADIUS: 6,
@@ -155,7 +155,7 @@ export const ENEMY = {
     sprayRange:108, sprayHalfAngle:0.52,     // short ~60°-wide cone
     sprayMinClear:0.4,                       // only spray if >=40% of range is open ahead
     sprayDmg:1, tickEvery:0.6,               // 1 HP per tick while inside (GDD)
-    slowDur:0.9,                             // movement-slow refreshed while inside
+    slowDur:1.1,                             // movement-slow refreshed while inside
     spawners:2, max:6, interval:2.6, preplace:3,
   },
   drone: {

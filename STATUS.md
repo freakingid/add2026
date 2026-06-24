@@ -20,11 +20,11 @@ by feel. Once a change is built + tested, fold its decisions into the relevant
    **both** `rescueWorker` and `killWorker` (the two ways a worker leaves). Guard so
    it can't double-fire and doesn't fire on level rebuild (5 reseeded). Distinct from
    the per-rescue jingle and the all-5 callout. — GDD §7, §10.~~ **DONE.**
-3. **[NEXT] Stronger Cleaner slow** (`config.js`). Lower `CFG.SLOW_FACTOR` from 0.5 to a
+3. ~~**Stronger Cleaner slow** (`config.js`). Lower `CFG.SLOW_FACTOR` from 0.5 to a
    heavier slow (suggest **0.35**; optionally bump `slowDur` 0.9→1.1). `SLOW_FACTOR`
    is consumed only by the Cleaner spray, so the blast radius is contained. — GDD
-   §6.1.7. ⚠ Interacts with #6 — see that entry.
-4. **Workers seek Dan on LOS** (`workers.js`). In `updateWorkers`, after the flee
+   §6.1.7. ⚠ Interacts with #6 — see that entry.~~ **DONE** (`SLOW_FACTOR` 0.35, `slowDur` 1.1).
+4. **[NEXT] Workers seek Dan on LOS** (`workers.js`). In `updateWorkers`, after the flee
    check: if NOT fleeing a robot and `hasLineOfSight(worker, dan)`, steer toward Dan
    at a new `seekSpeed` (suggest **60**, between `speed` 44 and `fleeSpeed` 92).
    Priority: flee > seek-Dan > wander. — GDD §7.
@@ -117,7 +117,7 @@ by feel. Once a change is built + tested, fold its decisions into the relevant
 - **Spray render is CLIPPED to walls** (`coneRayDist` raymarch per cone slice + per droplet), so the cone visually stops at shelves instead of bleeding through. Damage was already correct. Also **won't start a spray facing a wall point-blank** (`sprayMinClear` 0.4 = needs ≥40% of range open ahead).
 - **Spray DoT uses its own tick timer** (`dan.sprayTick`/`tickEvery`), NOT the melee/bolt i-frame window — DoT hazard, ignores i-frames, overlapping cones can't double-tick. Slow always refreshes while inside. Damage stays LOS-gated via `danInSprayCone`. (Alt: gate damage by i-frames.)
 - **No contact damage** (mop the bot freely; `meleeContact` 0-dmg guard).
-- **Slow = movement only** (`SLOW_FACTOR` 0.5); fire rate unaffected. `sprayRange` 108 / ~60° cone / `slowDur` 0.9 s are the feel dials. **PENDING (Planned change #3):** strengthen the slow (lower `SLOW_FACTOR`, ~0.35).
+- **Slow = movement only** (`SLOW_FACTOR` **0.35** — a heavy ~65% slow); fire rate unaffected. `sprayRange` 108 / ~60° cone / `slowDur` **1.1 s** are the feel dials. `SLOW_FACTOR` is consumed only at `player.js` (gated on `dan.slow > 0`), and `dan.slow` is set only by the Cleaner spray, so the heavier slow stays contained to the Cleaner. ⚠ **Compounds with Planned change #6** (Manager missile speed ramp): a Dan slowed to ~0.35× (~65 px/s) can't outrun even the base 90 px/s missile, so once both land, walls are the only counterplay while slowed — intended, but verify the Manager fight stays fair when #6 ships.
 
 ### Drone (L6)
 
