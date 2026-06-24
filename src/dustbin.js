@@ -16,32 +16,29 @@
    callout.
 
    State machine on `G.dustbin.state`:  "slide" -> "attract" -> (detonate -> null).
-   Floor pickups live in `G.dustbinPickups`. `placeDustbins` is called from
-   buildLevel, `updateDustbin` from update(); rendering is `drawDustbins` in
-   render.js (same split as the vending machines).
+   Floor pickups live in `G.dustbinPickups`. `spawnDustbinPickup` is called by the
+   level loader (atomicDustbin spawn rule, §8.1.3), `updateDustbin` from update();
+   rendering is `drawDustbins` in render.js (same split as the vending machines).
    ========================================================================= */
 import { CFG } from "./config.js";
 import { G } from "./state.js";
 import { isDeploySpecial, getMoveVec } from "./input.js";
-import { moveBody, isWall, randomFloorTile } from "./world.js";
+import { moveBody, isWall } from "./world.js";
 import { killEnemy } from "./combat.js";
 import { addFloat } from "./effects.js";
 import { COL } from "./palette.js";
 import { sfx } from "./audio.js";
 
-// Seed this level's dustbin floor pickups. RARE: guaranteed on level 1 (so a fresh
-// run can always reach the special) then `spawnChance` odds per level after — the
-// guarantee is testing convenience, tune it down toward "rare" with §8.1 procgen.
-export function placeDustbins(){
-  G.dustbinPickups = [];
+// Spawn one glowing-green floor pickup at `pos` ({x,y} world centre). The loader
+// calls this from the level's atomicDustbin spawn rule (§8.1.3); the RARE-ness
+// (L1-guaranteed, then CFG.DUSTBIN.spawnChance odds) is decided by the generator
+// as the rule's `count`, so this just owns the pickup's shape.
+export function spawnDustbinPickup(pos){
   const D = CFG.DUSTBIN;
-  if (G.level === 1 || Math.random() < D.spawnChance){
-    const p = randomFloorTile(D.pickupMinDist);
-    G.dustbinPickups.push({
-      x:p.x, y:p.y, r:D.r,
-      spin:Math.random()*Math.PI*2, bob:Math.random()*Math.PI*2,
-    });
-  }
+  G.dustbinPickups.push({
+    x:pos.x, y:pos.y, r:D.r,
+    spin:Math.random()*Math.PI*2, bob:Math.random()*Math.PI*2,
+  });
 }
 
 export function updateDustbin(dt){

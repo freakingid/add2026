@@ -6,7 +6,29 @@
 /* ---- Tunable config (everything balance-related lives here) ------------- */
 export const CFG = {
   TILE: 32,
-  COLS: 40, ROWS: 30,            // world = 1280 x 960
+  COLS: 40, ROWS: 30,            // LIVE world dims — set by the loader from each level's
+                                 // tile grid (loadTileGrid). Initialised to the procgen
+                                 // size so anything reading them before the first load is safe.
+  GEN_COLS: 40, GEN_ROWS: 30,    // size the procedural generator emits (the loader then
+                                 // sets COLS/ROWS from the grid it produces). Kept separate
+                                 // so loading a differently-sized authored level can't make
+                                 // the next generated level inherit that size.
+
+  // Tile types (GDD §8.1.1). The Level-Definition grid is one char per tile; these
+  // flags are the SINGLE source of truth for collision / line-of-sight / destructibility,
+  // so new tile types can be added here without touching collision code (world.js reads
+  // them via isWall / blocksLOS / isDestructible). Floor is the only non-solid type.
+  //   .=floor  #=wall  S=shelf(destructible by Forklift charge)  P=pallet  o=pillar
+  TILES: {
+    ".": { name:"floor",  solid:false, blocksLOS:false, destructible:false },
+    "#": { name:"wall",   solid:true,  blocksLOS:true,  destructible:false },
+    "S": { name:"shelf",  solid:true,  blocksLOS:true,  destructible:true  },
+    "P": { name:"pallet", solid:true,  blocksLOS:true,  destructible:false },
+    "o": { name:"pillar", solid:true,  blocksLOS:true,  destructible:false },
+  },
+  TILE_FLOOR: ".",               // char a destroyed shelf / carved pocket resets a cell to
+  CONVEYOR_SPEED: 60,            // px/s per unit of a strip's `speed` (push is BAKED only — §8.1.4;
+                                 // no entity reads the push field yet, that lands next session)
 
   DAN_RADIUS: 12,
   DAN_SPEED: 185,               // px/sec
@@ -50,14 +72,13 @@ export const CFG = {
   // means of healing mid-run. Two variants; single-use (deplete after one touch),
   // capped at Dan's maxHp. Robots ignore them entirely. `r` = contact radius;
   // breadth/depth size the drawn cabinet (breadth runs PARALLEL to the wall it's
-  // flush against, depth perpendicular). Test levels place a fixed set; full
-  // weighted procgen comes with §8.1.
+  // flush against, depth perpendicular). Placed by the level loader's vendingSmall
+  // (cover zone) / vendingLarge (danger zone) spawn rules (§8.1.3, §2.5).
   VENDING: {
     r: 15,
     small: { heal:5,  breadth:22, depth:16 },   // dim glow, shorter unit
     large: { heal:10, breadth:28, depth:20 },   // brighter glow, taller unit
-    testPlacement: ["small", "large"],          // manual 1–2 machines for now (§8.1 later)
-    minDistFromCenter: 4,                        // keep off Dan's central spawn pocket
+    minDistFromCenter: 4,                        // fallback wall-spot search keeps off Dan's pocket
   },
 
   // Atomic Dustbin special (GDD §5) — a rare, glowing-green deployable Dan carries

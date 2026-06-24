@@ -10,7 +10,7 @@
 import { CFG, ENEMY } from "./config.js";
 import { G } from "./state.js";
 import {
-  moveBody, isWall, hasLineOfSight, destroyShelf, isBorderTile,
+  moveBody, isWall, hasLineOfSight, destroyShelf, isDestructible,
   tileFloor, tileCenter, tileClearRun, rectPerimeterClear, clamp,
 } from "./world.js";
 import { meleeContact } from "./combat.js";
@@ -259,11 +259,11 @@ function updateForklift(e, dt){
     const ny = e.y + Math.sin(e.cdir) * step;
     const tx = (nx / CFG.TILE)|0, ty = (ny / CFG.TILE)|0;
     if (isWall(tx, ty)){
-      if (isBorderTile(tx, ty)){
-        e.mode = "recover"; e.timer = d.recover;   // can't smash the outer wall
-      } else {
+      if (isDestructible(tx, ty)){
         destroyShelf(tx, ty);                       // plow through shelving
         e.x = nx; e.y = ny;
+      } else {
+        e.mode = "recover"; e.timer = d.recover;   // can't smash walls / pallets / pillars
       }
     } else {
       e.x = nx; e.y = ny;

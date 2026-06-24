@@ -8,40 +8,37 @@
    nothing in the enemy AI references G.vending, so they don't participate in
    pathfinding or collision.
 
-   placeVendingMachines is called from buildLevel; updateVending from update().
+   spawnVendingMachine is called by the level loader (vendingSmall / vendingLarge
+   spawn rules, §8.1.3); updateVending from update().
    ========================================================================= */
 import { CFG } from "./config.js";
 import { G } from "./state.js";
-import { randomFloorTileNearWall, tileCenter } from "./world.js";
+import { tileCenter } from "./world.js";
 import { addFloat } from "./effects.js";
 import { COL } from "./palette.js";
 import { sfx } from "./audio.js";
 
-// Place the level's vending machines flush against walls. Test levels use a
-// fixed CFG.VENDING.testPlacement list (manual 1–2 machines); full weighted
-// procedural placement arrives with §8.1.
-export function placeVendingMachines(){
-  G.vending = [];
-  const V = CFG.VENDING;
-  for (const variant of V.testPlacement){
-    const spot = randomFloorTileNearWall(V.minDistFromCenter);
-    if (!spot) continue;                         // no wall-adjacent tile found
-    const def = V[variant];
-    const c = tileCenter(spot.tx, spot.ty);
-    // Push the cabinet toward the wall so its back sits flush against it.
-    const inset = CFG.TILE/2 - def.depth/2;
-    G.vending.push({
-      x: c.x + spot.dx * inset,
-      y: c.y + spot.dy * inset,
-      r: V.r,
-      variant,
-      heal: def.heal,
-      dx: spot.dx, dy: spot.dy,                  // direction toward the wall (its back)
-      depleted: false,
-      glow: Math.random() * Math.PI * 2,         // ambient-glow phase
-      flash: 0,                                  // brief dispense flash on use
-    });
-  }
+// Build one vending machine of `variant` flush against the wall at `spot`
+// ({tx,ty,dx,dy}, where dx/dy points from the floor tile toward the adjoining
+// wall — see randomFloorTileNearWall). Pushed onto G.vending. The loader calls
+// this from the level's vendingSmall / vendingLarge spawn rules (§8.1.3); the
+// rule chooses the wall-adjacent spot, this owns the machine's shape.
+export function spawnVendingMachine(variant, spot){
+  const V = CFG.VENDING, def = V[variant];
+  const c = tileCenter(spot.tx, spot.ty);
+  // Push the cabinet toward the wall so its back sits flush against it.
+  const inset = CFG.TILE/2 - def.depth/2;
+  G.vending.push({
+    x: c.x + spot.dx * inset,
+    y: c.y + spot.dy * inset,
+    r: V.r,
+    variant,
+    heal: def.heal,
+    dx: spot.dx, dy: spot.dy,                  // direction toward the wall (its back)
+    depleted: false,
+    glow: Math.random() * Math.PI * 2,         // ambient-glow phase
+    flash: 0,                                  // brief dispense flash on use
+  });
 }
 
 export function updateVending(dt){

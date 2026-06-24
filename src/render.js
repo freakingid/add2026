@@ -10,7 +10,7 @@ import { ctx, VIEW_W, VIEW_H } from "./canvas.js";
 import { G } from "./state.js";
 import { CFG, POWERUPS } from "./config.js";
 import { COL, TERMINAL_TINT } from "./palette.js";
-import { map, clamp } from "./world.js";
+import { isWall, clamp } from "./world.js";
 import { drawEnemies, drawEbolts } from "./render-entities.js";
 import { drawHUD, drawTitle, drawLevelClear, drawGameOver } from "./screens.js";
 
@@ -119,7 +119,7 @@ function drawFloor(){
   for (let ty = y0; ty < y1; ty++){
     for (let tx = x0; tx < x1; tx++){
       if (tx<0||ty<0||tx>=CFG.COLS||ty>=CFG.ROWS) continue;
-      if (map[ty][tx] === 1) continue;
+      if (isWall(tx, ty)) continue;
       ctx.fillStyle = ((tx + ty) & 1) ? COL.floorA : COL.floorB;
       ctx.fillRect(tx*T, ty*T, T, T);
       ctx.strokeStyle = COL.grid;
@@ -136,7 +136,7 @@ function drawWalls(){
   for (let ty = y0; ty < y1; ty++){
     for (let tx = x0; tx < x1; tx++){
       if (tx<0||ty<0||tx>=CFG.COLS||ty>=CFG.ROWS) continue;
-      if (map[ty][tx] !== 1) continue;
+      if (!isWall(tx, ty)) continue;
       const px = tx*T, py = ty*T;
       // steel base
       ctx.fillStyle = COL.steel;

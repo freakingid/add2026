@@ -21,6 +21,7 @@ is a design decision, not a fix.
 - **Bounce** reflects per-axis off walls; a shot lives until its travel range expires.
 - **One enemy type per level** (testing), set by `LEVEL_PLAN` — except the Manager/Scanner levels (seed a Picker cluster) and the trailing **`"mixed"` sandbox** (L10+: one terminal of every real type). `"mixed"` is a pseudo-type with **no `ENEMY` entry**; only `buildLevel` + `update.js` special-case it. Levels reachable in sequence via the exit door.
 - **All enemies spawn from destroyable terminals** (generalized Dispatch Terminal). A single GLOBAL spawn cadence per level (`spawnTimer` + the type's `interval`) emits from a random matching terminal, capped by the type's `max`. Destroying ALL a type's terminals stops its spawns; thinning some does NOT slow the rate.
+- **Levels load through ONE loader** (GDD §8.1). Every level is a plain-data **Level Definition**; `loadLevel` (`level.js`) is the sole entry point to a playable level, and procgen is just a *producer* of these objects (`generateLevelDef`) — never generate a playable level directly, bypassing the loader. `map` holds a **tile char**, and collision/LOS/destructibility read per-type flags from **`CFG.TILES`** (`isWall`/`blocksLOS`/`isDestructible`) — do not revert to a 0/1 grid or hardcode tile behavior. Conveyor strips are parsed + **baked** into `world.pushField`, but the **push is not applied yet** (next session); don't assume belts move entities. `CFG.COLS/ROWS` are loader-set from the grid (procgen sizes itself from `CFG.GEN_COLS/ROWS`).
 - **Knockback** is `+dx/dist` — pushes Dan AWAY from the enemy.
 - **Worker rescue values double: 100/200/400/800/1600** (`rescueBase·2^G.rescued`), summing to 3,100 for all 5. **Rescuing all 5 does NOT auto-complete the level** — the exit door stays the only level-end trigger (GDD §8.2 was TBD; this is the chosen resolution). `G.rescued` resets each level; score persists. Workers are killable only by the (unbuilt) Inventory Bot.
 - **After every implementation change, update STATUS.md** — the "Current state" bullet for the affected system and the relevant subsystem decisions block if reasoning changed. STATUS.md is the handoff artifact; it must reflect reality after every session.
@@ -73,7 +74,7 @@ and responsibilities) is in **STATUS.md → "Architecture map"**. Quick orientat
 - **Data/leaves:** `config.js` (`CFG`, `ENEMY`, `POWERUPS`, `LEVEL_PLAN`), `palette.js` (`COL`), `canvas.js` (`ctx`/view dims), `audio.js` (Web Audio `sfx.*` SFX — GDD §10; called at each gameplay event).
 - **State:** `state.js` — the single mutable `G` object (run meta + all entities `dan/shots/enemies/terminals/pickups/marks/floats/ebolts/camera/exit` + timers) and `levelType()`. Modules read/mutate `G.*`; whole-value resets (`G.shots = []`) live in `level.js`.
 - **World:** `world.js` — `map`, collision (`moveBody`), geometry/LOS, `destroyShelf`.
-- **Sim:** `player.js` (Dan + soap shots), `enemies.js` (spawn + per-type AI incl. Inventory worker-hunter; `buffSpd` combines Manager berserk + Scanner alarm), `projectiles.js` (`G.ebolts` pool; `kind`: `bolt`/`arc`/`drop`/`homing`), `combat.js` (damage/kill/berserk), `workers.js` (human workers wander/flee + `rescueWorker`/`killWorker`), `dustbin.js` (Atomic Dustbin special §5 — carry/throw/slide/attract/detonate + `vortexHold`), `level.js` (newGame/buildLevel/nextLevel + terminals + pickups + 5 workers; `"mixed"` branch), `effects.js`. `update.js` orchestrates one frame.
+- **Sim:** `player.js` (Dan + soap shots), `enemies.js` (spawn + per-type AI incl. Inventory worker-hunter; `buffSpd` combines Manager berserk + Scanner alarm), `projectiles.js` (`G.ebolts` pool; `kind`: `bolt`/`arc`/`drop`/`homing`), `combat.js` (damage/kill/berserk), `workers.js` (human workers wander/flee + `rescueWorker`/`killWorker`), `dustbin.js` (Atomic Dustbin special §5 — carry/throw/slide/attract/detonate + `vortexHold`), `level.js` (newGame/nextLevel + the §8.1 **generator** `generateLevelDef` and **loader** `loadLevel` — `buildLevel` = `loadLevel(generateLevelDef())`; terminals/pickups/5 workers via spawn rules; `"mixed"` branch), `effects.js`. `update.js` orchestrates one frame.
 - **Render:** `render.js` (compositor + world draws), `render-entities.js` (enemy/ebolt sprites), `screens.js` (HUD + title/levelclear/gameover). `input.js` registers listeners on import.
 - States: `title` / `playing` / `levelclear` / `dead`.
 - **Adding an enemy:** stats in `config.js` (`ENEMY` + `LEVEL_PLAN`), color in `palette.js`, spawn-init + AI in `enemies.js`, sprite in `render-entities.js`, any new projectile `kind` in `projectiles.js`.
@@ -98,8 +99,10 @@ are in STATUS.md.
 
 **Enemy roster COMPLETE** (all 9 + Dispatch Terminal). Human workers + rescue scoring
 (§7) **DONE** (`workers.js`); the **`"mixed"` all-types sandbox** is L10+; the **Atomic
-Dustbin special (§5) DONE** (`dustbin.js`); the **audio system (§10) DONE** (`audio.js`).
-Remaining larger GDD features: full guaranteed-placement procgen (§8.1), sprite polish (§10).
+Dustbin special (§5) DONE** (`dustbin.js`); the **audio system (§10) DONE** (`audio.js`);
+the **§8.1 Level Definition format + loader DONE** (`level.js` generator+loader, `world.js`
+tile/conveyor primitives, `CFG.TILES`) — see STATUS "Level Definition format & loader".
 
-**Larger unbuilt GDD features:** full procedural placement (§8.1),
-sprite-art polish (§10).
+**Larger unbuilt GDD features:** conveyor **push** mechanic (the §8.1 push field is
+baked but not yet applied — queued in STATUS), richer generator geometry /
+guaranteed-placement tuning (the §8.1 *loader contract* is done), sprite-art polish (§10).

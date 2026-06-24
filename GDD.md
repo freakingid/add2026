@@ -7,7 +7,7 @@ rules, see CLAUDE.md. Section numbers here are stable — STATUS.md references t
 ### Build status index
 
 - **Built:** §2 Player (incl. §2.5 Vending Machines), §3 Power-ups, §4 Controls (**full**: §4.1 keyboard move, §4.2 mouse aim/fire, §4.3 keyboard directional fire (N=O E=`;` S=L W=K + two-key diagonals; East is `;`, not P — see STATUS), §4.4 keyboard special, §4.5 input-mode selection, §4.6–§4.8 gamepad move/fire/special — device-agnostic `input.js`, see STATUS "Controls / input"), §5 Atomic Dustbin special, §6 Enemies (**full roster**: Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner, Inventory + Dispatch Terminal) plus a `"mixed"` all-types sandbox level, §7 Human workers + rescue scoring, §8.2 level-end, §8.3 progression, §10 audio.
-- **Designed, NOT yet built:** full guaranteed-placement procgen (§8.1), §10 sprite-art polish.
+- **Designed, NOT yet built:** §8.1 Level Definition format + loader (procgen to be refactored to emit it), §10 sprite-art polish.
 
 ---
 
@@ -365,11 +365,128 @@ Rescuing all 5 earns a **full clear bonus** and a celebratory callout.
 
 ## 8. LEVEL STRUCTURE
 
-### 8.1 Layout
+## 8. LEVEL STRUCTURE
 
-- **Tile-based procedural generation** per level. *(Full guaranteed-placement procgen below is NOT yet built — current builds use test placement.)*
-- Warehouse aesthetic: shelf rows, corridors, open floor, cinderblock walls.
-- **Guaranteed placement each level:** 1 exit door; 5 human workers; multiple Dispatch Terminals (scales with level); vending-machine health pickups (see §2.5); power-up pickups; 1 rare Atomic Dustbin pickup (possibly 0 on early levels).
+### 8.1 Layout — Level Definition Format
+
+> **Status: DESIGNED, loader NOT yet built.** Current builds generate level
+> geometry directly in code with no intermediate data. This section defines the
+> single **Level Definition** format that both procedural generation and
+> hand-authoring emit, and that the engine alone consumes. Settled implementation
+> decisions live in CLAUDE.md / STATUS.md.
+
+Every level — generated or hand-authored — is a plain data object: the **Level
+Definition**. Procgen is a *producer* of these objects; hand-drawn set-piece levels
+are written directly as these objects. The engine never branches on origin: it loads
+a Level Definition and runs. This is what lets the conveyor mechanic, obstacle types,
+and entity placement behave identically whether a level was generated or authored.
+
+A Level Definition has three thin layers plus fixed set-piece placements.
+
+#### 8.1.1 Layer 1 — Tile grid (static geometry)
+
+A row-major array of equal-length strings; one character per tile. This is the only
+layer that carries collision and line-of-sight. Grid dimensions are `cols × rows`;
+a typical level is roughly 30 × 34 tiles.
+
+| Char | Tile | Solid | Blocks LOS | Destructible |
+| :--- | :--- | :--- | :--- | :--- |
+| `.` | floor | no | no | — |
+| `#` | wall | yes | yes | no |
+| `S` | shelf | yes | yes | yes (Forklift charge only) |
+| `P` | pallet | yes | yes | no |
+| `o` | pillar | yes | yes | no |
+
+Per-type flags are defined once in `CFG.TILES` so behavior is data-driven and new
+tile types can be added without touching collision code. Conveyor cells are **not** a
+tile type — they are plain `.` floor; the conveyor layer (§8.1.2) is the sole source
+of truth for belt positions. The Sorter's arcing box clears walls via its projectile
+arc (§6.1.4), not via any tile flag, so no "low wall" type is required.
+
+#### 8.1.2 Layer 2 — Conveyor strips
+
+A list of axis-aligned rectangles, each with a push direction and speed. The net push
+applied at any cell is the **vector sum of every strip that covers it**.
+
+```
+conveyors: [
+  { x: 1,  y: 16, w: 28, h: 2,  dir: "E", speed: 1.0 },
+  { x: 14, y: 1,  w: 2,  h: 32, dir: "N", speed: 1.0 },
+]
+```
+
+Each strip's `x, y, w, h` are in tile coordinates; `dir` is one of `N / S / E / W`;
+`speed` is in the same units as entity movement per the `CFG` conveyor constant.
+
+Because push is summed, **crossing strips produce a diagonal push at the overlap with
+no special intersection type** — an East strip crossing a North strip pushes any
+entity in the overlap cells to the Northeast. This is the entire intersection
+mechanic. Two strips with the same axis and opposing directions cancel where they
+overlap (avoid authoring this unless a dead zone is intended).
+
+**Unavoidable belts** are an authoring concern, not a format feature: span a strip the
+full width or height of the map and wall off every other route to the exit side, so
+crossing the belt is the only path. The format already supports this — no flag needed.
+
+#### 8.1.3 Layer 3 — Zones, placements, and spawn rules
+
+**Zones** are tagged, non-colliding rectangles that hint where the placer puts things.
+They carry no geometry of their own.
+
+```
+zones: [
+  { x: 1, y: 24, w: 28, h: 9,  role: "spawn"  },
+  { x: 1, y: 1,  w: 28, h: 13, role: "danger" },
+  { x: 1, y: 18, w: 28, h: 5,  role: "cover"  },
+]
+```
+
+Standard roles: `spawn`, `cover`, `combat`, `danger`. A level may define any subset;
+roles may overlap spatially.
+
+**Fixed placements** are hand-authored set pieces with exact tile coordinates. The
+player start and the exit door are always fixed placements.
+
+```
+placements: [
+  { type: "player", x: 15, y: 27 },
+  { type: "exit",   x: 25, y: 1  },
+]
+```
+
+**Spawn rules** are what keep procedural placement alive. Each rule asks the placer to
+drop `count` entities of `type` into a named zone `role`, optionally avoiding a role.
+
+```
+spawnRules: [
+  { type: "dispatchTerminal", count: 2, zone: "danger" },
+  { type: "vendingSmall",     count: 1, zone: "cover"  },
+  { type: "vendingLarge",     count: 1, zone: "danger" },
+  { type: "worker",           count: 5, zone: "any", avoid: "spawn" },
+  { type: "powerup",          count: 2, zone: "cover"  },
+  { type: "atomicDustbin",    count: 1, zone: "danger" },
+]
+```
+
+**Guaranteed placement each level** (per the original design intent, now expressed as
+spawn rules): 1 exit door (fixed); 5 human workers; Dispatch Terminals scaling with
+level; **two vending machines — one small in a `cover` zone, one large in a `danger`
+zone** (the large unit is a deliberate risk/reward pull, §2.5); power-up pickups; and
+1 rare Atomic Dustbin (`count` may be 0 on early levels).
+
+#### 8.1.4 Loader contract
+
+The engine gains one loader that consumes a Level Definition and is the **only** entry
+point to a playable level. It must:
+
+- Parse the tile grid into the runtime collision/LOS structures, reading flags from `CFG.TILES`.
+- **Bake conveyor strips into a per-cell push field**: a `cols × rows` array of `{dx, dy}` defaulting to zero, summing every covering strip's vector during the bake. Runtime push lookup is then O(1) per entity and intersections are already resolved. Drones ignore this field entirely (§6.1.5 — they fly above the belt).
+- Resolve fixed placements to exact spawn positions; run spawn rules to scatter rule-based entities into their zones, honoring `avoid`, and never placing an entity on a solid tile.
+- Validate: every level must have exactly one `player` and at least one `exit` placement, and every spawn rule's referenced zone role must exist (or be `"any"`).
+
+Procgen's responsibility narrows to **emitting a valid Level Definition** — generating
+the tile grid, choosing conveyor strips, tagging zones, and listing spawn rules — after
+which it hands off to the same loader every hand-authored level uses.
 
 ### 8.2 Level End Conditions
 
