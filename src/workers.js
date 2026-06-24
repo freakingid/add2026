@@ -61,6 +61,7 @@ export function killWorker(w){
   addFloat(w.x, w.y - 14, "WORKER LOST", COL.chargeWarn);
   sfx.workerLost();
   G.workers.splice(i, 1);
+  if (G.workers.length === 0) sfx.noWorkers();   // last human gone (GDD 7, 10)
 }
 
 // Award the escalating rescue value, count it, and remove the worker.
@@ -74,4 +75,5 @@ function rescueWorker(i){
   G.workers.splice(i, 1);
   // Celebratory callout for the full clear of all workers (GDD 7.2).
   if (G.rescued === d.count) addFloat(G.dan.x, G.dan.y - 30, "ALL " + d.count + " SAVED!", COL.amber);
+  if (G.workers.length === 0) sfx.noWorkers();   // last human gone (GDD 7, 10)
 }

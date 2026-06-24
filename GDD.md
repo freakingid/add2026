@@ -351,7 +351,7 @@ Dustbin per §5.3) score.
 - **Setting:** warehouse interior — shelving, concrete floors, loading zones, break-room elements.
 - **Projectile visuals:** base iridescent soap bubbles; Triple Shot larger opaque cleaning pods; Bounce leaves a soapy trail on walls at ricochet points.
 - **Atomic Dustbin:** glowing green, spins as a floor pickup; dramatic vortex + explosion on detonation.
-- **Audio:** retro arcade SFX via Web Audio API — pop/splash on hit, alarm on Scanner trigger, explosion on dustbin detonation. *(Built — `audio.js`; 16 synthesized SFX incl. these 3 plus game-feel additions, `M` to mute. See STATUS.md → "Audio".)*
+- **Audio:** retro arcade SFX via Web Audio API — pop/splash on hit, alarm on Scanner trigger, explosion on dustbin detonation. *(Built — `audio.js`; 17 synthesized SFX incl. these 3 plus game-feel additions, `M` to mute. See STATUS.md → "Audio".)*
 - **Worker-death cue:** a worker being killed plays a **dramatic, prominent** sting (clearly more noticeable than a generic hit) so the loss reads unmistakably.
 - **Last-worker cue:** when the **final** worker leaves the level — by rescue *or* by being killed — a **unique** one-shot SFX signals that there are no more humans left to save.
 

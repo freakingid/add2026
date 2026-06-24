@@ -198,6 +198,16 @@ export const sfx = {
     // Low sub-boom under it all for weight and menace.
     tone({ type:"sine", freq:130, freqEnd:48, dur:0.85, gain:0.30, delay:0.04 }); },
 
+  // The LAST human worker has left the level (rescued or killed) — a hollow,
+  // final descending motif: there's no one left to save. Sparse, somber sine
+  // line over a low drone; deliberately distinct from the bright `rescue` blip,
+  // the dramatic `workerLost` death sting, and the sawtooth `gameOver`. One-shot,
+  // never throttled.
+  noWorkers(){ if (!ensure()) return;
+    sequence([{freq:330,dur:0.18},{freq:262,dur:0.18},{freq:196,dur:0.5}],
+      { type:"sine", gain:0.22, gap:0.06 });
+    tone({ type:"triangle", freq:110, freqEnd:55, dur:0.95, gain:0.15 }); },
+
   // Level cleared — 4-note ascending victory jingle.
   levelClear(){ if (!ensure()) return;
     sequence([{freq:523,dur:0.11},{freq:659,dur:0.11},{freq:784,dur:0.11},{freq:1047,dur:0.2}],
