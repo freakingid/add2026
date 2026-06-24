@@ -6,7 +6,7 @@ rules, see CLAUDE.md. Section numbers here are stable — STATUS.md references t
 
 ### Build status index
 
-- **Built:** §2 Player (incl. §2.5 Vending Machines), §3 Power-ups, §4 Controls (**full**: §4.1 keyboard move, §4.2 mouse aim/fire, §4.3 keyboard directional fire O/P/L/K + two-key diagonals, §4.4 keyboard special, §4.5 input-mode selection, §4.6–§4.8 gamepad move/fire/special — device-agnostic `input.js`, see STATUS "Controls / input"), §5 Atomic Dustbin special, §6 Enemies (**full roster**: Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner, Inventory + Dispatch Terminal) plus a `"mixed"` all-types sandbox level, §7 Human workers + rescue scoring, §8.2 level-end, §8.3 progression, §10 audio.
+- **Built:** §2 Player (incl. §2.5 Vending Machines), §3 Power-ups, §4 Controls (**full**: §4.1 keyboard move, §4.2 mouse aim/fire, §4.3 keyboard directional fire (N=O E=`;` S=L W=K + two-key diagonals; East is `;`, not P — see STATUS), §4.4 keyboard special, §4.5 input-mode selection, §4.6–§4.8 gamepad move/fire/special — device-agnostic `input.js`, see STATUS "Controls / input"), §5 Atomic Dustbin special, §6 Enemies (**full roster**: Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner, Inventory + Dispatch Terminal) plus a `"mixed"` all-types sandbox level, §7 Human workers + rescue scoring, §8.2 level-end, §8.3 progression, §10 audio.
 - **Designed, NOT yet built:** full guaranteed-placement procgen (§8.1), §10 sprite-art polish.
 
 ---

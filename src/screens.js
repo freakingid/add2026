@@ -171,9 +171,9 @@ export function drawTitle(){
 function drawFireLegend(ox, oy){
   const cell = 36, gap = 4;
   const labels = [
-    ["O+K","↖"], ["O","↑"],   ["O+P","↗"],
-    ["K","←"],   ["·","·"],   ["P","→"],
-    ["L+K","↙"], ["L","↓"],   ["L+P","↘"],
+    ["O+K","↖"], ["O","↑"],   ["O+;","↗"],
+    ["K","←"],   ["·","·"],   [";","→"],
+    ["L+K","↙"], ["L","↓"],   ["L+;","↘"],
   ];
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillStyle = "#9aa3ae";

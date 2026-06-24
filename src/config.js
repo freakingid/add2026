@@ -29,10 +29,12 @@ export const CFG = {
   // detection routes through these (no hardcoded key strings in logic). Diagonal
   // combos are derived from the cardinals at runtime (two adjacent held), so
   // remapping a cardinal here automatically produces the right diagonals.
-  //   MOVE: N=W E=D S=S W=A   FIRE: N=O E=P S=L W=K
+  //   MOVE: N=W E=D S=S W=A   FIRE: N=O E=; S=L W=K
+  // (Fire East is `;`, not P per GDD §4.3 — deliberate; matches the physical
+  //  O / K L ; cluster. Diagonals follow: NE=O+; SE=L+;.)
   KEYS: {
     MOVE: { N:"w", E:"d", S:"s", W:"a" },
-    FIRE: { N:"o", E:"p", S:"l", W:"k" },
+    FIRE: { N:"o", E:";", S:"l", W:"k" },
   },
   // Browser Gamepad API standard (XInput) mapping: axes 0/1 = left stick, 2/3 =
   // right stick; buttons 9=Start 0=A, 4=LB 5=RB 6=LT 7=RT. Any push past a

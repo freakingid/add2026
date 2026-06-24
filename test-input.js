@@ -6,7 +6,7 @@
 const DIR = { N:[0,-1], E:[1,0], S:[0,1], W:[-1,0] };
 const KEYS = {
   MOVE: { N:"w", E:"d", S:"s", W:"a" },
-  FIRE: { N:"o", E:"p", S:"l", W:"k" },
+  FIRE: { N:"o", E:";", S:"l", W:"k" },
 };
 const GAMEPAD = { moveDeadzone:0.2, fireDeadzone:0.2 };
 
@@ -53,18 +53,18 @@ const PI = Math.PI;
 console.log("Cardinal fire keys ->");
 check("O alone = North", fireAngleKeyboard(held("o")), -PI/2);
 check("L alone = South", fireAngleKeyboard(held("l")),  PI/2);
-check("P alone = East",  fireAngleKeyboard(held("p")),  0);
+check("; alone = East",  fireAngleKeyboard(held(";")),  0);
 check("K alone = West",  fireAngleKeyboard(held("k")),  PI);
 
 console.log("Diagonal fire (two adjacent) ->");
-check("O+P = NE", fireAngleKeyboard(held("o","p")), -PI/4);
+check("O+; = NE", fireAngleKeyboard(held("o",";")), -PI/4);
 check("O+K = NW", fireAngleKeyboard(held("o","k")), -PI*3/4);
-check("L+P = SE", fireAngleKeyboard(held("l","p")),  PI/4);
+check("L+; = SE", fireAngleKeyboard(held("l",";")),  PI/4);
 check("L+K = SW", fireAngleKeyboard(held("l","k")),  PI*3/4);
 
 console.log("Opposing fire keys cancel -> null ->");
 check("O+L = null", fireAngleKeyboard(held("o","l")), null);
-check("K+P = null", fireAngleKeyboard(held("k","p")), null);
+check("K+; = null", fireAngleKeyboard(held("k",";")), null);
 check("none  = null", fireAngleKeyboard(held()), null);
 
 console.log("Gamepad fire deadzone ->");

@@ -19,7 +19,7 @@ _(none queued — the Controls overhaul shipped; see "Controls / input" below.)_
 - Single-file HTML5 Canvas + JS game; delta-timed loop; pixelated retro warehouse look.
 - **Dan:** device-agnostic controls (GDD §4) — keyboard+mouse OR gamepad, chosen on
   the title and locked for the run (`G.inputMode`). Keyboard: WASD move (diagonals =
-  two adjacent), O/P/L/K cardinal fire (diagonals = two adjacent, vector-sum angle),
+  two adjacent), O/;/L/K cardinal fire (N=O E=`;` S=L W=K; diagonals = two adjacent, vector-sum angle),
   mouse aim + left-click fire, E/F special. Gamepad: left stick move, right stick
   aim+fire, any bumper/trigger special. All player code reads `getMoveVec()` /
   `getFireAngle()` / `isDeploySpecial()` (see "Controls / input"). 20 HP,
@@ -77,10 +77,12 @@ _(none queued — the Controls overhaul shipped; see "Controls / input" below.)_
   stay exported only for mouse-aim, the `M` mute key, and debug. Removed the old
   `fireKeyStack`/`FIRE_ANGLES`/`keyboardFireAngle`.
 - **Diagonals are derived, not bound.** Cardinals live in `CFG.KEYS` (MOVE W/D/S/A,
-  FIRE O/P/L/K); a held diagonal is the **vector sum of two adjacent cardinals** (so
-  O+P = NE fire, W+D = NE move). Opposing fire keys (O+L) cancel to zero → no fire.
-  Remap a cardinal and the diagonals follow automatically — there are no per-diagonal
-  keys (the old `i ; , . /` single-key fire grid is gone).
+  FIRE N=O E=`;` S=L W=K); a held diagonal is the **vector sum of two adjacent
+  cardinals** (so O+; = NE fire, W+D = NE move). Opposing fire keys (O+L) cancel to
+  zero → no fire. Remap a cardinal and the diagonals follow automatically — there are
+  no per-diagonal keys (the old `i o p / k l ; / , . /` single-key fire grid is gone).
+  **Fire East is `;`, not P** (GDD §4.3 says P) — a deliberate divergence chosen to
+  match the physical `O` / `K L ;` finger cluster; change `CFG.KEYS.FIRE.E` to revert.
 - **Aim vs. fire are separate.** `getFireAngle()` is `null` when not firing. In keyboard
   mode `player.js` still faces Dan at the mouse cursor every frame (cursor tracking
   always on); in gamepad mode Dan **holds his last fire heading** when the right stick
@@ -97,7 +99,7 @@ _(none queued — the Controls overhaul shipped; see "Controls / input" below.)_
   keeps it always-evaluated). Throw direction now comes from `getMoveVec()` (left stick
   or WASD), so a moving deploy throws and a centered one drops in place, in either mode.
 - **Title shows both modes; the fire legend matches.** `screens.js` renders "SPACE —
-  KEYBOARD" / "A / START — GAMEPAD" and a 3×3 legend with O/P/L/K cardinals + the four
+  KEYBOARD" / "A / START — GAMEPAD" and a 3×3 legend with O/;/L/K cardinals + the four
   two-key diagonal combos (empty center). Game-over prompt is mode-keyed; level-clear
   auto-advances (no prompt). Pure math is unit-tested in `test-input.js` (`node
   test-input.js`); full gamepad/loop integration needs a browser.
@@ -243,7 +245,7 @@ _(none queued — the Controls overhaul shipped; see "Controls / input" below.)_
 - **`player.js`** — `updateDan` (slow move-scaling, decays `slow`/`sprayTick`), `fireVolley`/`fireBubble`, `updateShots` (bubble↔enemy↔terminal). ← config, state, input, world, combat.
 - **`update.js`** — `update(dt)` orchestrator: `pollGamepad()` first (every state), then (when playing) Dan → shots → **dustbin** → spawn → enemies → ebolts → pickups → vending → workers → effects → camera + `updateCamera` + spawn/terminal/exit/death bookkeeping. ← state, config, input (`pollGamepad`), player, enemies, projectiles, workers, vending, dustbin, level, effects, world, canvas.
 - **`render-entities.js`** — `drawEnemies` (per-type sprites + berserk aura) + `drawEbolts` (bolt/arc/drop/homing). ← canvas, state, config, palette, enemies (`coneRayDist`).
-- **`screens.js`** — `drawHUD` + `drawTitle` (both "SPACE — KEYBOARD" / "A / START — GAMEPAD" options + the O/P/L/K `drawFireLegend`) / `drawLevelClear` / `drawGameOver` (continue prompt keyed to `G.inputMode`). ← canvas, state, config, palette.
+- **`screens.js`** — `drawHUD` + `drawTitle` (both "SPACE — KEYBOARD" / "A / START — GAMEPAD" options + the O/;/L/K `drawFireLegend`) / `drawLevelClear` / `drawGameOver` (continue prompt keyed to `G.inputMode`). ← canvas, state, config, palette.
 - **`render.js`** — `render()` compositor + world/entity draws (`drawFloor`/`drawWalls`/`drawMarks` incl. the `"blast"` detonation ring/`drawExit`/`drawExitPointer`/`drawVending`/`drawDustbins`(floor pickups + sliding canister + attract vortex, via `drawDustbinCan`)/`drawTerminals`/`drawShots`/`drawPickups`/`drawWorkers`/`drawFloats`/`drawDan` incl. carried-dustbin cue). ← canvas, state, config, palette, world, render-entities, screens.
 - **`atomic-dustbin-dan.html`** — entry: imports `update` + `render` (+ `input` for its listeners) and runs the delta-timed `loop`. Nothing else.
 

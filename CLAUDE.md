@@ -31,21 +31,22 @@ is a design decision, not a fix.
 `input.js`'s `getMoveVec()` / `getFireAngle()` / `isDeploySpecial()`, which route to
 keyboard or gamepad by **`G.inputMode`** (`null` on title, then `'keyboard'` or
 `'gamepad'`). **Never bypass `G.inputMode`** when reading input. Cardinal key
-assignments live in `CFG.KEYS` (`MOVE` N=W E=D S=S W=A · `FIRE` N=O E=P S=L W=K);
+assignments live in `CFG.KEYS` (`MOVE` N=W E=D S=S W=A · `FIRE` N=O E=`;` S=L W=K);
 **diagonals are derived at runtime** as the vector sum of two adjacent cardinals —
-there are NO dedicated single-key diagonals.
+there are NO dedicated single-key diagonals. (Fire East is `;`, not P per GDD §4.3 —
+a deliberate divergence matching the physical O / K L ; cluster.)
 
 **Keyboard fire** — four cardinals, diagonal = two adjacent held; fire angle is the
 normalized vector sum (opposing keys cancel → no fire). Mouse aims + left-click fires
 (keyboard mode only); Dan faces the cursor whenever no fire key is held.
 
 ```
-O+K  O  O+P     NW N NE
- K  (·) P       W  ·  E
-L+K  L  L+P     SW S SE
+O+K  O  O+;     NW N NE
+ K  (·) ;       W  ·  E
+L+K  L  L+;     SW S SE
 ```
 
-N=O  E=P  S=L  W=K   ·   NW=O+K  NE=O+P  SW=L+K  SE=L+P
+N=O  E=;  S=L  W=K   ·   NW=O+K  NE=O+;  SW=L+K  SE=L+;
 
 **Keyboard movement** — WASD cardinals; diagonal = two adjacent (W+A=NW, W+D=NE,
 S+A=SW, S+D=SE). **Special** (Atomic Dustbin) = E or F. **Gamepad** — left stick move
