@@ -12,6 +12,7 @@ import { mouse, getMoveVec, getFireAngle } from "./input.js";
 import { moveBody, isWall, pushAtWorld, clampNet } from "./world.js";
 import { killEnemy, destroyTerminal } from "./combat.js";
 import { sfx } from "./audio.js";
+import { emit } from "./events.js";
 
 export function updateDan(dt){
   // Aim: the active fire direction wins. When not firing, keyboard mode keeps Dan
@@ -78,6 +79,10 @@ export function updateDan(dt){
 // Fire one trigger event: 3-projectile fan if Triple, else single.
 function fireVolley(angle, triple, bounce){
   sfx.shoot();   // one bloop per trigger, not per pellet
+  emit('bolt:fired', {
+    kind: bounce ? 'bounce' : 'standard',
+    isTripleShotActive: !!triple,
+  });
   if (triple){
     const s = CFG.TRIPLE_SPREAD;
     fireBubble(angle - s, triple, bounce);

@@ -13,6 +13,40 @@ import { COL, TERMINAL_TINT } from "./palette.js";
 import { isWall, clamp, pushAt } from "./world.js";
 import { drawEnemies, drawEbolts } from "./render-entities.js";
 import { drawHUD, drawTitle, drawLevelClear, drawGameOver } from "./screens.js";
+import { popAchievementBanner } from "./achievements.js";
+
+/* ---- Achievement banner ------------------------------------------------- */
+const BANNER_DURATION = 2500; // ms
+let _currentBanner = null;
+let _bannerReceivedAt = 0;
+
+function drawAchievementBanner() {
+  const now = Date.now();
+  // Advance to next banner if current has expired or we have none.
+  if (!_currentBanner || now - _bannerReceivedAt >= BANNER_DURATION) {
+    _currentBanner = popAchievementBanner();
+    if (_currentBanner) _bannerReceivedAt = now;
+  }
+  if (!_currentBanner) return;
+  if (now - _bannerReceivedAt >= BANNER_DURATION) { _currentBanner = null; return; }
+
+  const bw = 280, bh = 44, bx = (VIEW_W - bw) / 2, by = VIEW_H - 72;
+  ctx.save();
+  ctx.globalAlpha = 0.88;
+  ctx.fillStyle = '#111';
+  ctx.beginPath();
+  ctx.roundRect(bx, by, bw, bh, 6);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 14px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(_currentBanner.text, VIEW_W / 2, by + 17);
+  ctx.fillStyle = '#aaa';
+  ctx.font = '11px monospace';
+  ctx.fillText(_currentBanner.subtext, VIEW_W / 2, by + 33);
+  ctx.restore();
+}
 
 /* ---- Render ------------------------------------------------------------- */
 export function render(){
@@ -43,6 +77,7 @@ export function render(){
 
   if (G.state === "playing") drawExitPointer();
   drawHUD();
+  drawAchievementBanner();
   if (G.state === "levelclear") drawLevelClear();
   if (G.state === "dead") drawGameOver();
 }

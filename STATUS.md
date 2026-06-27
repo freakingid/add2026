@@ -35,7 +35,7 @@ All core systems are complete. The table below is the canonical build status; GD
 | Conveyor push mechanic + rendering + hum | ✅ Built | §8.1.2 | `world.js`, `render.js` |
 | Audio — 17 SFX + looping conveyor bed | ✅ Built | §10 | `audio.js` |
 | Game states (title / playing / levelclear / dead) | ✅ Built | — | `state.js`, `screens.js` |
-| Achievement system | 🔲 Not built | `ACHIEVEMENTS.md` | — |
+| Achievement system | 🔧 In progress — Phase 1 complete | `ACHIEVEMENTS.md` | `events.js`, `achievements.js` |
 | Sprite-art polish | 🔲 Not built | §10 | — |
 
 > Cross-cutting "do not silently change" rules (HP/score persistence, decrement model,
@@ -368,12 +368,25 @@ All core systems are complete. The table below is the canonical build status; GD
 
 ---
 
-## Achievement system (not yet built)
+## Achievement system (Phase 1 complete)
 
-See **`ACHIEVEMENTS.md`** for the full specification. Key files to be created:
+See **`ACHIEVEMENTS.md`** for the full specification and **`ACHIEVEMENT-BLUEPRINT.md`** for the implementation plan.
 
-- `src/events.js` — pub/sub bus; emitters will be added to existing modules
-- `src/achievements.js` — subscriber; manages session, weekly, and lifetime state
-- `localStorage` keys: `weekly_{isoYear}_{isoWeek}`, `lifetime_achievements`
+**Files created:**
+- `src/events.js` — synchronous pub/sub bus (zero imports; leaf node)
+- `src/achievements.js` — subscriber module; module-local state only
 
-When built, add a subsystem decisions entry here.
+**Files modified (Phase 1 emitters):**
+- `src/player.js` — `bolt:fired` emit in `fireVolley()`
+- `src/level.js` — `initAchievements()` call in `newGame()`
+- `src/render.js` — `drawAchievementBanner()` pull from `popAchievementBanner()`
+
+**Phase 1 decisions:**
+
+- **Synchronous pub/sub over a frame-drained queue.** Handlers run immediately at the emit call site (same pattern as `sfx.*` audio calls). Achievement handlers are read-only relative to `G` — they write only module-local tracking state — so mid-frame execution has no observable side effects on the sim. A queued bus would add a drain step in `update.js` for no benefit at this scale.
+
+- **`popAchievementBanner()` pull architecture.** `achievements.js` pushes to a module-local `_bannerQueue`; `render.js` pulls one entry per frame via `popAchievementBanner()`. This keeps the dependency arrow correct: render pulls from achievements; achievements never call into render. Multiple unlocks in quick succession queue and display sequentially (2.5 s each). Module-level `_currentBanner` state in `render.js` holds the active banner across frames; a new pop only happens when the current banner expires or the queue was empty.
+
+- **Module-local state, not on `G`.** All achievement tracking counters live as `let` variables in `achievements.js`. `G` is the game sim state; achievement bookkeeping is a separate concern (per CLAUDE.md non-negotiable: no `G` entries for achievement state). `initAchievements()` resets module-local state on each new game; named handler references allow `off()`/`on()` deduplication across `newGame()` calls.
+
+- **`localStorage` keys:** `add_weekly_{isoYear}_{isoWeek}`, `add_lifetime`, `add_xp`, `add_eotw_streak` (all prefixed `add_` to namespace the game's storage). Not yet wired — Phase 2.

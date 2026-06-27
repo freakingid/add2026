@@ -18,6 +18,7 @@
    power-up pickup seeding/collection.
    ========================================================================= */
 import { CFG, ENEMY, POWERUPS, POWERUP_KEYS, LEVEL_PLAN } from "./config.js";
+import { initAchievements } from "./achievements.js";
 import { G, levelType } from "./state.js";
 import {
   loadTileGrid, bakeConveyors, isWall, tileCenter,
@@ -41,6 +42,7 @@ export function newGame(){
   G.powerups = { rapid:0, triple:0, bounce:0 };
   G.score = 0;
   G.level = 1;
+  initAchievements();
   buildLevel();
   G.state = "playing";
 }
