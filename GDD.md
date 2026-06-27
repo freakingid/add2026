@@ -6,8 +6,8 @@ rules, see CLAUDE.md. Section numbers here are stable — STATUS.md references t
 
 ### Build status index
 
-- **Built:** §2 Player (incl. §2.5 Vending Machines), §3 Power-ups, §4 Controls (**full**: §4.1 keyboard move, §4.2 mouse aim/fire, §4.3 keyboard directional fire (N=O E=`;` S=L W=K + two-key diagonals; East is `;`, not P — see STATUS), §4.4 keyboard special, §4.5 input-mode selection, §4.6–§4.8 gamepad move/fire/special — device-agnostic `input.js`, see STATUS "Controls / input"), §5 Atomic Dustbin special, §6 Enemies (**full roster**: Picker, Forklift, Security, Sorter, Cleaner, Drone, Manager, Scanner, Inventory + Dispatch Terminal) plus a `"mixed"` all-types sandbox level, §7 Human workers + rescue scoring, §8.2 level-end, §8.3 progression, §10 audio.
-- **Designed, NOT yet built:** §8.1 Level Definition format + loader (procgen to be refactored to emit it), §10 sprite-art polish.
+- **Built:** §2 Player (incl. §2.5 Vending Machines), §3 Power-ups, §4 Controls (full — keyboard+mouse and gamepad; device-agnostic `input.js`; see STATUS "Controls / input"), §5 Atomic Dustbin special, §6 Enemies (full roster: all 9 types + Dispatch Terminal + `"mixed"` sandbox — see `GDD-ENEMIES.md`), §7 Human workers + rescue scoring + Inventory Bot worker-hunting, §8.1 Level Definition format + loader + five hand-authored levels + conveyor push mechanic, §8.2 level-end, §8.3 progression, §10 audio (17 SFX + conveyor hum).
+- **Designed, NOT yet built:** Achievement system (see `ACHIEVEMENTS.md`), §10 sprite-art polish.
 
 ---
 
@@ -63,12 +63,6 @@ decided to take action.
 | Bounce active | Shots leave brief soapy trail on walls at ricochet point |
 
 ### 2.5 Vending Machines
-
-> **Status: BUILT** (`vending.js`). Contact-triggered, single-use, maxHp-capped.
-> Test levels place one small + one large flush against walls; full weighted
-> procedural placement (1–3 per level) awaits §8.1. Implementation/feel decisions
-> (won't deplete at full HP; float shows actual HP gained) are in STATUS
-> "Vending machines".
 
 Vending machines are static, interactable health-restoration objects placed in each
 level. They are the sole means of restoring Dan's HP mid-run and are diegetically
@@ -222,8 +216,6 @@ Atomic Dustbin. Button indices per standard XInput / Browser Gamepad API mapping
 
 ## 5. SPECIAL ITEM — THE ATOMIC DUSTBIN
 
-> **Status: BUILT** (`dustbin.js`). Implementation/feel decisions are in STATUS.md → "Atomic Dustbin special". `e.flying` flags drones so the attract phase pulls them too.
-
 A rare, glowing green deployable pickup. Dan carries **one at a time**. Glows green,
 spins slowly when sitting on the floor as a pickup.
 
@@ -251,89 +243,13 @@ spins slowly when sitting on the floor as a pickup.
 
 ## 6. ENEMIES
 
-Dan has **20 HP** — reference this when reading damage values. Per-enemy detail
-below; the summary table in §6.2 is the canonical stat reference.
-
-### 6.1 Enemy Roster
-
-**6.1.1 PICKER BOT** — basic chaser / cannon fodder. HP 1, 50 pts. Melee contact,
-1 HP to Dan. Moves directly toward Dan at moderate speed. Spawns constantly from
-Dispatch Terminals.
-
-**6.1.2 FORKLIFT BOT** — slow tank / charger. HP 5, 200 pts. Melee charge: 4 HP on
-charge impact, 2 HP on standard contact. Slow by default; on line of sight it locks
-on and charges in a straight line. Can destroy shelving in its path. Dangerous to
-stand in front of.
-
-**6.1.3 SCANNER BOT** — support / alarm emitter. HP 2, 150 pts. No direct attack
-(0 HP). Patrols; on spotting Dan it broadcasts an alarm making nearby robots
-temporarily faster and more aggressive. Priority kill before engaging clusters.
-
-**6.1.4 SORTER BOT** — cowardly ranged lobber; bombards from behind cover. HP 2,
-100 pts. Ranged arcing cardboard box (arcs over walls/shelving), 1 HP per hit.
-Always knows Dan's location; mood flips on line of sight:
-- **Exposed (has LOS):** panics — flees fast in an erratic, jittery scatter, holds fire. Wants cover.
-- **In cover (no LOS):** feels secure — advances and periodically lobs a box in a slow high arc that clears walls to drop on Dan. Only lobs when within ~140px; closes distance under cover otherwise. A wall usually sits between them, so Dan's straight soap shots can't answer back — bombarding from cover is its whole game. Each lob is telegraphed by a ground shadow at the landing spot: predictable and dodgeable, but punishing in tight, wall-heavy rooms.
-
-**6.1.5 DRONE** — aerial ranged attacker; ignores ground obstacles. HP 2, 150 pts. Ranged package bomb dropped below its position, 2 HP per hit. Flies above shelving and walls. A shadow / targeting indicator appears on the ground before the bomb lands. Forces Dan to stay mobile by orbiting unpredictably before committing to a bombing run. Still affected by the Atomic Dustbin attract phase.
-**Movement behavior:** Drones use a three-phase predatory orbit cycle rather than flying directly above Dan. **STALK** — the drone orbits Dan at a medium radius, circling clockwise or counter-clockwise. No bombing during this phase; the drone is visibly circling, not descending. **COMMIT** — after a randomized stalk duration, the drone breaks orbit and climbs toward bombing position above Dan. This is the readable telegraph: it accelerates upward and inward. If Dan moves far enough to break pursuit, the drone aborts back to STALK — mobility is the counterplay. **DROP** — if the drone reaches position, it drops the bomb (existing reticle + shadow system), then returns to STALK. Multiple drones may orbit in opposite directions, making their paths cross and harder to dodge simultaneously.
-
-**6.1.6 INVENTORY BOT** — wanderer / worker hunter. HP 1, 75 pts. Melee contact,
-1 HP to Dan. **(BUILT, L9.)** Dual state:
-- *Default:* wanders slowly and randomly, oblivious to Dan.
-- *Hunter:* periodically (timer or worker proximity) locks onto the nearest human worker and pursues slowly but relentlessly.
-- *Hunting Dan:* once **no human workers remain** in the level (all rescued and/or killed), the Inventory Bot turns on Dan — it pursues the player directly and deals its melee contact damage. Its worker-hunting purpose is over, so it becomes a (weak) threat to Dan.
-- **Special:** the ONLY robot capable of killing human workers. Slow, but it will find them.
-
-**6.1.7 CLEANER BOT** — debuffer / slow hazard. HP 2, 100 pts. Ranged cone spray
-ahead of it, 1 HP per tick while Dan is inside the cone, plus a **strong slow
-movement debuff** (a heavy movement penalty while sprayed — significantly more than
-a gentle slow). Wanders slowly. Most dangerous in corridors where Dan cannot escape
-the cone.
-
-**6.1.8 SECURITY BOT** — fast ranged pursuer; mid-game primary threat. HP 3, 200
-pts. Ranged taser bolt, 2 HP per bolt. Fast, aggressive; fires direct-line bolts at
-a fast rate. Requires active dodging. **Taser bolts also damage any ground robot
-they strike** (friendly fire) — **drones are immune** (bolts travel below drone
-altitude). Robots destroyed this way award **no points** to Dan (§9).
-
-**6.1.9 MANAGER BOT** — rare, high-value, boss-tier. HP 6, 500 pts. Ranged seeking
-missile, 3 HP per hit. Rare spawn; fires slow-tracking missiles that follow Dan.
-The missile **launches slow and accelerates over its flight up to a fast maximum** —
-easy to outrun at first, but it closes the gap if it chases too long, so commit to
-luring it into a wall (detonates harmlessly) before it reaches top speed. **Missiles
-also damage any ground robot they hit** (friendly fire); **drones are immune**
-(missiles fly below drone altitude), and robots killed this way award **no points**
-to Dan (§9). On death the Manager emits a **berserk pulse**: nearby robots gain
-increased movement speed + increased melee damage (no added ranged) for a temporary
-duration.
-
-**6.1.10 DISPATCH TERMINAL** — static spawner (like Gauntlet's generators). HP 4,
-300 pts. No attack (0 HP). Stationary; spawns Picker Bots on a fixed timer.
-Destroying it stops all spawning from that location. Always a priority target.
-Multiple terminals may exist per level.
-
-### 6.2 Enemy Summary Table (canonical stat reference)
-
-| Enemy | HP | Points | Attack Type | Damage to Dan | Ranged? |
-| :---- | :---- | :---- | :---- | :---- | :---- |
-| Picker Bot | 1 | 50 | Melee contact | 1 HP | No |
-| Forklift Bot | 5 | 200 | Melee charge | 4 HP (charge) / 2 HP (contact) | No |
-| Scanner Bot | 2 | 150 | Alarm (indirect) | 0 HP | No |
-| Sorter Bot | 2 | 100 | Arcing box | 1 HP | Yes |
-| Drone | 2 | 150 | Bomb drop | 2 HP | Yes |
-| Inventory Bot | 1 | 75 | Melee contact | 1 HP | No |
-| Cleaner Bot | 2 | 100 | Spray cone | 1 HP/tick + slow | Yes (cone) |
-| Security Bot | 3 | 200 | Taser bolt | 2 HP | Yes |
-| Manager Bot | 6 | 500 | Seeking missile | 3 HP | Yes |
-| Dispatch Terminal | 4 | 300 | None (spawner) | 0 HP | No |
+> See **`GDD-ENEMIES.md`** for the full enemy roster (§6.1) and canonical stat table (§6.2). That file is extracted here for token efficiency — include it only in sessions that touch enemy AI, stats, or new enemy types.
+>
+> All 9 enemies + Dispatch Terminal are fully built. Implementation decisions in STATUS.md per-enemy subsystem entries.
 
 ---
 
 ## 7. HUMAN WORKERS
-
-> **Status: BUILT** (`workers.js`) — wander/flee + rescue scoring. Killing workers
-> awaits the Inventory Bot (§6.1.6); until then a worker only leaves by rescue.
 
 ### 7.1 Basics
 
@@ -365,15 +281,9 @@ Rescuing all 5 earns a **full clear bonus** and a celebratory callout.
 
 ## 8. LEVEL STRUCTURE
 
-## 8. LEVEL STRUCTURE
-
 ### 8.1 Layout — Level Definition Format
 
-> **Status: DESIGNED, loader NOT yet built.** Current builds generate level
-> geometry directly in code with no intermediate data. This section defines the
-> single **Level Definition** format that both procedural generation and
-> hand-authoring emit, and that the engine alone consumes. Settled implementation
-> decisions live in CLAUDE.md / STATUS.md.
+> **Status: BUILT** (`level.js` + `world.js`). Generator, loader, five hand-authored levels, and conveyor push mechanic are all complete. Implementation decisions in STATUS.md → "Level Definition format & loader" and "Conveyors".
 
 Every level — generated or hand-authored — is a plain data object: the **Level
 Definition**. Procgen is a *producer* of these objects; hand-drawn set-piece levels
@@ -524,23 +434,17 @@ Dustbin per §5.3) score.
 
 ---
 
-## 11. TECHNICAL NOTES FOR IMPLEMENTATION
+## 11. FUTURE OPTIONAL FEATURES
 
-Design-level guidance; settled implementation decisions live in CLAUDE.md / STATUS.md.
+Features considered during design but deferred from the current roadmap. Not in CLAUDE.md or the active STATUS.md checklist; not expected in any current implementation session. Revisit when a relevant system creates a natural hook.
 
-- **Platform:** HTML5 Canvas + JS, runs in browser.
-- **Rendering:** 2D tile-based top-down.
-- **Collision:** tile-based for walls/obstacles; circle or AABB for entities.
-- **Procedural generation:** tile grid with guaranteed exit, worker, terminal, and pickup placement; shelf rows as obstacles.
-- **Projectile system:** pool of active shots, each with position, direction, velocity, lifespan counter, bounce flag.
-- **Power-up system:** three independent shot counters (RF, Triple, Bounce); decrement once per trigger; stack all three.
-- **Atomic Dustbin physics:** velocity vector on throw from Dan's movement direction; per-frame friction; wall bounce via velocity reflection; attract phase begins at zero velocity.
-- **Enemy AI per type:** §6; each type has a distinct behavior state machine.
-- **Inventory Bot worker-hunt:** timer- or proximity-based trigger locks onto nearest living worker.
-- **Dan facing:** always faces the mouse cursor (keyboard mode) or the last fire direction from the right stick (gamepad mode).
-- **Melee knockback:** fixed knockback vector away from the robot; single damage event per contact; requires re-entry to trigger again.
-- **Input abstraction:** `input.js` exports `getMoveVec()`, `getFireAngle()`, and `isDeploySpecial()` — device-agnostic functions that route to keyboard or gamepad based on `G.inputMode`. All player-action code calls these rather than reading raw key state. Cardinal key assignments live in `CFG.KEYS.MOVE` and `CFG.KEYS.FIRE` for future remapping. Diagonal combos are derived from those assignments at runtime.
-- **Gamepad polling:** `navigator.getGamepads()[0]` polled each update tick (not event-driven). Standard XInput / Browser Gamepad API button indices assumed (axes 0/1 = left stick, axes 2/3 = right stick).
+### 11.1 The Scenic Route (Achievement)
+
+Achievement concept: "Step on every walkable tile in a level." Requires per-frame spatial coverage tracking — a `cols × rows` boolean visited-grid updated each frame as Dan moves. Deferred because the CPU overhead and implementation complexity are not justified for a single achievement. Revisit if a tile-visit tracking system is added for another purpose.
+
+### 11.2 Vending Machine Cooldown
+
+Instead of permanently single-use, vending machines could enter a cooldown period and become usable again after a fixed time. This would unlock achievement concepts that currently make no sense (e.g., "use a vending machine 5 times in one level"). Deferred; current design is single-use within a level.
 
 ---
 
