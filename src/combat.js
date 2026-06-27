@@ -10,6 +10,7 @@ import { COL } from "./palette.js";
 import { G } from "./state.js";
 import { addFloat } from "./effects.js";
 import { sfx } from "./audio.js";
+import { emit } from "./events.js";
 
 // Apply a ranged hit to Dan: shared i-frame + a lighter knockback along the
 // bolt's travel direction.
@@ -20,6 +21,9 @@ export function hitDanRanged(b){
   const a = Math.atan2(b.vy, b.vx);
   G.dan.kvx = Math.cos(a) * CFG.KNOCKBACK_SPEED * 0.6;
   G.dan.kvy = Math.sin(a) * CFG.KNOCKBACK_SPEED * 0.6;
+  emit('player:hit', { dmg: b.dmg, source: 'ranged' });
+  emit('player:hp_changed', { hp: G.dan.hp, maxHp: G.dan.maxHp });
+  if (G.dan.hp <= 0) emit('player:died');
 }
 
 // Area impact (arc landing): shared i-frame + radial knockback away from the
@@ -31,6 +35,9 @@ export function hitDanArea(x, y, dmg){
   const a = Math.atan2(G.dan.y - y, G.dan.x - x);
   G.dan.kvx = Math.cos(a) * CFG.KNOCKBACK_SPEED * 0.6;
   G.dan.kvy = Math.sin(a) * CFG.KNOCKBACK_SPEED * 0.6;
+  emit('player:hit', { dmg, source: 'area' });
+  emit('player:hp_changed', { hp: G.dan.hp, maxHp: G.dan.maxHp });
+  if (G.dan.hp <= 0) emit('player:died');
 }
 
 // dx,dy point from the enemy toward Dan; knock Dan AWAY (down +dx/dy).
@@ -44,6 +51,9 @@ export function meleeContact(e, dx, dy, dist, dmg){
     G.dan.iframe = CFG.DAN_IFRAME;
     G.dan.kvx = (dx/dist) * CFG.KNOCKBACK_SPEED;
     G.dan.kvy = (dy/dist) * CFG.KNOCKBACK_SPEED;
+    emit('player:hit', { dmg, source: 'melee' });
+    emit('player:hp_changed', { hp: G.dan.hp, maxHp: G.dan.maxHp });
+    if (G.dan.hp <= 0) emit('player:died');
   }
 
   if (e.hp <= 0){
@@ -68,8 +78,17 @@ export function damageEnemy(e, dmg){
 
 // `score:false` (e.g. robot-on-robot missile/bolt friendly fire) skips the points
 // award + score float but keeps the death sound, Manager berserk pulse, and splice.
-export function killEnemy(index, { score = true } = {}){
+export function killEnemy(index, { score = true, killerKind = 'mop', bounceCount = 0, uniqueWallCount = 0, hadLOSAtFire = true, timeAliveMs = 0 } = {}){
   const e = G.enemies[index];
+  emit('enemy:died', {
+    type: e.type,
+    killerKind,
+    bounceCount,
+    uniqueWallCount,
+    hadLOSAtFire,
+    timeAliveMs,
+    isBounceKill: bounceCount > 0,
+  });
   if (score){
     G.score += ENEMY[e.type].points;
     addFloat(e.x, e.y - 16, "+" + ENEMY[e.type].points, COL.amber);

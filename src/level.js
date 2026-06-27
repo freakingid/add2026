@@ -19,6 +19,7 @@
    ========================================================================= */
 import { CFG, ENEMY, POWERUPS, POWERUP_KEYS, LEVEL_PLAN } from "./config.js";
 import { initAchievements } from "./achievements.js";
+import { emit } from "./events.js";
 import { G, levelType } from "./state.js";
 import {
   loadTileGrid, bakeConveyors, isWall, tileCenter,
@@ -38,17 +39,26 @@ export function newGame(){
     angle:0, cooldown:0, iframe:0, kvx:0, kvy:0,
     slow:0, sprayTick:0,        // Cleaner debuff: slow timer + DoT tick gate
     hasDustbin:false,           // carrying an Atomic Dustbin special? (GDD 5)
+    stillInputMs:0, _stoodStillEmitted:false,  // for player:stood_still achievement event
+    _prevOnBelt:false,                         // for conveyor:push_start edge detection
   };
   G.powerups = { rapid:0, triple:0, bounce:0 };
   G.score = 0;
   G.level = 1;
+  G._runStartTime = performance.now();
   initAchievements();
+  emit('run:start');
   buildLevel();
   G.state = "playing";
 }
 
 // Advance to a fresh level — HP, power-ups, and score persist.
 export function nextLevel(){
+  emit('level:end', {
+    levelTime: performance.now() - G._levelStartTime,
+    workersRescued: G.rescued,
+    levelNumber: G.level,
+  });
   G.level++;
   buildLevel();
   G.state = "playing";
@@ -226,6 +236,7 @@ export function loadLevel(def){
   G.marks = []; G.floats = []; G.ebolts = []; G.vending = [];
   G.dustbin = null; G.dustbinPickups = []; G.workers = [];
   G.rescued = 0; G.spawnTimer = 0.6; G.pickupTimer = 0;
+  G._allEnemiesDeadEmitted = false;
 
   // Fixed placements: player start + exit door. Resolve the player FIRST so any
   // preplaced enemy that reads Dan's position (e.g. the Drone's orbit bearing)
@@ -244,6 +255,12 @@ export function loadLevel(def){
   for (const rule of (def.spawnRules || [])) runSpawnRule(rule, def);
 
   G.camera = { x:0, y:0 };
+
+  G._levelStartTime = performance.now();
+  emit('level:start', {
+    terminalCount: G.terminals.length,
+    workerCount: G.workers.length,
+  });
 }
 
 // §8.1.4 validation: exactly one `player`, at least one `exit`, and every spawn
@@ -336,7 +353,10 @@ function runSpawnRule(rule, def){
       for (let i = 0; i < n; i++){
         const c = centerOf(pickTile(rule, def));
         G.workers.push({ x:c.x, y:c.y, r:CFG.WORKER.radius,
-          heading:Math.random()*Math.PI*2, wanderT:0, bob:Math.random()*Math.PI*2, fleeing:false });
+          heading:Math.random()*Math.PI*2, wanderT:0, bob:Math.random()*Math.PI*2, fleeing:false,
+          index: G.workers.length,   // stable index within this level's worker array
+          _following: false, _followingMs: 0,
+        });
       }
       break;
     }
@@ -401,6 +421,7 @@ export function updatePickups(dt){
       const def = POWERUPS[p.type];
       addFloat(p.x, p.y - 14, "+" + def.label, def.color);
       sfx.powerup();
+      emit('powerup:collected', { kind: p.type });
       G.pickups.splice(i, 1);
     }
   }

@@ -18,6 +18,7 @@ import { fireEnemyBolt, fireEnemyArc, fireEnemyDrop, fireEnemyHoming } from "./p
 import { killWorker } from "./workers.js";
 import { vortexHold } from "./dustbin.js";
 import { sfx } from "./audio.js";
+import { emit } from "./events.js";
 
 // Flips each drone spawn so successive drones orbit Dan in opposite directions
 // (they cross paths — harder to dodge several at once).
@@ -171,7 +172,12 @@ export function spawnEnemy(type, pos){
     e.target = null;                        // the worker being hunted
     e.huntCd = Math.random() * d.huntPeriod;   // stagger the first hunt check
   }
+  e._spawnTime = performance.now();
   G.enemies.push(e);
+  emit('enemy:spawned', {
+    type: e.type,
+    timeInLevel: performance.now() - G._levelStartTime,
+  });
 }
 export function updateEnemies(dt){
   for (let i = G.enemies.length - 1; i >= 0; i--){
@@ -303,6 +309,7 @@ function updateSecurity(e, dt){
     e.winding -= dt;
     if (e.winding <= 0){
       fireEnemyBolt(e, e.aim, d);
+      emit('enemy:fired', { type: e.type });
       e.fireCd = d.fireCd;
     }
   } else {
@@ -343,6 +350,7 @@ function updateSorter(e, dt){
     e.fireCd -= dt;
     if (e.fireCd <= 0 && dist <= d.fireRange){
       fireEnemyArc(e, G.dan.x, G.dan.y, d);   // target Dan's position at lob time
+      emit('enemy:fired', { type: e.type });
       e.fireCd = d.fireCd;
     }
     // Out of range: fireCd stays ready (<=0), so it lobs the instant it closes in.
@@ -496,6 +504,7 @@ function updateDrone(e, dt){
   } else { // drop
     if (e.dropCd <= 0){
       fireEnemyDrop(e, e.x, G.dan.y, d);    // x = drone's column, y = Dan's row
+      emit('enemy:fired', { type: e.type });
       e.dropCd = d.dropCd;
       droneEnterStalk(e, d, true);          // fresh stalk, maybe flip direction
     } else {
@@ -535,6 +544,7 @@ function updateManager(e, dt){
     e.winding -= dt;
     if (e.winding <= 0){
       fireEnemyHoming(e, d);
+      emit('enemy:fired', { type: e.type });
       e.fireCd = d.fireCd;
     }
   } else {

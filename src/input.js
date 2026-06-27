@@ -20,6 +20,7 @@ import { newGame, loadLevel } from "./level.js";
 import { unlock, toggleMute } from "./audio.js";
 import { AUTHORED_LEVELS } from "./levels/authored-levels.js";
 import { addFloat } from "./effects.js";
+import { emit } from "./events.js";
 
 /* ---- Raw input state (still exported: mouse aim, M mute, debug) ---------- */
 export const keys = {};
@@ -126,6 +127,7 @@ export function isDeploySpecial(){
 function startRun(mode){
   newGame();
   G.inputMode = mode;
+  emit('run:input_mode_set', { mode });
 }
 
 /* ---- Debug: cycle the hand-authored levels (src/levels/authored-levels.js) --

@@ -9,7 +9,7 @@
 import { CFG } from "./config.js";
 import { G } from "./state.js";
 import { mouse, getMoveVec, getFireAngle } from "./input.js";
-import { moveBody, isWall, pushAtWorld, clampNet } from "./world.js";
+import { moveBody, isWall, pushAtWorld, clampNet, hasLineOfSight } from "./world.js";
 import { killEnemy, destroyTerminal } from "./combat.js";
 import { sfx } from "./audio.js";
 import { emit } from "./events.js";
@@ -28,6 +28,19 @@ export function updateDan(dt){
 
   // movement input — already normalized (mag 0 or 1) by the input layer.
   const mv = getMoveVec();
+
+  // player:stood_still — accumulate stillness; emit once at 1000 ms, then reset.
+  if (mv.x !== 0 || mv.y !== 0) {
+    G.dan.stillInputMs = 0;
+    G.dan._stoodStillEmitted = false;
+  } else {
+    G.dan.stillInputMs += dt * 1000;
+    if (G.dan.stillInputMs >= 1000 && !G.dan._stoodStillEmitted) {
+      emit('player:stood_still', { durationMs: G.dan.stillInputMs });
+      G.dan._stoodStillEmitted = true;
+    }
+  }
+
   // Cleaner spray slows Dan's movement while the debuff is active.
   const moveSpeed = CFG.DAN_SPEED * (G.dan.slow > 0 ? CFG.SLOW_FACTOR : 1);
   // Conveyor belt (§8.1.2): Dan's net velocity is his own move vector PLUS the
@@ -38,6 +51,11 @@ export function updateDan(dt){
   G.dan.onBelt = belt.dx !== 0 || belt.dy !== 0;
   const net = clampNet(mv.x * moveSpeed + belt.dx, mv.y * moveSpeed + belt.dy, CFG.DAN_NET_SPEED_MAX);
   moveBody(G.dan, net.x * dt, net.y * dt);
+
+  // conveyor:push_start / conveyor:push_tick
+  if (G.dan.onBelt && !G.dan._prevOnBelt) emit('conveyor:push_start');
+  if (G.dan.onBelt) emit('conveyor:push_tick', { dx: belt.dx, dy: belt.dy });
+  G.dan._prevOnBelt = G.dan.onBelt;
 
   // knockback velocity (decays via friction)
   if (G.dan.kvx || G.dan.kvy){
@@ -105,6 +123,10 @@ function fireBubble(angle, big, bounce){
     wob: Math.random()*Math.PI*2,
     big: !!big,          // Triple Shot -> larger, opaque cleaning pod
     bounce: !!bounce,    // Bounce Shot -> ricochet off walls
+    bounceCount: 0,      // wall bounce tally (for bounce achievements)
+    wallsHit: null,      // Set of stringified tile coords hit (lazy-init on first bounce)
+    danPosAtFire: { x: G.dan.x, y: G.dan.y },  // for blind-shot LOS check at hit time
+    spawnTime: performance.now(),               // for timeAliveMs context
   });
 }
 
@@ -118,16 +140,25 @@ export function updateShots(dt){
       // Per-axis reflection so bubbles ricochet off tile walls (GDD 3).
       let nx = s.x + stepX, ny = s.y + stepY;
       let bounced = false;
-      if (isWall((nx / CFG.TILE)|0, (s.y / CFG.TILE)|0)){
+      const tileX = (s.x / CFG.TILE)|0, tileY = (s.y / CFG.TILE)|0;
+      if (isWall((nx / CFG.TILE)|0, tileY)){
         s.vx = -s.vx; nx = s.x + s.vx * dt; bounced = true;
+        // track bounce on x-axis wall
+        const wk = `${(nx / CFG.TILE)|0},${tileY}`;
+        s.bounceCount++; if (!s.wallsHit) s.wallsHit = new Set(); s.wallsHit.add(wk);
       }
-      if (isWall((s.x / CFG.TILE)|0, (ny / CFG.TILE)|0)){
+      if (isWall(tileX, (ny / CFG.TILE)|0)){
         s.vy = -s.vy; ny = s.y + s.vy * dt; bounced = true;
+        // track bounce on y-axis wall
+        const wk = `${tileX},${(ny / CFG.TILE)|0}`;
+        s.bounceCount++; if (!s.wallsHit) s.wallsHit = new Set(); s.wallsHit.add(wk);
       }
       // Corner case: still inside a wall after axis checks — reflect both.
       if (!bounced && isWall((nx / CFG.TILE)|0, (ny / CFG.TILE)|0)){
         s.vx = -s.vx; s.vy = -s.vy;
         nx = s.x + s.vx * dt; ny = s.y + s.vy * dt; bounced = true;
+        const wk = `${(nx / CFG.TILE)|0},${(ny / CFG.TILE)|0}`;
+        s.bounceCount++; if (!s.wallsHit) s.wallsHit = new Set(); s.wallsHit.add(wk);
       }
       if (bounced) G.marks.push({ x:s.x, y:s.y, life:1 }); // soapy splat
       s.x = nx; s.y = ny;
@@ -139,6 +170,7 @@ export function updateShots(dt){
     // Expire by range; non-bounce shots also fizzle on the first wall hit.
     const inWall = isWall((s.x / CFG.TILE)|0, (s.y / CFG.TILE)|0);
     if (s.traveled >= CFG.SHOT_RANGE || (!s.bounce && inWall)){
+      emit(s.traveled >= CFG.SHOT_RANGE ? 'bolt:expired' : 'bolt:missed');
       G.shots.splice(i, 1);
       continue;
     }
@@ -151,8 +183,18 @@ export function updateShots(dt){
       if (Math.hypot(e.x - s.x, e.y - s.y) <= e.r + s.r){
         e.hp -= 1; e.hitFlash = 0.1;
         sfx.pop();   // soap bubble pops on a robot
+        const bc = s.bounceCount ?? 0;
+        const uwc = s.wallsHit?.size ?? 0;
+        const hadLOS = hasLineOfSight(s.danPosAtFire.x, s.danPosAtFire.y, e.x, e.y);
+        emit('bolt:hit', { targetType: e.type, bounceCount: bc, uniqueWallCount: uwc });
         G.shots.splice(i, 1);
-        if (e.hp <= 0) killEnemy(j);
+        if (e.hp <= 0) killEnemy(j, {
+          killerKind: 'bubble',
+          bounceCount: bc,
+          uniqueWallCount: uwc,
+          hadLOSAtFire: hadLOS,
+          timeAliveMs: performance.now() - (e._spawnTime ?? 0),
+        });
         consumed = true;
         break;
       }

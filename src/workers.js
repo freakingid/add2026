@@ -13,6 +13,7 @@ import { G } from "./state.js";
 import { moveBody, hasLineOfSight } from "./world.js";
 import { addFloat } from "./effects.js";
 import { sfx } from "./audio.js";
+import { emit } from "./events.js";
 
 export function updateWorkers(dt){
   const d = CFG.WORKER;
@@ -30,11 +31,12 @@ export function updateWorkers(dt){
 
     // Priority (GDD 7.1): flee a nearby robot > move toward Dan on LOS > wander.
     let speed;
+    const seekingDan = !threat && hasLineOfSight(w.x, w.y, G.dan.x, G.dan.y);
     if (threat){
       w.fleeing = true;
       w.heading = Math.atan2(w.y - threat.y, w.x - threat.x) + (Math.random() - 0.5) * 0.4;
       speed = d.fleeSpeed;
-    } else if (hasLineOfSight(w.x, w.y, G.dan.x, G.dan.y)){
+    } else if (seekingDan){
       w.fleeing = false;
       w.heading = Math.atan2(G.dan.y - w.y, G.dan.x - w.x);   // seek Dan to ease rescue
       speed = d.seekSpeed;
@@ -47,6 +49,18 @@ export function updateWorkers(dt){
       }
       speed = d.speed;
     }
+
+    // worker:following_start / worker:following_tick — track when the worker seeks Dan
+    if (seekingDan && !w._following) {
+      w._following = true;
+      w._followingMs = 0;
+      emit('worker:following_start', { workerIndex: w.index ?? i });
+    }
+    if (w._following) {
+      w._followingMs += dt * 1000;
+      emit('worker:following_tick', { workerIndex: w.index ?? i, durationMs: w._followingMs });
+    }
+    if (!seekingDan) w._following = false;
 
     // Move, sliding along walls; if fully boxed in, turn to find a way out.
     const ox = w.x, oy = w.y;
@@ -66,6 +80,7 @@ export function killWorker(w){
   addFloat(w.x, w.y - 14, "WORKER LOST", COL.chargeWarn);
   sfx.workerLost();
   G.workers.splice(i, 1);
+  emit('worker:died', { workerIndex: w.index ?? i });
   if (G.workers.length === 0) sfx.noWorkers();   // last human gone (GDD 7, 10)
 }
 
@@ -77,6 +92,12 @@ function rescueWorker(i){
   sfx.rescue(G.rescued);   // pitch climbs with each rescue this level (0-based)
   G.rescued++;
   addFloat(w.x, w.y - 14, "+" + pts + " SAVED", COL.atomic);
+  emit('worker:rescued', {
+    workerIndex: w.index ?? i,
+    timeInLevelMs: performance.now() - G._levelStartTime,
+    playerHP: G.dan.hp,
+    followingDurationMs: w._followingMs ?? 0,
+  });
   G.workers.splice(i, 1);
   // Celebratory callout for the full clear of all workers (GDD 7.2).
   if (G.rescued === d.count) addFloat(G.dan.x, G.dan.y - 30, "ALL " + d.count + " SAVED!", COL.amber);

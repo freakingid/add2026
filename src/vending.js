@@ -17,6 +17,7 @@ import { tileCenter } from "./world.js";
 import { addFloat } from "./effects.js";
 import { COL } from "./palette.js";
 import { sfx } from "./audio.js";
+import { emit } from "./events.js";
 
 // Build one vending machine of `variant` flush against the wall at `spot`
 // ({tx,ty,dx,dy}, where dx/dy points from the floor tile toward the adjoining
@@ -60,6 +61,7 @@ export function updateVending(dt){
       const color = m.variant === "large" ? COL.vendLarge : COL.vendSmall;
       addFloat(m.x, m.y - 20, "+" + gained, color);
       sfx.heal();
+      emit('vending:used', { variant: m.variant, hpGained: gained });
     }
   }
 }

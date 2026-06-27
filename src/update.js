@@ -20,6 +20,7 @@ import { updateDustbin } from "./dustbin.js";
 import { updateEffects } from "./effects.js";
 import { nextLevel, spawnWave, spawnPickup, updatePickups } from "./level.js";
 import { sfx } from "./audio.js";
+import { emit } from "./events.js";
 
 export function update(dt){
   // Poll the gamepad every frame, in every state — events are unreliable, and the
@@ -52,6 +53,16 @@ export function update(dt){
   }
 
   updateEnemies(dt);
+
+  // level:all_enemies_dead — fires once when all terminals are gone AND no active
+  // enemies remain (terminals splice on destroy, so length === 0 = all dead).
+  if (!G._allEnemiesDeadEmitted
+      && G.terminals.length === 0
+      && G.enemies.length === 0) {
+    G._allEnemiesDeadEmitted = true;
+    emit('level:all_enemies_dead');
+  }
+
   updateEbolts(dt);
   updatePickups(dt);
   updateVending(dt);
@@ -86,6 +97,12 @@ export function update(dt){
     G.high = Math.max(G.high, G.score);
     G.state = "dead";
     sfx.gameOver();
+    emit('run:end', {
+      runTime: performance.now() - G._runStartTime,
+      levelsCompleted: G.level - 1,
+      totalScore: G.score,
+      inputMode: G.inputMode,
+    });
   }
 }
 

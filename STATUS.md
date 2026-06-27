@@ -35,7 +35,7 @@ All core systems are complete. The table below is the canonical build status; GD
 | Conveyor push mechanic + rendering + hum | ✅ Built | §8.1.2 | `world.js`, `render.js` |
 | Audio — 17 SFX + looping conveyor bed | ✅ Built | §10 | `audio.js` |
 | Game states (title / playing / levelclear / dead) | ✅ Built | — | `state.js`, `screens.js` |
-| Achievement system | 🔧 In progress — Phase 1 complete | `ACHIEVEMENTS.md` | `events.js`, `achievements.js` |
+| Achievement system | 🔧 In progress — Phase 2 complete | `ACHIEVEMENTS.md`, `ACHIEVEMENT-BLUEPRINT.md` | `events.js`, `achievements.js` |
 | Sprite-art polish | 🔲 Not built | §10 | — |
 
 > Cross-cutting "do not silently change" rules (HP/score persistence, decrement model,
@@ -389,4 +389,20 @@ See **`ACHIEVEMENTS.md`** for the full specification and **`ACHIEVEMENT-BLUEPRIN
 
 - **Module-local state, not on `G`.** All achievement tracking counters live as `let` variables in `achievements.js`. `G` is the game sim state; achievement bookkeeping is a separate concern (per CLAUDE.md non-negotiable: no `G` entries for achievement state). `initAchievements()` resets module-local state on each new game; named handler references allow `off()`/`on()` deduplication across `newGame()` calls.
 
-- **`localStorage` keys:** `add_weekly_{isoYear}_{isoWeek}`, `add_lifetime`, `add_xp`, `add_eotw_streak` (all prefixed `add_` to namespace the game's storage). Not yet wired — Phase 2.
+- **`localStorage` keys:** `add_weekly_{isoYear}_{isoWeek}`, `add_lifetime`, `add_xp`, `add_eotw_streak` (all prefixed `add_` to namespace the game's storage).
+
+**Phase 2 decisions:**
+
+- **All emitters wired (Blueprint Task 5).** Every module now imports `emit` from `events.js` and fires events at the specified call sites: `combat.js` (`player:hit`, `player:hp_changed`, `player:died`, `enemy:died` with full payload); `player.js` (`bolt:fired` already Phase 1, plus `player:stood_still`, `conveyor:push_start/tick`, `bolt:hit`, `bolt:missed/expired`, shot-object fields `bounceCount`/`wallsHit`/`danPosAtFire`); `enemies.js` (`enemy:spawned`, `enemy:fired` at all four fire branches); `workers.js` (`worker:following_start/tick`, `worker:rescued`, `worker:died`); `level.js` (`run:start`, `level:start`, `level:end`, `powerup:collected`); `vending.js` (`vending:used`); `dustbin.js` (`dustbin:thrown`, `dustbin:bounced`, `dustbin:detonated`); `update.js` (`level:all_enemies_dead`, `run:end`); `input.js` (`run:input_mode_set`).
+
+- **`enemy:died` opts extended.** `killEnemy(index, opts)` now accepts `killerKind`, `bounceCount`, `uniqueWallCount`, `hadLOSAtFire`, `timeAliveMs` in the opts object. Call sites that pass nothing use defaults (`killerKind:'mop'`, zero counts, `hadLOSAtFire:true`). `updateShots` in `player.js` passes the shot's accumulated fields at hit time; `dustbin.js` passes `killerKind:'dustbin'`. The `score:false` friendly-fire path continues to work unchanged.
+
+- **Shot-object tracking fields.** `fireBubble` now initialises `bounceCount:0`, `wallsHit:null` (lazy Set), `danPosAtFire:{x,y}`, and `spawnTime` on every shot. `updateShots` increments `bounceCount` and adds to `wallsHit` at each wall bounce (per-axis and corner cases). `hadLOSAtFire` is computed at hit time via `hasLineOfSight(shot.danPosAtFire, enemy)` (one raycast at hit, not at fire — zero extra cost at fire time). Worker `index` (stable within level) and `_following`/`_followingMs` fields added to worker objects at spawn in `runSpawnRule`.
+
+- **`level:all_enemies_dead` guard.** `update.js` checks `G.terminals.length === 0 && G.enemies.length === 0` once per frame and uses `G._allEnemiesDeadEmitted` (reset in `loadLevel`, set by the update check) to ensure the event fires exactly once per level. Terminals splice on destroy, so the empty array is the reliable "all terminals gone" signal.
+
+- **localStorage schema wired.** `achievements.js` maintains: `add_lifetime` (per-achievement `{tier,progress}` map), `add_weekly_meta` (sentinel `{key}` for rollover detection), `add_weekly_{YYYY_WW}` (per-achievement `{unlocked,progress}` for current week). On `initAchievements()`, if the stored week key differs from `isoWeekKey()`, the old weekly key is left as a tombstone (no cleanup) and fresh weekly state is initialized — incomplete weekly progress does NOT carry over to the new week (by design). Same-week re-init loads existing data unchanged.
+
+- **`G._levelStartTime` / `G._runStartTime` / `G._allEnemiesDeadEmitted`.** Three new tracking fields added to `G` in `state.js`. These are set by game lifecycle code (`level.js`, `update.js`), not by `achievements.js`, so they aren't achievement-module state on `G` — they're timing primitives used by emitter call sites. `achievements.js` never writes to `G`.
+
+- **80/80 headless tests pass** (`node test-achievements.js`). 22 sections covering pub/sub correctness, isoWeekKey format, init round-trip, cmb_foam_party Bronze trigger and cross-session persistence, all payload shapes (bolt:fired/hit/missed/expired, enemy:died/spawned/fired, player:hit, worker:rescued/died/following, level:start/end, run:end, vending:used, dustbin events, conveyor events), week rollover discard, parallel lifetime counters, and banner queue behaviour.

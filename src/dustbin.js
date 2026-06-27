@@ -28,6 +28,7 @@ import { killEnemy } from "./combat.js";
 import { addFloat } from "./effects.js";
 import { COL } from "./palette.js";
 import { sfx } from "./audio.js";
+import { emit } from "./events.js";
 
 // Spawn one glowing-green floor pickup at `pos` ({x,y} world centre). The loader
 // calls this from the level's atomicDustbin spawn rule (§8.1.3); the RARE-ness
@@ -94,6 +95,7 @@ function deployDustbin(){
   G.dustbin = b;
   G.dan.hasDustbin = false;
   sfx.deploy();
+  emit('dustbin:thrown');
 }
 
 // Slide with exponential friction + per-axis wall bounce (mirrors the bounce-shot
@@ -102,11 +104,31 @@ function deployDustbin(){
 function slideStep(b, dt){
   const D = CFG.DUSTBIN;
   let nx = b.x + b.vx * dt, ny = b.y + b.vy * dt;
-  if (isWall((nx / CFG.TILE)|0, (b.y / CFG.TILE)|0)){ b.vx = -b.vx * D.bounce; nx = b.x + b.vx * dt; }
-  if (isWall((b.x / CFG.TILE)|0, (ny / CFG.TILE)|0)){ b.vy = -b.vy * D.bounce; ny = b.y + b.vy * dt; }
+  let didBounce = false;
+  if (isWall((nx / CFG.TILE)|0, (b.y / CFG.TILE)|0)){
+    b.vx = -b.vx * D.bounce; nx = b.x + b.vx * dt; didBounce = true;
+    const wk = `${(nx / CFG.TILE)|0},${(b.y / CFG.TILE)|0}`;
+    b._totalWallCount = (b._totalWallCount ?? 0) + 1;
+    if (!b._wallsHit) b._wallsHit = new Set(); b._wallsHit.add(wk);
+  }
+  if (isWall((b.x / CFG.TILE)|0, (ny / CFG.TILE)|0)){
+    b.vy = -b.vy * D.bounce; ny = b.y + b.vy * dt; didBounce = true;
+    const wk = `${(b.x / CFG.TILE)|0},${(ny / CFG.TILE)|0}`;
+    b._totalWallCount = (b._totalWallCount ?? 0) + 1;
+    if (!b._wallsHit) b._wallsHit = new Set(); b._wallsHit.add(wk);
+  }
   // Corner: still inside a wall after axis checks -> reflect both, hold position.
   if (isWall((nx / CFG.TILE)|0, (ny / CFG.TILE)|0)){
-    b.vx = -b.vx * D.bounce; b.vy = -b.vy * D.bounce; nx = b.x; ny = b.y;
+    b.vx = -b.vx * D.bounce; b.vy = -b.vy * D.bounce; nx = b.x; ny = b.y; didBounce = true;
+    const wk = `${(nx / CFG.TILE)|0},${(ny / CFG.TILE)|0}`;
+    b._totalWallCount = (b._totalWallCount ?? 0) + 1;
+    if (!b._wallsHit) b._wallsHit = new Set(); b._wallsHit.add(wk);
+  }
+  if (didBounce) {
+    emit('dustbin:bounced', {
+      totalWallCount: b._totalWallCount,
+      uniqueWallCount: b._wallsHit.size,
+    });
   }
   b.x = nx; b.y = ny;
   const decay = Math.exp(-D.friction * dt);
@@ -136,15 +158,17 @@ export function vortexHold(e, dt){
 // ring + soapy debris, and the "DAN'S SPECIAL!" callout. Dan is unharmed — it's his.
 function detonate(b){
   const D = CFG.DUSTBIN;
+  let killCount = 0;
   for (let i = G.enemies.length - 1; i >= 0; i--){
     const e = G.enemies[i];
     if (e.spawn > 0) continue;
     if (Math.hypot(e.x - b.x, e.y - b.y) <= D.blastRadius + e.r){
       e.hp -= D.blastDmg;
       e.hitFlash = 0.1;
-      if (e.hp <= 0) killEnemy(i);
+      if (e.hp <= 0){ killEnemy(i, { killerKind: 'dustbin' }); killCount++; }
     }
   }
+  emit('dustbin:detonated', { killCount });
   G.marks.push({ x:b.x, y:b.y, life:1.5, kind:"blast" });
   for (let p = 0; p < 10; p++){
     const a = Math.random() * Math.PI * 2, r = Math.random() * D.blastRadius;

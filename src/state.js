@@ -32,6 +32,11 @@ export const G = {
   exit:null,
   spawnTimer:0,
   pickupTimer:0,
+
+  // Achievement tracking (not game-sim state — set by level.js/update.js, read by achievements.js)
+  _levelStartTime:0,     // performance.now() at the start of the current level
+  _runStartTime:0,       // performance.now() at the start of the current run
+  _allEnemiesDeadEmitted:false,  // one-shot guard for level:all_enemies_dead
 };
 
 // Which single enemy type populates the current level (one type per level).
