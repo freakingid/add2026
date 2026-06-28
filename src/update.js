@@ -10,7 +10,7 @@ import { CFG, ENEMY } from "./config.js";
 import { G, levelType } from "./state.js";
 import { VIEW_W, VIEW_H } from "./canvas.js";
 import { clamp } from "./world.js";
-import { pollGamepad } from "./input.js";
+import { pollGamepad, pollModals } from "./input.js";
 import { updateDan, updateShots } from "./player.js";
 import { updateEnemies } from "./enemies.js";
 import { updateEbolts } from "./projectiles.js";
@@ -19,6 +19,7 @@ import { updateVending } from "./vending.js";
 import { updateDustbin } from "./dustbin.js";
 import { updateEffects } from "./effects.js";
 import { nextLevel, spawnWave, spawnPickup, updatePickups } from "./level.js";
+import { getLevelAchievementSummary } from "./achievements.js";
 import { sfx } from "./audio.js";
 import { emit } from "./events.js";
 
@@ -27,9 +28,31 @@ export function update(dt){
   // title/dead screens need it to start/restart a run (handled inside pollGamepad).
   pollGamepad();
 
+  // Modal input (post-level / lifetime achievement modals) is polled every frame,
+  // device-agnostically, BEFORE state branching so it works over title + levelclear.
+  pollModals(dt);
+
   // Level-clear splash: freeze the world, then build the next level.
   if (G.state === "levelclear"){
     sfx.conveyor(false);   // belt hum off while the world is frozen
+
+    // Emit level:end exactly once on entering levelclear (was in nextLevel) so the
+    // post-level modal can read getLevelAchievementSummary() during the splash.
+    if (!G._levelEndEmitted){
+      G._levelEndEmitted = true;
+      emit('level:end', {
+        levelTime: performance.now() - G._levelStartTime,
+        workersRescued: G.rescued,
+        levelNumber: G.level,
+      });
+      // Open the post-level modal iff something progressed this level.
+      if (getLevelAchievementSummary().length > 0) G._showAchievementModal = true;
+    }
+
+    // While the modal is up it intercepts the advance: the player must dismiss it
+    // (Continue) before the level advances. Otherwise the splash timer runs out.
+    if (G._showAchievementModal || G._showLifetimeModal) return;
+
     G.transition -= dt;
     if (G.transition <= 0) nextLevel();
     return;

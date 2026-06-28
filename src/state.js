@@ -37,6 +37,14 @@ export const G = {
   _levelStartTime:0,     // performance.now() at the start of the current level
   _runStartTime:0,       // performance.now() at the start of the current run
   _allEnemiesDeadEmitted:false,  // one-shot guard for level:all_enemies_dead
+
+  // Achievement UI modal state (Phase 6 — render/input flags, not sim state).
+  _levelEndEmitted:false,        // one-shot guard: emit level:end once on entering levelclear
+  _showAchievementModal:false,   // post-level achievement modal active (intercepts advance)
+  _showLifetimeModal:false,      // lifetime achievements modal active (over title or post-level)
+  _lifetimeModalFrom:null,       // 'title' | 'postlevel' — surface to return to on dismiss
+  _lifetimeScrollY:0,            // scroll offset for the lifetime modal
+  _lifetimeMaxScroll:0,          // max scroll offset (set by screens.js each draw)
 };
 
 // Which single enemy type populates the current level (one type per level).

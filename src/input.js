@@ -16,7 +16,7 @@
 import { CFG } from "./config.js";
 import { canvas, VIEW_W, VIEW_H } from "./canvas.js";
 import { G } from "./state.js";
-import { newGame, loadLevel } from "./level.js";
+import { newGame, loadLevel, nextLevel } from "./level.js";
 import { unlock, toggleMute } from "./audio.js";
 import { AUTHORED_LEVELS } from "./levels/authored-levels.js";
 import { addFloat } from "./effects.js";
@@ -60,13 +60,110 @@ export function pollGamepad(){
   pad = (navigator.getGamepads ? navigator.getGamepads()[0] : null) || null;
   if (!pad){ prevStart = false; return; }
   const start = CFG.GAMEPAD.BTN_START.some(i => pad.buttons[i] && pad.buttons[i].pressed);
-  if (start && !prevStart){
+  if (start && !prevStart && !G._showLifetimeModal && !G._showAchievementModal){
     unlock();
     if (G.state === "title") startRun("gamepad");
     else if (G.state === "dead" && G.inputMode === "gamepad") startRun("gamepad");
     // levelclear auto-advances; nothing to trigger there.
   }
   prevStart = start;
+}
+
+/* ---- Achievement modal input (Phase 6) ----------------------------------
+   Polled every frame from update.js BEFORE state branching, so it governs the
+   post-level modal (over levelclear), the lifetime modal (over title or
+   post-level), and the title's "View All Achievements" entry point.
+
+   Device-agnostic: routes to keyboard or gamepad by G.inputMode, EXCEPT on the
+   title before a run is started (G.inputMode === null) where either device may
+   open the lifetime modal — picking a device there must NOT lock the run's mode.
+   Edges are tracked per-frame against held-state for both devices uniformly. */
+const _modalPrev = { confirm:false, view:false, back:false, scroll:0 };
+
+// Held-state of an abstract modal action for the CURRENTLY routed device.
+// mode === null → either device counts (title-only, pre-run).
+function _modalHeld(action, mode){
+  const kb = () => {
+    switch (action){
+      case 'confirm': return !!(keys[" "] || keys["enter"]);
+      case 'view':    return !!keys["v"];
+      case 'back':    return !!(keys["escape"] || keys["backspace"]);
+      case 'scroll':  return (keys["arrowdown"]||keys["s"]?1:0) - (keys["arrowup"]||keys["w"]?1:0);
+    }
+  };
+  const gp = () => {
+    if (!pad) return action === 'scroll' ? 0 : false;
+    const any = idxs => idxs.some(i => pad.buttons[i] && pad.buttons[i].pressed);
+    switch (action){
+      case 'confirm': return any(CFG.GAMEPAD.BTN_START);
+      case 'view':    return any(CFG.GAMEPAD.BTN_VIEW);
+      case 'back':    return any(CFG.GAMEPAD.BTN_BACK);
+      case 'scroll': {
+        const ay = pad.axes[1] || 0;
+        return Math.abs(ay) > CFG.GAMEPAD.moveDeadzone ? Math.sign(ay) : 0;
+      }
+    }
+  };
+  if (mode === "gamepad") return gp();
+  if (mode === "keyboard") return kb();
+  // title pre-run: either device
+  if (action === 'scroll') return kb() || gp();
+  return kb() || gp();
+}
+
+export function pollModals(dt){
+  const mode = G.inputMode;   // null on the title before a run is locked
+
+  // --- Lifetime modal active: scroll + dismiss back to its opener ---
+  if (G._showLifetimeModal){
+    const s = _modalHeld('scroll', mode);
+    G._lifetimeScrollY += s * 600 * dt;   // arrow/stick scrolling
+    G._lifetimeScrollY = Math.max(0, Math.min(G._lifetimeScrollY, G._lifetimeMaxScroll));
+
+    const back = _modalHeld('back', mode);
+    if (back && !_modalPrev.back){
+      G._showLifetimeModal = false;       // return to whichever surface opened it
+      // _lifetimeModalFrom === 'postlevel' leaves _showAchievementModal up;
+      // 'title' simply returns to the title (nothing else to restore).
+    }
+    _modalPrev.back = back;
+    _modalPrev.confirm = _modalHeld('confirm', mode);
+    _modalPrev.view = _modalHeld('view', mode);
+    return;
+  }
+
+  // --- Post-level modal active: Continue / View All ---
+  if (G._showAchievementModal){
+    const confirm = _modalHeld('confirm', mode);
+    const view = _modalHeld('view', mode);
+    if (confirm && !_modalPrev.confirm){
+      G._showAchievementModal = false;    // Continue → resume the normal advance
+      nextLevel();
+    } else if (view && !_modalPrev.view){
+      G._showLifetimeModal = true;        // View All → open lifetime modal over it
+      G._lifetimeModalFrom = 'postlevel';
+      G._lifetimeScrollY = 0;
+    }
+    _modalPrev.confirm = confirm;
+    _modalPrev.view = view;
+    _modalPrev.back = _modalHeld('back', mode);
+    return;
+  }
+
+  // --- Title screen: "View All Achievements" opens the lifetime modal ---
+  if (G.state === "title"){
+    const view = _modalHeld('view', mode);
+    if (view && !_modalPrev.view){
+      G._showLifetimeModal = true;
+      G._lifetimeModalFrom = 'title';
+      G._lifetimeScrollY = 0;
+    }
+    _modalPrev.view = view;
+  }
+
+  // Keep edges fresh when no modal owns the frame.
+  _modalPrev.confirm = _modalHeld('confirm', mode);
+  _modalPrev.back = _modalHeld('back', mode);
 }
 
 /* ---- Abstracted input API ----------------------------------------------- */
@@ -156,7 +253,10 @@ addEventListener("keydown", e => {
   // Title: SPACE/ENTER selects keyboard+mouse mode and starts. Dead: same key
   // restarts, but only when the run was in keyboard mode (gamepad disables it).
   if (e.key === " " || e.key === "Enter"){
-    if (G.state === "title") startRun("keyboard");
+    // A lifetime modal over the title swallows the start key (it's dismissed via
+    // ESC/BACKSPACE, handled in pollModals), so SPACE doesn't punch into a run.
+    if (G._showLifetimeModal){ /* modal owns input */ }
+    else if (G.state === "title") startRun("keyboard");
     else if (G.state === "dead" && G.inputMode === "keyboard") startRun("keyboard");
   }
 });
@@ -172,6 +272,7 @@ canvas.addEventListener("mousemove", e => {
 canvas.addEventListener("mousedown", () => {
   mouse.down = true;
   unlock();                          // resume AudioContext on first gesture (autoplay policy)
+  if (G._showLifetimeModal) return;  // modal over the title swallows the click
   // Mouse is part of keyboard+mouse mode: clicking the title/dead screen starts there.
   if (G.state === "title") startRun("keyboard");
   else if (G.state === "dead" && G.inputMode === "keyboard") startRun("keyboard");

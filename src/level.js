@@ -56,11 +56,9 @@ export function newGame(){
 
 // Advance to a fresh level — HP, power-ups, and score persist.
 export function nextLevel(){
-  emit('level:end', {
-    levelTime: performance.now() - G._levelStartTime,
-    workersRescued: G.rescued,
-    levelNumber: G.level,
-  });
+  // level:end is emitted on entering the levelclear state (update.js) so the
+  // post-level achievement modal can read getLevelAchievementSummary() during the
+  // splash. By the time nextLevel runs, that emit has already happened.
   G.level++;
   buildLevel();
   G.state = "playing";
@@ -239,6 +237,8 @@ export function loadLevel(def){
   G.dustbin = null; G.dustbinPickups = []; G.workers = [];
   G.rescued = 0; G.spawnTimer = 0.6; G.pickupTimer = 0;
   G._allEnemiesDeadEmitted = false;
+  G._levelEndEmitted = false;     // re-arm the levelclear level:end one-shot
+  G._showAchievementModal = false;
 
   // Fixed placements: player start + exit door. Resolve the player FIRST so any
   // preplaced enemy that reads Dan's position (e.g. the Drone's orbit bearing)

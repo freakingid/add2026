@@ -24,7 +24,8 @@ function clearStorage() { for (const k of Object.keys(_store)) delete _store[k];
 const { emit, on, off } = await import('./src/events.js');
 const {
   initAchievements, popAchievementBanner, isoWeekKey,
-  getLifetimeAchievements, getWeeklyAchievements,
+  getLifetimeRaw, getLifetimeAchievements, getWeeklyAchievements,
+  getLevelAchievementSummary,
   noLateralMovement, aimFightsBelt,
 } = await import('./src/achievements.js');
 
@@ -189,7 +190,7 @@ console.log('\n=== Section 6: enemy:died ===');
   freshInit();
   emit('enemy:died', { type:'picker', killerKind:'bubble', bounceCount:0, uniqueWallCount:0, hadLOSAtFire:true, timeAliveMs:1000, isBounceKill:false });
   emit('enemy:died', { type:'forklift', killerKind:'mop', bounceCount:0, uniqueWallCount:0, hadLOSAtFire:true, timeAliveMs:2000, isBounceKill:false });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['cmb_decommissioned'].progress, 2, 'cmb_decommissioned increments per enemy:died');
 }
 
@@ -233,7 +234,7 @@ console.log('\n=== Section 8: worker:rescued ===');
   emit('worker:rescued', { workerIndex:0, timeInLevelMs:5000, playerHP:20, followingDurationMs:1000 });
   emit('worker:rescued', { workerIndex:1, timeInLevelMs:8000, playerHP:19, followingDurationMs:500 });
   emit('worker:rescued', { workerIndex:2, timeInLevelMs:12000, playerHP:17, followingDurationMs:0 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['wrk_total_rescued'].progress, 3, 'wrk_total_rescued = 3 rescues');
 }
 
@@ -257,7 +258,7 @@ console.log('\n=== Section 9: vending:used ===');
   emit('vending:used', { variant:'small', hpGained:5 });
   emit('vending:used', { variant:'large', hpGained:10 });
   emit('vending:used', { variant:'small', hpGained:3 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['pwr_vending_total'].progress, 3, 'pwr_vending_total = 3 uses');
 }
 
@@ -286,7 +287,7 @@ console.log('\n=== Section 10: dustbin events ===');
   freshInit();
   emit('dustbin:thrown');
   emit('dustbin:thrown');
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['dust_heavy_hitter'].progress, 2, 'dust_heavy_hitter = 2 throws');
 }
 
@@ -338,7 +339,7 @@ console.log('\n=== Section 13: powerup:collected ===');
   emit('powerup:collected', { kind:'rapid' });
   emit('powerup:collected', { kind:'triple' });
   emit('powerup:collected', { kind:'bounce' });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['pwr_stocked'].progress, 3, 'pwr_stocked = 3 powerups');
 }
 
@@ -399,7 +400,7 @@ console.log('\n=== Section 15: parallel lifetime counters ===');
   emit('worker:rescued', { workerIndex:0, timeInLevelMs:3000, playerHP:20, followingDurationMs:0 });
   emit('vending:used',   { variant:'small', hpGained:5 });
 
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['cmb_foam_party'].progress,   2, 'cmb_foam_party at 2 shots');
   assertEq(lt['cmb_decommissioned'].progress, 1, 'cmb_decommissioned at 1 kill');
   assertEq(lt['pwr_stocked'].progress,       1, 'pwr_stocked at 1 powerup');
@@ -418,12 +419,12 @@ console.log('\n=== Section 16: lifetime localStorage round-trip ===');
   for (let i = 0; i < 10; i++) {
     emit('enemy:died', { type:'picker', killerKind:'mop', bounceCount:0, uniqueWallCount:0, hadLOSAtFire:true, timeAliveMs:500, isBounceKill:false });
   }
-  const prog1 = getLifetimeAchievements()['cmb_decommissioned'].progress;
+  const prog1 = getLifetimeRaw()['cmb_decommissioned'].progress;
   assertEq(prog1, 10, 'cmb_decommissioned = 10 before re-init');
 
   // Re-init without clearing storage (new browser session simulation)
   initAchievements();
-  const prog2 = getLifetimeAchievements()['cmb_decommissioned'].progress;
+  const prog2 = getLifetimeRaw()['cmb_decommissioned'].progress;
   assertEq(prog2, 10, 'cmb_decommissioned = 10 AFTER re-init (round-trip preserved)');
 }
 
@@ -547,12 +548,12 @@ console.log('\n=== Section 23 (P3): Progression ===');
   // Complete 1 level
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['prg_temp'].progress, 1, 'prg_temp increments on level:end');
   assert(lt['prg_temp'].tier === 1, 'prg_temp tier 1 (Bronze) at 1 level');
 
   emit('run:end', { runTime:60000, levelsCompleted:1, totalScore:1000, inputMode:'keyboard' });
-  const lt2 = getLifetimeAchievements();
+  const lt2 = getLifetimeRaw();
   assertEq(lt2['prg_director'].progress, 1, 'prg_director increments on run:end');
   assert(lt2['prg_director'].tier === 1, 'prg_director tier 1 (Bronze) at 1 run');
 }
@@ -562,7 +563,7 @@ console.log('\n=== Section 23 (P3): Progression ===');
   freshInit();
   emit('run:start');
   emit('run:end', { runTime:30000, levelsCompleted:1, totalScore:500, inputMode:'keyboard' });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['prg_ceo'] || lt['prg_ceo'].progress === 0, 'prg_ceo stub — no progress incremented');
 }
 
@@ -579,7 +580,7 @@ console.log('\n=== Section 24 (P3): Survival ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   // no player:hit
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['surv_spotless']?.progress, 1, 'surv_spotless increments on damage-free level');
 }
 
@@ -590,7 +591,7 @@ console.log('\n=== Section 24 (P3): Survival ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('player:hit', { dmg:2, source:'ranged' });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['surv_spotless'] || lt['surv_spotless'].progress === 0, 'surv_spotless NOT incremented when damaged');
 }
 
@@ -602,7 +603,7 @@ console.log('\n=== Section 24 (P3): Survival ===');
     emit('level:start', { terminalCount:2, workerCount:5 });
     emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:i });
   }
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['surv_teflon']?.progress, 1, 'surv_teflon increments after 3 consecutive damage-free levels');
 }
 
@@ -617,7 +618,7 @@ console.log('\n=== Section 24 (P3): Survival ===');
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:2 });
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:3 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['surv_teflon'] || lt['surv_teflon'].progress === 0, 'surv_teflon NOT triggered when streak broken');
 }
 
@@ -628,7 +629,7 @@ console.log('\n=== Section 24 (P3): Survival ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('player:hp_changed', { hp:1, maxHp:20 });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['surv_skeleton']?.progress, 1, 'surv_skeleton increments at 1 HP on level end');
 }
 
@@ -639,7 +640,7 @@ console.log('\n=== Section 24 (P3): Survival ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('player:hp_changed', { hp:2, maxHp:20 });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['surv_skeleton'] || lt['surv_skeleton'].progress === 0, 'surv_skeleton NOT triggered at 2 HP');
 }
 
@@ -650,7 +651,7 @@ console.log('\n=== Section 24 (P3): Survival ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   for (let i = 0; i < 10; i++) emit('player:hit', { dmg:1, source:'melee' });
   emit('level:end', { levelTime:120000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['surv_osha']?.progress, 1, 'surv_osha increments at 10+ hits on level end');
 }
 
@@ -661,7 +662,7 @@ console.log('\n=== Section 24 (P3): Survival ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   // no stood_still event
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['surv_no_stopping']?.progress, 1, 'surv_no_stopping increments when never stood still');
 }
 
@@ -672,7 +673,7 @@ console.log('\n=== Section 24 (P3): Survival ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('player:stood_still', { durationMs:1200 });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['surv_no_stopping'] || lt['surv_no_stopping'].progress === 0, 'surv_no_stopping NOT triggered after stood_still');
 }
 
@@ -684,7 +685,7 @@ console.log('\n=== Section 24 (P3): Survival ===');
     emit('level:start', { terminalCount:2, workerCount:5 });
     emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:i });
   }
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['surv_hot_streak']?.progress, 1, 'surv_hot_streak increments after 3 survived levels');
 }
 
@@ -699,7 +700,7 @@ console.log('\n=== Section 24 (P3): Survival ===');
   emit('player:died');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:3 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['surv_hot_streak'] || lt['surv_hot_streak'].progress === 0, 'surv_hot_streak NOT triggered when streak broken by death');
 }
 
@@ -714,7 +715,7 @@ console.log('\n=== Section 25 (P3): Speed ===');
   emit('run:start');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('level:end', { levelTime:44000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['spd_rush']?.progress, 1, 'spd_rush increments for level under 45s');
 }
 
@@ -724,7 +725,7 @@ console.log('\n=== Section 25 (P3): Speed ===');
   emit('run:start');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('level:end', { levelTime:46000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['spd_rush'] || lt['spd_rush'].progress === 0, 'spd_rush NOT triggered for level over 45s');
 }
 
@@ -735,7 +736,7 @@ console.log('\n=== Section 25 (P3): Speed ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
   emit('run:end', { runTime:890000, levelsCompleted:1, totalScore:5000, inputMode:'keyboard' });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['spd_lunch']?.progress, 1, 'spd_lunch increments for run under 15 min');
 }
 
@@ -744,7 +745,7 @@ console.log('\n=== Section 25 (P3): Speed ===');
   freshInit();
   emit('run:start');
   emit('run:end', { runTime:901000, levelsCompleted:1, totalScore:5000, inputMode:'keyboard' });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['spd_lunch'] || lt['spd_lunch'].progress === 0, 'spd_lunch NOT triggered for run over 15 min');
 }
 
@@ -759,7 +760,7 @@ console.log('\n=== Section 26 (P3): Worker Rescue ===');
   emit('run:start');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('worker:rescued', { workerIndex:0, timeInLevelMs:20000, playerHP:20, followingDurationMs:1000 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['wrk_first_responder']?.progress, 1, 'wrk_first_responder increments for rescue within 30s');
 }
 
@@ -769,7 +770,7 @@ console.log('\n=== Section 26 (P3): Worker Rescue ===');
   emit('run:start');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('worker:rescued', { workerIndex:0, timeInLevelMs:31000, playerHP:20, followingDurationMs:1000 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['wrk_first_responder'] || lt['wrk_first_responder'].progress === 0, 'wrk_first_responder NOT triggered after 30s');
 }
 
@@ -782,7 +783,7 @@ console.log('\n=== Section 26 (P3): Worker Rescue ===');
     emit('worker:rescued', { workerIndex:i, timeInLevelMs:10000 + i*5000, playerHP:20, followingDurationMs:0 });
   }
   emit('level:end', { levelTime:80000, workersRescued:5, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['wrk_hero']?.progress, 1, 'wrk_hero increments when all 5 rescued in one level');
 }
 
@@ -792,7 +793,7 @@ console.log('\n=== Section 26 (P3): Worker Rescue ===');
   emit('run:start');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('worker:rescued', { workerIndex:0, timeInLevelMs:15000, playerHP:8, followingDurationMs:0 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['wrk_nick']?.progress, 1, 'wrk_nick increments when rescued at ≤10 HP');
 }
 
@@ -802,7 +803,7 @@ console.log('\n=== Section 26 (P3): Worker Rescue ===');
   emit('run:start');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('worker:rescued', { workerIndex:0, timeInLevelMs:15000, playerHP:1, followingDurationMs:0 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['wrk_danger_pay']?.progress, 1, 'wrk_danger_pay increments at exactly 1 HP');
 }
 
@@ -812,7 +813,7 @@ console.log('\n=== Section 26 (P3): Worker Rescue ===');
   emit('run:start');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('worker:rescued', { workerIndex:0, timeInLevelMs:20000, playerHP:20, followingDurationMs:6000 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['wrk_escort']?.progress, 1, 'wrk_escort increments when worker followed 5+ seconds');
 }
 
@@ -824,7 +825,7 @@ console.log('\n=== Section 26 (P3): Worker Rescue ===');
   for (let i = 0; i < 5; i++) {
     emit('worker:rescued', { workerIndex:i, timeInLevelMs:10000, playerHP:20, followingDurationMs:0 });
   }
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['wrk_union_rep']?.progress, 5, 'wrk_union_rep = 5 cumulative rescues');
 }
 
@@ -837,7 +838,7 @@ console.log('\n=== Section 26 (P3): Worker Rescue ===');
     emit('worker:rescued', { workerIndex:i, timeInLevelMs:10000, playerHP:20, followingDurationMs:0 });
   }
   emit('level:end', { levelTime:60000, workersRescued:5, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['wrk_zero_hour']?.progress, 1, 'wrk_zero_hour increments when all rescued + no damage');
 }
 
@@ -851,7 +852,7 @@ console.log('\n=== Section 26 (P3): Worker Rescue ===');
   }
   emit('player:hit', { dmg:1, source:'melee' });
   emit('level:end', { levelTime:60000, workersRescued:5, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['wrk_zero_hour'] || lt['wrk_zero_hour'].progress === 0, 'wrk_zero_hour NOT triggered when damage taken');
 }
 
@@ -867,7 +868,7 @@ console.log('\n=== Section 26 (P3): Worker Rescue ===');
     emit('level:end', { levelTime:60000, workersRescued:5, levelNumber:lvl });
   }
   emit('run:end', { runTime:120000, levelsCompleted:2, totalScore:5000, inputMode:'keyboard' });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['wrk_attendance']?.progress, 1, 'wrk_attendance increments when all workers rescued every level');
 }
 
@@ -879,7 +880,7 @@ console.log('\n=== Section 26 (P3): Worker Rescue ===');
   emit('worker:rescued', { workerIndex:0, timeInLevelMs:10000, playerHP:20, followingDurationMs:0 });
   // only 1 of 5 rescued
   emit('level:end', { levelTime:60000, workersRescued:1, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['wrk_last_man']?.progress, 1, 'wrk_last_man increments when ≥1 rescued but not all');
 }
 
@@ -892,7 +893,7 @@ console.log('\n=== Section 26 (P3): Worker Rescue ===');
     // no worker:rescued events
     emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:i });
   }
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['wrk_understaffed']?.progress, 1, 'wrk_understaffed increments after 5 no-rescue levels');
 }
 
@@ -906,7 +907,7 @@ console.log('\n=== Section 27 (P3): Atomic Dustbin ===');
   freshInit();
   emit('run:start');
   emit('dustbin:detonated', { killCount:4 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['dust_option']?.progress, 1, 'dust_option increments when 3+ enemies killed by detonation');
 }
 
@@ -915,7 +916,7 @@ console.log('\n=== Section 27 (P3): Atomic Dustbin ===');
   freshInit();
   emit('run:start');
   emit('dustbin:detonated', { killCount:2 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['dust_option'] || lt['dust_option'].progress === 0, 'dust_option NOT triggered for <3 kills');
 }
 
@@ -926,7 +927,7 @@ console.log('\n=== Section 27 (P3): Atomic Dustbin ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   // no dustbin:thrown event
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['dust_reserve']?.progress, 1, 'dust_reserve increments when dustbin not thrown');
 }
 
@@ -937,7 +938,7 @@ console.log('\n=== Section 27 (P3): Atomic Dustbin ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('dustbin:thrown');
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['dust_reserve'] || lt['dust_reserve'].progress === 0, 'dust_reserve NOT triggered when dustbin thrown');
 }
 
@@ -947,7 +948,7 @@ console.log('\n=== Section 27 (P3): Atomic Dustbin ===');
   emit('run:start');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('enemy:died', { type:'manager', killerKind:'dustbin', bounceCount:0, uniqueWallCount:0, hadLOSAtFire:true, timeAliveMs:5000, isBounceKill:false });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['dust_env_hazard']?.progress, 1, 'dust_env_hazard increments when manager killed by dustbin');
 }
 
@@ -957,7 +958,7 @@ console.log('\n=== Section 27 (P3): Atomic Dustbin ===');
   emit('run:start');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('enemy:died', { type:'manager', killerKind:'bubble', bounceCount:0, uniqueWallCount:0, hadLOSAtFire:true, timeAliveMs:5000, isBounceKill:false });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['dust_env_hazard'] || lt['dust_env_hazard'].progress === 0, 'dust_env_hazard NOT triggered for bubble kill');
 }
 
@@ -967,7 +968,7 @@ console.log('\n=== Section 27 (P3): Atomic Dustbin ===');
   emit('dustbin:thrown');
   emit('dustbin:thrown');
   emit('dustbin:thrown');
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['dust_heavy_hitter']?.progress, 3, 'dust_heavy_hitter accumulates throws');
 }
 
@@ -975,7 +976,7 @@ console.log('\n=== Section 27 (P3): Atomic Dustbin ===');
   // dust_disgruntled: 3+ wall bounces before detonation
   freshInit();
   emit('dustbin:bounced', { totalWallCount:3, uniqueWallCount:2 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['dust_disgruntled']?.progress, 1, 'dust_disgruntled increments when dustbin bounces 3+ walls');
 }
 
@@ -991,7 +992,7 @@ console.log('\n=== Section 28 (P3): Power-Ups & Items ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   // no powerup:collected
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['itm_off_clock']?.progress, 1, 'itm_off_clock increments when no power-ups collected');
 }
 
@@ -1002,7 +1003,7 @@ console.log('\n=== Section 28 (P3): Power-Ups & Items ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('powerup:collected', { kind:'rapid' });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['itm_off_clock'] || lt['itm_off_clock'].progress === 0, 'itm_off_clock NOT triggered when powerup collected');
 }
 
@@ -1012,7 +1013,7 @@ console.log('\n=== Section 28 (P3): Power-Ups & Items ===');
   emit('run:start');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['itm_calories']?.progress, 1, 'itm_calories increments when no vending used');
 }
 
@@ -1023,7 +1024,7 @@ console.log('\n=== Section 28 (P3): Power-Ups & Items ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('vending:used', { variant:'small', hpGained:5 });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['itm_calories'] || lt['itm_calories'].progress === 0, 'itm_calories NOT triggered when vending used');
 }
 
@@ -1033,7 +1034,7 @@ console.log('\n=== Section 28 (P3): Power-Ups & Items ===');
   emit('run:start');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['itm_cost_cutting']?.progress, 1, 'itm_cost_cutting increments when no powerups AND no vending');
 }
 
@@ -1044,7 +1045,7 @@ console.log('\n=== Section 28 (P3): Power-Ups & Items ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
   emit('run:end', { runTime:60000, levelsCompleted:1, totalScore:500, inputMode:'keyboard' });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['itm_min_wage']?.progress, 1, 'itm_min_wage increments on run with no power-ups');
 }
 
@@ -1055,7 +1056,7 @@ console.log('\n=== Section 28 (P3): Power-Ups & Items ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
   emit('run:end', { runTime:60000, levelsCompleted:1, totalScore:500, inputMode:'keyboard' });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['itm_no_refills']?.progress, 1, 'itm_no_refills increments on run with no vending');
 }
 
@@ -1071,7 +1072,7 @@ console.log('\n=== Section 29 (P3): Score stubs ===');
   freshInit();
   emit('run:start');
   emit('run:end', { runTime:60000, levelsCompleted:1, totalScore:999999, inputMode:'keyboard' });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['scr_bonus'] || lt['scr_bonus'].progress === 0, 'scr_bonus stub — no progress');
   assert(!lt['scr_quarterly'] || lt['scr_quarterly'].progress === 0, 'scr_quarterly stub — no progress');
   assert(!lt['scr_annual'] || lt['scr_annual'].progress === 0, 'scr_annual stub — no progress');
@@ -1093,7 +1094,7 @@ console.log('\n=== Section 30 (P3): Combat achievements ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('level:all_enemies_dead');
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['cmb_zero_waste']?.progress, 1, 'cmb_zero_waste increments when all enemies dead');
 }
 
@@ -1103,7 +1104,7 @@ console.log('\n=== Section 30 (P3): Combat achievements ===');
   emit('run:start');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['cmb_zero_waste'] || lt['cmb_zero_waste'].progress === 0, 'cmb_zero_waste NOT triggered without all enemies dead');
 }
 
@@ -1114,7 +1115,7 @@ console.log('\n=== Section 30 (P3): Combat achievements ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('enemy:spawned', { type:'manager', timeInLevel:5000 });
   emit('enemy:died', { type:'manager', killerKind:'bubble', bounceCount:0, uniqueWallCount:0, hadLOSAtFire:true, timeAliveMs:8000, isBounceKill:false });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['cmb_overtime_denied']?.progress, 1, 'cmb_overtime_denied increments for manager killed within 10s');
 }
 
@@ -1126,7 +1127,7 @@ console.log('\n=== Section 30 (P3): Combat achievements ===');
   emit('enemy:spawned', { type:'manager', timeInLevel:5000 });
   // no enemy:fired for manager
   emit('enemy:died', { type:'manager', killerKind:'bubble', bounceCount:0, uniqueWallCount:0, hadLOSAtFire:true, timeAliveMs:4000, isBounceKill:false });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['cmb_early_retirement']?.progress, 1, 'cmb_early_retirement increments when manager killed before firing');
 }
 
@@ -1138,7 +1139,7 @@ console.log('\n=== Section 30 (P3): Combat achievements ===');
   emit('enemy:spawned', { type:'manager', timeInLevel:5000 });
   emit('enemy:fired', { type:'manager' }); // manager fires
   emit('enemy:died', { type:'manager', killerKind:'bubble', bounceCount:0, uniqueWallCount:0, hadLOSAtFire:true, timeAliveMs:9000, isBounceKill:false });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['cmb_early_retirement'] || lt['cmb_early_retirement'].progress === 0, 'cmb_early_retirement NOT triggered when manager fired first');
 }
 
@@ -1150,7 +1151,7 @@ console.log('\n=== Section 30 (P3): Combat achievements ===');
   emit('enemy:spawned', { type:'drone', timeInLevel:2000 });
   // no enemy:fired for drone
   emit('enemy:died', { type:'drone', killerKind:'bubble', bounceCount:0, uniqueWallCount:0, hadLOSAtFire:true, timeAliveMs:3000, isBounceKill:false });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['cmb_grounded']?.progress, 1, 'cmb_grounded increments when drone killed before firing');
 }
 
@@ -1162,7 +1163,7 @@ console.log('\n=== Section 30 (P3): Combat achievements ===');
   emit('enemy:spawned', { type:'drone', timeInLevel:2000 });
   emit('enemy:fired', { type:'drone' });
   emit('enemy:died', { type:'drone', killerKind:'bubble', bounceCount:0, uniqueWallCount:0, hadLOSAtFire:true, timeAliveMs:5000, isBounceKill:false });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['cmb_grounded'] || lt['cmb_grounded'].progress === 0, 'cmb_grounded NOT triggered when drone fired first');
 }
 
@@ -1174,7 +1175,7 @@ console.log('\n=== Section 30 (P3): Combat achievements ===');
   for (let i = 0; i < 5; i++) {
     emit('enemy:died', { type:'picker', killerKind:'bubble', bounceCount:0, uniqueWallCount:0, hadLOSAtFire:true, timeAliveMs:1000, isBounceKill:false });
   }
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['cmb_cleaning_spree']?.progress, 1, 'cmb_cleaning_spree increments for 5 kills within 10s');
 }
 
@@ -1186,7 +1187,7 @@ console.log('\n=== Section 30 (P3): Combat achievements ===');
   for (let i = 0; i < 3; i++) {
     emit('enemy:died', { type:'cleaner', killerKind:'bubble', bounceCount:0, uniqueWallCount:0, hadLOSAtFire:true, timeAliveMs:1000, isBounceKill:false });
   }
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['cmb_deep_clean']?.progress, 1, 'cmb_deep_clean increments for 3 cleaner kills within 5s');
 }
 
@@ -1198,7 +1199,7 @@ console.log('\n=== Section 30 (P3): Combat achievements ===');
   emit('enemy:died', { type:'security', killerKind:'bubble', bounceCount:0, uniqueWallCount:0, hadLOSAtFire:true, timeAliveMs:1000, isBounceKill:false });
   emit('enemy:died', { type:'picker', killerKind:'bubble', bounceCount:0, uniqueWallCount:0, hadLOSAtFire:true, timeAliveMs:1000, isBounceKill:false });
   emit('enemy:died', { type:'drone', killerKind:'bubble', bounceCount:0, uniqueWallCount:0, hadLOSAtFire:true, timeAliveMs:1000, isBounceKill:false });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['cmb_whistleblower']?.progress, 1, 'cmb_whistleblower increments on security kill');
   assertEq(lt['cmb_blue_collar']?.progress, 1, 'cmb_blue_collar increments on picker kill');
   assertEq(lt['cmb_pest_control']?.progress, 1, 'cmb_pest_control increments on drone kill');
@@ -1233,7 +1234,7 @@ console.log('\n=== Section 30 (P3): Combat achievements ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
   emit('run:end', { runTime:60000, levelsCompleted:1, totalScore:1000, inputMode:'gamepad' });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['prg_manual']?.progress, 1, 'prg_manual increments for gamepad run with ≥1 level');
 }
 
@@ -1245,7 +1246,7 @@ console.log('\n=== Section 30 (P3): Combat achievements ===');
   emit('level:start', { terminalCount:2, workerCount:5 });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
   emit('run:end', { runTime:60000, levelsCompleted:1, totalScore:1000, inputMode:'keyboard' });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['prg_manual'] || lt['prg_manual'].progress === 0, 'prg_manual NOT triggered for keyboard run');
 }
 
@@ -1277,7 +1278,7 @@ function bounceKill(bounceCount, uniqueWallCount, extra = {}) {
   freshInit();
   emit('run:start'); emit('level:start', { terminalCount:1, workerCount:5 });
   emit('enemy:died', bounceKill(1, 1));
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['bnc_bank']?.progress, 1, 'bnc_bank increments on a single-bounce kill');
   assert(!lt['bnc_cue_ball'] || lt['bnc_cue_ball'].progress === 0, 'bnc_cue_ball NOT triggered at 1 bounce');
 }
@@ -1287,7 +1288,7 @@ function bounceKill(bounceCount, uniqueWallCount, extra = {}) {
   freshInit();
   emit('run:start'); emit('level:start', { terminalCount:1, workerCount:5 });
   emit('enemy:died', bounceKill(1, 1));
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['bnc_geometry_brain'] || lt['bnc_geometry_brain'].progress === 0, 'bnc_geometry_brain NOT triggered at 1 bounce');
   assert(!lt['bnc_bank'] || lt['bnc_bank'].progress === 1, 'bnc_bank still 1');
 }
@@ -1297,7 +1298,7 @@ function bounceKill(bounceCount, uniqueWallCount, extra = {}) {
   freshInit();
   emit('run:start'); emit('level:start', { terminalCount:1, workerCount:5 });
   emit('enemy:died', bounceKill(3, 2));
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['bnc_cue_ball']?.progress, 1, 'bnc_cue_ball increments at 3 bounces');
   assert(!lt['bnc_pool_shark'] || lt['bnc_pool_shark'].progress === 0, 'bnc_pool_shark NOT triggered at 3 bounces');
   assert(!lt['bnc_bank'] || lt['bnc_bank'].progress === 0, 'bnc_bank NOT triggered at 3 bounces (needs exactly 1)');
@@ -1308,7 +1309,7 @@ function bounceKill(bounceCount, uniqueWallCount, extra = {}) {
   freshInit();
   emit('run:start'); emit('level:start', { terminalCount:1, workerCount:5 });
   emit('enemy:died', bounceKill(5, 3));
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['bnc_pool_shark']?.progress, 1, 'bnc_pool_shark increments at 5 bounces');
   assertEq(lt['bnc_cue_ball']?.progress, 1, 'bnc_cue_ball increments at 5 bounces');
   assertEq(lt['bnc_geometry_brain']?.progress, 1, 'bnc_geometry_brain increments at 5 total bounces');
@@ -1319,7 +1320,7 @@ function bounceKill(bounceCount, uniqueWallCount, extra = {}) {
   freshInit();
   emit('run:start'); emit('level:start', { terminalCount:1, workerCount:5 });
   emit('enemy:died', bounceKill(4, 2));
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['bnc_geometry_brain']?.progress, 1, 'bnc_geometry_brain at 4 total bounces');
   assert(!lt['bnc_geometry_teacher'] || lt['bnc_geometry_teacher'].progress === 0, 'bnc_geometry_teacher NOT at 2 unique walls');
   assertEq(lt['bnc_long_way']?.progress, 1, 'bnc_long_way at 2 unique walls (rounded a corner)');
@@ -1330,7 +1331,7 @@ function bounceKill(bounceCount, uniqueWallCount, extra = {}) {
   freshInit();
   emit('run:start'); emit('level:start', { terminalCount:1, workerCount:5 });
   emit('enemy:died', bounceKill(4, 4));
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['bnc_geometry_teacher']?.progress, 1, 'bnc_geometry_teacher at 4 unique walls');
 }
 
@@ -1339,11 +1340,11 @@ function bounceKill(bounceCount, uniqueWallCount, extra = {}) {
   freshInit();
   emit('run:start'); emit('level:start', { terminalCount:1, workerCount:5 });
   emit('enemy:died', bounceKill(2, 1, { chainCount: 1 }));
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['bnc_chain'] || lt['bnc_chain'].progress === 0, 'bnc_chain dormant at chainCount 1');
   // but it DOES fire if the payload ever carries chainCount >= 4
   emit('enemy:died', bounceKill(2, 1, { chainCount: 4 }));
-  assertEq(getLifetimeAchievements()['bnc_chain']?.progress, 1, 'bnc_chain fires when chainCount reaches 4');
+  assertEq(getLifetimeRaw()['bnc_chain']?.progress, 1, 'bnc_chain fires when chainCount reaches 4');
 }
 
 {
@@ -1351,7 +1352,7 @@ function bounceKill(bounceCount, uniqueWallCount, extra = {}) {
   freshInit();
   emit('run:start'); emit('level:start', { terminalCount:1, workerCount:5 });
   emit('enemy:died', { type:'picker', killerKind:'mop', bounceCount:0, uniqueWallCount:0, isBounceKill:false });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['bnc_bank'] || lt['bnc_bank'].progress === 0, 'bnc_bank NOT triggered by a non-bounce kill');
 }
 
@@ -1366,7 +1367,7 @@ console.log('\n=== Section 32 (P4): final sweep / wall flower ===');
   emit('run:start'); emit('level:start', { terminalCount:1, workerCount:5 });
   emit('enemy:died', bounceKill(1, 1));           // last kill is a bounce
   emit('level:all_enemies_dead');
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['bnc_final_sweep']?.progress, 1, 'bnc_final_sweep when last kill was a bounce');
 }
 
@@ -1377,7 +1378,7 @@ console.log('\n=== Section 32 (P4): final sweep / wall flower ===');
   emit('enemy:died', bounceKill(2, 1));                                          // earlier bounce kill
   emit('enemy:died', { type:'picker', killerKind:'mop', bounceCount:0, isBounceKill:false }); // final non-bounce
   emit('level:all_enemies_dead');
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['bnc_final_sweep'] || lt['bnc_final_sweep'].progress === 0, 'bnc_final_sweep NOT triggered when last kill not a bounce');
 }
 
@@ -1388,7 +1389,7 @@ console.log('\n=== Section 32 (P4): final sweep / wall flower ===');
   emit('enemy:died', bounceKill(1, 1));
   emit('enemy:died', bounceKill(2, 2));
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['bnc_wall_flower']?.progress, 1, 'bnc_wall_flower when all kills were bounces');
 }
 
@@ -1399,7 +1400,7 @@ console.log('\n=== Section 32 (P4): final sweep / wall flower ===');
   emit('enemy:died', bounceKill(1, 1));
   emit('enemy:died', { type:'picker', killerKind:'mop', bounceCount:0, isBounceKill:false });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['bnc_wall_flower'] || lt['bnc_wall_flower'].progress === 0, 'bnc_wall_flower NOT triggered with a non-bounce kill');
 }
 
@@ -1408,7 +1409,7 @@ console.log('\n=== Section 32 (P4): final sweep / wall flower ===');
   freshInit();
   emit('run:start'); emit('level:start', { terminalCount:1, workerCount:5 });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['bnc_wall_flower'] || lt['bnc_wall_flower'].progress === 0, 'bnc_wall_flower NOT triggered with no kills');
 }
 
@@ -1430,7 +1431,7 @@ function runAccuracyLevel(fired, hits, allDead = false) {
   // 100% accuracy: marksman + sharpshooter + surgical + one_job
   freshInit();
   runAccuracyLevel(10, 10);
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['acc_marksman']?.progress, 1, 'acc_marksman at 100% accuracy');
   assertEq(lt['acc_sharpshooter']?.progress, 1, 'acc_sharpshooter at 100% accuracy');
   assertEq(lt['acc_surgical']?.progress, 1, 'acc_surgical at 100% accuracy');
@@ -1442,7 +1443,7 @@ function runAccuracyLevel(fired, hits, allDead = false) {
   // 40% accuracy (4/10): participation, NOT spray (needs <=30%)
   freshInit();
   runAccuracyLevel(10, 4);
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['acc_participation']?.progress, 1, 'acc_participation at 40% accuracy');
   assert(!lt['acc_spray'] || lt['acc_spray'].progress === 0, 'acc_spray NOT at 40% (needs <=30%)');
   assert(!lt['acc_marksman'] || lt['acc_marksman'].progress === 0, 'acc_marksman NOT at 40%');
@@ -1453,7 +1454,7 @@ function runAccuracyLevel(fired, hits, allDead = false) {
   // 20% accuracy (2/10): participation + spray
   freshInit();
   runAccuracyLevel(10, 2);
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['acc_spray']?.progress, 1, 'acc_spray at 20% accuracy');
   assertEq(lt['acc_participation']?.progress, 1, 'acc_participation at 20% accuracy');
 }
@@ -1462,7 +1463,7 @@ function runAccuracyLevel(fired, hits, allDead = false) {
   // 80% accuracy (8/10): marksman, NOT sharpshooter
   freshInit();
   runAccuracyLevel(10, 8);
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['acc_marksman']?.progress, 1, 'acc_marksman at 80%');
   assert(!lt['acc_sharpshooter'] || lt['acc_sharpshooter'].progress === 0, 'acc_sharpshooter NOT at 80%');
 }
@@ -1471,7 +1472,7 @@ function runAccuracyLevel(fired, hits, allDead = false) {
   // acc_quality: ≤10 shots AND all enemies dead
   freshInit();
   runAccuracyLevel(8, 8, true);
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assertEq(lt['acc_quality']?.progress, 1, 'acc_quality at 8 shots with all enemies dead');
 }
 
@@ -1479,7 +1480,7 @@ function runAccuracyLevel(fired, hits, allDead = false) {
   // acc_quality NOT triggered if >10 shots
   freshInit();
   runAccuracyLevel(12, 12, true);
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['acc_quality'] || lt['acc_quality'].progress === 0, 'acc_quality NOT at 12 shots');
 }
 
@@ -1488,7 +1489,7 @@ function runAccuracyLevel(fired, hits, allDead = false) {
   freshInit();
   emit('run:start'); emit('level:start', { terminalCount:1, workerCount:5 });
   emit('level:end', { levelTime:60000, workersRescued:0, levelNumber:1 });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['acc_marksman'] || lt['acc_marksman'].progress === 0, 'no accuracy award with 0 shots fired');
   assert(!lt['acc_participation'] || lt['acc_participation'].progress === 0, 'no participation award with 0 shots fired');
 }
@@ -1533,7 +1534,7 @@ console.log('\n=== Section 34 (P4): cmb_confrontational lateral math ===');
     pos:{ x:100, y:0 }, danPos:{ x:0, y:0 },
     danMoveHistory:[{ dx:1, dy:0, t:1 }],
   });
-  assertEq(getLifetimeAchievements()['cmb_confrontational']?.progress, 1, 'cmb_confrontational on head-on security kill');
+  assertEq(getLifetimeRaw()['cmb_confrontational']?.progress, 1, 'cmb_confrontational on head-on security kill');
 }
 
 {
@@ -1545,7 +1546,7 @@ console.log('\n=== Section 34 (P4): cmb_confrontational lateral math ===');
     pos:{ x:100, y:0 }, danPos:{ x:0, y:0 },
     danMoveHistory:[{ dx:0, dy:1, t:1 }],
   });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['cmb_confrontational'] || lt['cmb_confrontational'].progress === 0, 'cmb_confrontational NOT on a sidestepped kill');
 }
 
@@ -1557,7 +1558,7 @@ console.log('\n=== Section 34 (P4): cmb_confrontational lateral math ===');
     type:'picker', killerKind:'bubble', bounceCount:0, isBounceKill:false,
     pos:{ x:100, y:0 }, danPos:{ x:0, y:0 }, danMoveHistory:[{ dx:1, dy:0, t:1 }],
   });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['cmb_confrontational'] || lt['cmb_confrontational'].progress === 0, 'cmb_confrontational only on security kills');
 }
 
@@ -1571,7 +1572,7 @@ console.log('\n=== Section 35 (P4): blind shot / wrong aisle ===');
   freshInit();
   emit('run:start'); emit('level:start', { terminalCount:1, workerCount:5 });
   emit('enemy:died', bounceKill(2, 1, { hadLOSAtFire:false }));
-  assertEq(getLifetimeAchievements()['cmb_blind_shot']?.progress, 1, 'cmb_blind_shot on no-LOS bounce kill');
+  assertEq(getLifetimeRaw()['cmb_blind_shot']?.progress, 1, 'cmb_blind_shot on no-LOS bounce kill');
 }
 
 {
@@ -1579,7 +1580,7 @@ console.log('\n=== Section 35 (P4): blind shot / wrong aisle ===');
   freshInit();
   emit('run:start'); emit('level:start', { terminalCount:1, workerCount:5 });
   emit('enemy:died', bounceKill(2, 1, { hadLOSAtFire:true }));
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['cmb_blind_shot'] || lt['cmb_blind_shot'].progress === 0, 'cmb_blind_shot NOT with LOS');
 }
 
@@ -1588,7 +1589,7 @@ console.log('\n=== Section 35 (P4): blind shot / wrong aisle ===');
   freshInit();
   emit('run:start'); emit('level:start', { terminalCount:1, workerCount:5 });
   emit('enemy:died', { type:'picker', killerKind:'bubble', bounceCount:0, isBounceKill:false, hadLOSAtFire:false });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['cmb_blind_shot'] || lt['cmb_blind_shot'].progress === 0, 'cmb_blind_shot needs a bounce kill');
 }
 
@@ -1610,7 +1611,7 @@ console.log('\n=== Section 35 (P4): blind shot / wrong aisle ===');
     type:'picker', killerKind:'bubble', bounceCount:0, isBounceKill:false,
     danOnBelt:true, danAimAngle:Math.PI, beltPush:{ dx:1, dy:0 },
   });
-  assertEq(getLifetimeAchievements()['conv_wrong_aisle']?.progress, 1, 'conv_wrong_aisle when fighting the belt at kill time');
+  assertEq(getLifetimeRaw()['conv_wrong_aisle']?.progress, 1, 'conv_wrong_aisle when fighting the belt at kill time');
 }
 
 {
@@ -1621,7 +1622,7 @@ console.log('\n=== Section 35 (P4): blind shot / wrong aisle ===');
     type:'picker', killerKind:'bubble', bounceCount:0, isBounceKill:false,
     danOnBelt:false, danAimAngle:Math.PI, beltPush:{ dx:0, dy:0 },
   });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['conv_wrong_aisle'] || lt['conv_wrong_aisle'].progress === 0, 'conv_wrong_aisle NOT when off the belt');
 }
 
@@ -1633,7 +1634,7 @@ console.log('\n=== Section 35 (P4): blind shot / wrong aisle ===');
     type:'picker', killerKind:'bubble', bounceCount:0, isBounceKill:false,
     danOnBelt:true, danAimAngle:0, beltPush:{ dx:1, dy:0 },
   });
-  const lt = getLifetimeAchievements();
+  const lt = getLifetimeRaw();
   assert(!lt['conv_wrong_aisle'] || lt['conv_wrong_aisle'].progress === 0, 'conv_wrong_aisle NOT when going with the belt');
 }
 
@@ -1646,9 +1647,9 @@ console.log('\n=== Section 36 (P4): cmb_recall_notice ===');
   freshInit();
   emit('run:start'); emit('level:start', { terminalCount:1, workerCount:5 });
   emit('bolt:homing_redirected', { hit:'wall' });
-  assertEq(getLifetimeAchievements()['cmb_recall_notice']?.progress, 1, 'cmb_recall_notice on homing→wall redirect');
+  assertEq(getLifetimeRaw()['cmb_recall_notice']?.progress, 1, 'cmb_recall_notice on homing→wall redirect');
   emit('bolt:homing_redirected', { hit:'enemy' });
-  assertEq(getLifetimeAchievements()['cmb_recall_notice']?.progress, 2, 'cmb_recall_notice on homing→enemy redirect');
+  assertEq(getLifetimeRaw()['cmb_recall_notice']?.progress, 2, 'cmb_recall_notice on homing→enemy redirect');
 }
 
 /* ==========================================================================
@@ -1698,6 +1699,89 @@ console.log('\n=== Section 37 (P5): getWeeklyAchievements() ===');
   const metaAfter = after[after.length - 1];
   assert(metaAfter.progress >= 1, 'meta_eotw progress reflects completed weeklies');
   void firstId;
+}
+
+/* ==========================================================================
+   SECTION 38 (P6): getLevelAchievementSummary() + getLifetimeAchievements()
+   ========================================================================== */
+console.log('\n=== Section 38 (P6): post-level summary + lifetime modal data ===');
+
+{
+  // -- getLevelAchievementSummary(): empty when nothing progressed this level --
+  freshInit();
+  emit('run:start');
+  emit('level:start', { terminalCount:1, workerCount:5 });
+  assertEq(getLevelAchievementSummary().length, 0,
+    'level summary is empty before any progress');
+
+  // -- A clean, fast, no-damage level should progress several achievements --
+  emit('level:all_enemies_dead');
+  emit('level:end', { levelTime:30000, workersRescued:0, levelNumber:1 });
+  const summary = getLevelAchievementSummary();
+  assert(summary.length > 0, 'level summary is non-empty after a level that made progress');
+
+  // -- every summary entry is well-formed --
+  const wf = summary.every(e =>
+    typeof e.id === 'string' &&
+    typeof e.name === 'string' &&
+    typeof e.description === 'string' &&
+    typeof e.progress === 'number' &&
+    typeof e.target === 'number' &&
+    typeof e.isNew === 'boolean');
+  assert(wf, 'every summary entry is {id,name,description,progress,target,isNew}');
+
+  // -- first-time progress flags isNew (a freshly crossed Bronze tier) --
+  assert(summary.some(e => e.isNew), 'at least one summary entry is flagged isNew on first clear');
+
+  // -- NEW! entries sort to the top --
+  const firstNonNew = summary.findIndex(e => !e.isNew);
+  const lastNew = summary.map(e => e.isNew).lastIndexOf(true);
+  assert(firstNonNew === -1 || lastNew < firstNonNew,
+    'isNew entries sort before non-new entries');
+
+  // -- summary resets on the next level:start --
+  emit('level:start', { terminalCount:1, workerCount:5 });
+  assertEq(getLevelAchievementSummary().length, 0,
+    'level summary clears on the next level:start');
+}
+
+{
+  // -- getLifetimeAchievements(): grouped, ordered, well-formed --
+  freshInit();
+  const groups = getLifetimeAchievements();
+  assert(Array.isArray(groups) && groups.length > 0, 'lifetime data is a non-empty array of groups');
+
+  const groupWF = groups.every(g =>
+    typeof g.emoji === 'string' &&
+    typeof g.name === 'string' &&
+    Array.isArray(g.achievements) &&
+    g.achievements.every(a =>
+      typeof a.id === 'string' &&
+      typeof a.name === 'string' &&
+      typeof a.tier === 'number' &&
+      Array.isArray(a.tiers)));
+  assert(groupWF, 'every group + achievement is well-formed');
+
+  // -- category order matches ACHIEVEMENTS.md (Accuracy first) --
+  assertEq(groups[0].name, 'Accuracy', 'first category is Accuracy');
+
+  // -- a hidden, unearned achievement is masked as ??? --
+  const allAch = groups.flatMap(g => g.achievements);
+  const masked = allAch.find(a => a.id === '???');
+  assert(!!masked, 'an unearned hidden achievement is masked as ???');
+  assert(masked.name === '???' && masked.description === '???', 'masked entry shows ??? name + description');
+
+  // -- earning a hidden achievement (crossing Bronze) unmasks it --
+  // dust_disgruntled (hidden) advances on each 3+ wall dustbin bounce; Bronze=3.
+  emit('run:start'); emit('level:start', { terminalCount:1, workerCount:5 });
+  for (let i = 0; i < 3; i++) emit('dustbin:bounced', { totalWallCount:3, uniqueWallCount:3 });
+  const after = getLifetimeAchievements().flatMap(g => g.achievements);
+  assert(after.some(a => a.id === 'dust_disgruntled'),
+    'a hidden achievement becomes visible (unmasked) once Bronze is earned');
+
+  // -- stubs and _compat entries are excluded --
+  assert(!after.some(a => a.id === 'scr_bonus'), 'stub achievements are excluded from lifetime data');
+  assert(!after.some(a => a.name && a.name.startsWith('_compat')), 'compat counters are excluded');
 }
 
 /* ==========================================================================

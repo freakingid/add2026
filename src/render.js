@@ -12,7 +12,7 @@ import { CFG, POWERUPS } from "./config.js";
 import { COL, TERMINAL_TINT } from "./palette.js";
 import { isWall, clamp, pushAt } from "./world.js";
 import { drawEnemies, drawEbolts } from "./render-entities.js";
-import { drawHUD, drawTitle, drawLevelClear, drawGameOver } from "./screens.js";
+import { drawHUD, drawTitle, drawLevelClear, drawGameOver, drawLifetimeModal } from "./screens.js";
 import { popAchievementBanner } from "./achievements.js";
 
 /* ---- Achievement banner (Phase 5: full spec) ----------------------------
@@ -57,7 +57,11 @@ function drawAchievementBanner() {
 export function render(){
   ctx.clearRect(0, 0, VIEW_W, VIEW_H);
 
-  if (G.state === "title"){ drawTitle(); return; }
+  if (G.state === "title"){
+    drawTitle();
+    if (G._showLifetimeModal) drawLifetimeModal();
+    return;
+  }
 
   ctx.save();
   ctx.translate(-Math.round(G.camera.x), -Math.round(G.camera.y));
@@ -85,6 +89,7 @@ export function render(){
   drawAchievementBanner();
   if (G.state === "levelclear") drawLevelClear();
   if (G.state === "dead") drawGameOver();
+  if (G._showLifetimeModal) drawLifetimeModal();   // overlays the post-level modal too
 }
 
 // Glowing EXIT door — the level-end goal (GDD 8.1/8.2).

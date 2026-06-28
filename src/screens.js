@@ -9,7 +9,7 @@ import { ctx, VIEW_W, VIEW_H } from "./canvas.js";
 import { G, levelType } from "./state.js";
 import { POWERUPS, POWERUP_KEYS } from "./config.js";
 import { COL } from "./palette.js";
-import { getWeeklyAchievements } from "./achievements.js";
+import { getWeeklyAchievements, getLevelAchievementSummary, getLifetimeAchievements } from "./achievements.js";
 
 /* ---- HUD + screens ------------------------------------------------------ */
 export function drawHUD(){
@@ -106,6 +106,10 @@ export function drawHUD(){
 }
 
 export function drawLevelClear(){
+  // When the level produced achievement progress, the modal replaces the normal
+  // level-clear splash and intercepts the advance until the player hits Continue.
+  if (G._showAchievementModal){ drawPostLevelModal(); return; }
+
   ctx.fillStyle = "rgba(8,12,9,0.72)";
   ctx.fillRect(0,0,VIEW_W,VIEW_H);
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -121,6 +125,83 @@ export function drawLevelClear(){
   ctx.font = "bold 12px 'Courier New', monospace";
   ctx.fillStyle = "#aeb6c0";
   ctx.fillText("HP & POWER-UPS CARRY OVER", VIEW_W/2, VIEW_H/2 + 60);
+}
+
+// Post-level achievement modal (Phase 6). Lists every achievement that advanced
+// this level (getLevelAchievementSummary) with name, description, n / target, and
+// a "NEW!" badge for newly-unlocked tiers/weeklies. Footer offers Continue and
+// View All Achievements. Input is handled by pollModals (input.js); this only draws.
+function drawPostLevelModal(){
+  const data = getLevelAchievementSummary();
+
+  // dim backdrop
+  ctx.fillStyle = "rgba(6,9,12,0.84)";
+  ctx.fillRect(0,0,VIEW_W,VIEW_H);
+
+  const PW = Math.min(560, VIEW_W - 80);
+  const rows = Math.min(data.length, 6);          // cap visible rows
+  const PH = 120 + rows * 46 + 64;
+  const px = (VIEW_W - PW) / 2, py = (VIEW_H - PH) / 2;
+
+  // panel
+  ctx.fillStyle = "#11151c";
+  ctx.fillRect(px, py, PW, PH);
+  ctx.strokeStyle = COL.atomic; ctx.lineWidth = 2;
+  ctx.strokeRect(px + 1, py + 1, PW - 2, PH - 2);
+
+  // header
+  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  ctx.font = "bold 26px 'Arial Black', sans-serif";
+  ctx.fillStyle = COL.atomic;
+  ctx.fillText("Achievement Progress", VIEW_W/2, py + 42);
+
+  // list
+  ctx.textAlign = "left";
+  let y = py + 84;
+  for (let i = 0; i < rows; i++){
+    const e = data[i];
+    // name + NEW! badge
+    ctx.font = "bold 15px 'Courier New', monospace";
+    ctx.fillStyle = "#e8ebef";
+    ctx.fillText(e.name, px + 24, y);
+    if (e.isNew){
+      const nx = px + 24 + ctx.measureText(e.name).width + 10;
+      ctx.font = "bold 11px 'Arial Black', sans-serif";
+      ctx.fillStyle = "#11151c";
+      const bw = 38;
+      ctx.fillStyle = COL.amber;
+      ctx.fillRect(nx, y - 12, bw, 16);
+      ctx.fillStyle = "#11151c";
+      ctx.textAlign = "center";
+      ctx.fillText("NEW!", nx + bw/2, y + 1);
+      ctx.textAlign = "left";
+    }
+    // progress n / target, right-aligned
+    ctx.textAlign = "right";
+    ctx.font = "bold 13px 'Courier New', monospace";
+    ctx.fillStyle = GOLD;
+    ctx.fillText(`${e.progress} / ${e.target}`, px + PW - 24, y);
+    ctx.textAlign = "left";
+    // description
+    ctx.font = "11px 'Courier New', monospace";
+    ctx.fillStyle = "#8b94a0";
+    ctx.fillText(e.description || "", px + 24, y + 16);
+    y += 46;
+  }
+
+  // footer buttons
+  const fy = py + PH - 30;
+  const contLabel = G.inputMode === "gamepad" ? "START — CONTINUE" : "SPACE / ENTER — CONTINUE";
+  const viewLabel = G.inputMode === "gamepad" ? "X — VIEW ALL ACHIEVEMENTS" : "V — VIEW ALL ACHIEVEMENTS";
+  ctx.textBaseline = "middle";
+  ctx.font = "bold 13px 'Courier New', monospace";
+  ctx.textAlign = "left";
+  ctx.fillStyle = COL.soap;
+  ctx.fillText("▸ " + contLabel, px + 24, fy);
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#9aa3ae";
+  ctx.fillText(viewLabel + " ◂", px + PW - 24, fy);
+  ctx.textBaseline = "alphabetic";
 }
 
 export function drawTitle(){
@@ -226,12 +307,12 @@ function drawWeeklyPanel(ox, oy){
     ctx.textAlign = "left";
   }
 
-  // "View All Achievements" text button (Phase 5: visual placeholder only;
-  // interaction lands in Phase 6).
+  // "View All Achievements" text button (Phase 6: opens the lifetime modal).
+  // V (keyboard) / X (gamepad) — the title's mode isn't locked yet, so both work.
   const by = oy + data.length * ROW_H + 10;
   ctx.fillStyle = COL.soap;
   ctx.font = "bold 11px 'Courier New', monospace";
-  ctx.fillText("▸ VIEW ALL ACHIEVEMENTS", ox, by);
+  ctx.fillText("▸ VIEW ALL ACHIEVEMENTS  [V]", ox, by);
 }
 
 // Compact 3x3 reference of the keyboard fire layout (GDD §4.3): O/P/L/K cardinals,
@@ -264,6 +345,117 @@ function drawFireLegend(ox, oy){
     ctx.font = "bold 12px 'Arial', sans-serif";
     ctx.fillText(labels[i][1], x + cell/2, y + cell/2 + 8);
   }
+}
+
+// Lifetime achievements modal (Phase 6). Full registry grouped by category in
+// ACHIEVEMENTS.md order, each row showing name, a 5-badge tier row (greyed until
+// earned), a progress bar toward the next tier, and a short description. Scrollable
+// via G._lifetimeScrollY (driven by pollModals). Overlays title or post-level.
+const TIER_BADGES = ['🥉','🥈','🥇','🏆','💎'];
+export function drawLifetimeModal(){
+  const groups = getLifetimeAchievements();
+
+  // full-screen dim
+  ctx.fillStyle = "rgba(4,6,9,0.9)";
+  ctx.fillRect(0,0,VIEW_W,VIEW_H);
+
+  const MW = Math.min(720, VIEW_W - 48);
+  const mx = (VIEW_W - MW) / 2;
+  const top = 24, bottom = VIEW_H - 24;
+  const MH = bottom - top;
+
+  // panel frame
+  ctx.fillStyle = "#0e1218";
+  ctx.fillRect(mx, top, MW, MH);
+  ctx.strokeStyle = COL.soap; ctx.lineWidth = 2;
+  ctx.strokeRect(mx + 1, top + 1, MW - 2, MH - 2);
+
+  // header (outside the clip)
+  const headerH = 40;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "bold 22px 'Arial Black', sans-serif";
+  ctx.fillStyle = COL.atomic;
+  ctx.fillText("ALL ACHIEVEMENTS", VIEW_W/2, top + headerH/2 + 2);
+
+  // dismiss hint (footer, outside the clip)
+  const footerH = 26;
+  const backLabel = G.inputMode === "gamepad" ? "B — BACK"
+                  : "ESC / BACKSPACE — BACK";
+  ctx.font = "bold 11px 'Courier New', monospace";
+  ctx.fillStyle = "#9aa3ae";
+  ctx.fillText(backLabel + "      ↑ / ↓ SCROLL", VIEW_W/2, bottom - footerH/2);
+
+  // scroll viewport
+  const vpTop = top + headerH, vpBottom = bottom - footerH;
+  const vpH = vpBottom - vpTop;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(mx + 2, vpTop, MW - 4, vpH);
+  ctx.clip();
+
+  const colX = mx + 24;
+  const colW = MW - 48;
+  const scroll = G._lifetimeScrollY;
+  let y = vpTop - scroll + 8;
+  const lineTop = y;   // remember start to measure content height
+
+  ctx.textBaseline = "alphabetic";
+  for (const g of groups){
+    // category header
+    ctx.textAlign = "left";
+    ctx.font = "bold 15px 'Arial Black', sans-serif";
+    ctx.fillStyle = COL.amber;
+    ctx.fillText(`${g.emoji} ${g.name}`, colX, y + 14);
+    y += 30;
+
+    for (const a of g.achievements){
+      // name
+      ctx.font = "bold 13px 'Courier New', monospace";
+      ctx.fillStyle = a.hidden && a.tier === 0 ? "#5a636f" : "#e8ebef";
+      ctx.fillText(a.name, colX, y + 12);
+
+      // 5-tier badge row (greyed until earned), right-aligned
+      ctx.textAlign = "right";
+      ctx.font = "13px 'Arial', sans-serif";
+      let bx = colX + colW;
+      for (let t = TIER_BADGES.length - 1; t >= 0; t--){
+        const earned = a.tier > t;
+        ctx.globalAlpha = earned ? 1 : 0.22;
+        ctx.fillText(TIER_BADGES[t], bx, y + 12);
+        bx -= 22;
+      }
+      ctx.globalAlpha = 1;
+      ctx.textAlign = "left";
+
+      // progress bar toward the next tier
+      const barY = y + 20, barW = colW, barH = 5;
+      ctx.fillStyle = "#1d232c";
+      ctx.fillRect(colX, barY, barW, barH);
+      const target = a.nextTarget || 1;
+      const frac = a.tier >= 5 ? 1 : Math.max(0, Math.min(1, a.progress / target));
+      ctx.fillStyle = a.tier >= 5 ? GOLD : COL.atomic;
+      ctx.fillRect(colX, barY, barW * frac, barH);
+
+      // description + progress count
+      ctx.font = "10px 'Courier New', monospace";
+      ctx.fillStyle = "#727b86";
+      ctx.fillText(a.description || "", colX, y + 38);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#8b94a0";
+      const count = a.tier >= 5 ? "MAX" : `${a.progress} / ${target}`;
+      ctx.fillText(count, colX + colW, y + 38);
+      ctx.textAlign = "left";
+
+      y += 48;
+    }
+    y += 10;
+  }
+
+  ctx.restore();
+
+  // record max scroll for pollModals to clamp against next frame
+  const contentH = (y + scroll) - lineTop;     // undo the scroll offset for true height
+  G._lifetimeMaxScroll = Math.max(0, contentH - vpH);
 }
 
 export function drawGameOver(){

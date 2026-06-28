@@ -70,6 +70,33 @@ const KEY_XP          = 'add_xp';
 const KEY_EOTW_STREAK = 'add_eotw_streak';
 function weeklyKey(key) { return `add_weekly_${key}`; }
 
+/* ---- Per-level progress log (Phase 6: post-level modal) ------------------
+   Records every achievement that advanced during the current level, keyed by id.
+   Cleared on level:start; read by getLevelAchievementSummary() during the
+   levelclear state. `isNew` flags an achievement whose tier was promoted (or a
+   weekly newly unlocked) this level — earned for the first time this session at
+   that milestone. -------------------------------------------------------------- */
+let _levelProgressLog = {};
+
+function _logLevelProgress(id, { newTier = false } = {}) {
+  const reg = REGISTRY[id];
+  if (!reg || reg.stub) return;
+  const entry = _lifetime[id] ?? { tier: 0, progress: 0 };
+  const tiers = reg.tiers ?? [];
+  // Next-tier threshold (target). Once Diamond, the final threshold is the target.
+  const target = entry.tier < tiers.length ? tiers[entry.tier]
+               : (tiers[tiers.length - 1] ?? entry.progress);
+  if (!_levelProgressLog[id]) _levelProgressLog[id] = { isNew: false };
+  const log = _levelProgressLog[id];
+  log.id = id;
+  log.name = reg.name;
+  log.description = reg.desc ?? '';
+  log.progress = entry.progress;
+  log.target = target;
+  log.tier = entry.tier;
+  if (newTier) log.isNew = true;
+}
+
 /* ---- In-play banner queue ----------------------------------------------- */
 let _bannerQueue = [];
 
@@ -230,11 +257,11 @@ function _unlockWeekly(id) {
 const REGISTRY = {
   /* Accuracy (Phase 4: evaluated at level:end from levelShotsFired / levelShotsHits) */
   acc_participation: { name:'Participation Trophy', desc:'Clear a level at 50% accuracy or less', tiers:[5,15,35,75,150],  weekly:true  },
-  acc_spray:         { name:'Spray and Pray',       desc:'Clear a level at 30% accuracy or less', tiers:[3,10,25,50,100],  weekly:false },
+  acc_spray:         { name:'Spray and Pray',       desc:'Clear a level at 30% accuracy or less', tiers:[3,10,25,50,100],  weekly:false, hidden:true },
   acc_marksman:      { name:'Marksman',             desc:'Clear a level at 75%+ accuracy',        tiers:[5,15,35,75,150],  weekly:true  },
   acc_sharpshooter:  { name:'Sharpshooter',         desc:'Clear a level at 85%+ accuracy',        tiers:[3,10,25,50,100],  weekly:true  },
   acc_surgical:      { name:'Surgical',             desc:'Clear a level at 95%+ accuracy',        tiers:[1,5,15,35,75],    weekly:true  },
-  acc_one_job:       { name:'One Job',              desc:'Clear a level with no missed shots',    tiers:[1,3,10,25,50],    weekly:false },
+  acc_one_job:       { name:'One Job',              desc:'Clear a level with no missed shots',    tiers:[1,3,10,25,50],    weekly:false, hidden:true },
   acc_quality:       { name:'Quality over Quantity',desc:'Clear a level using 10 shots or fewer', tiers:[3,10,25,50,100],  weekly:true  },
 
   /* Bounce Shot (Phase 4: per-shot tracking on enemy:died payload) */
@@ -276,7 +303,7 @@ const REGISTRY = {
   /* Atomic Dustbin */
   dust_option:     { name:'Atomic Option',        tiers:[3,10,25,50,100],  weekly:true  },
   dust_reserve:    { name:'Strategic Reserve',     tiers:[5,15,35,75,150],  weekly:true  },
-  dust_disgruntled:{ name:'Disgruntled Employee',  tiers:[3,10,25,50,100],  weekly:false },
+  dust_disgruntled:{ name:'Disgruntled Employee',  tiers:[3,10,25,50,100],  weekly:false, hidden:true },
   dust_env_hazard: { name:'Environmental Hazard',  tiers:[3,10,25,50,100],  weekly:true  },
   dust_heavy_hitter:{ name:'Heavy Hitter',         tiers:[50,150,350,750,1500], weekly:false },
 
@@ -293,7 +320,7 @@ const REGISTRY = {
   wrk_tag_team:       { name:'Tag Team',            tiers:[5,15,35,75,150],  weekly:true  },
   wrk_nobody:         { name:'Nobody Left Behind',  tiers:[1,3,10,25,50],    weekly:true  },
   wrk_unionized:      { name:'Unionized',           tiers:[3,10,25,50,100],  weekly:true  },
-  wrk_understaffed:   { name:'Understaffed',        tiers:[1,3,10,25,50],    weekly:false },
+  wrk_understaffed:   { name:'Understaffed',        tiers:[1,3,10,25,50],    weekly:false, hidden:true },
 
   /* Combat — lifetime type-specific counters */
   cmb_decommissioned:{ name:'Decommissioned',  tiers:[500,2000,5000,10000,25000], weekly:false },
@@ -349,6 +376,7 @@ function _checkTiers(id) {
   if (next > prev) {
     entry.tier = next;
     _saveLifetime();
+    _logLevelProgress(id, { newTier: true });
     _pushBanner(reg.name, `${TIER_NAMES[next - 1]} unlocked`);
   }
 }
@@ -358,7 +386,8 @@ function _inc(id, amount = 1) {
   const reg = REGISTRY[id];
   if (!reg || reg.stub) return 0;
   const total = _incLifetime(id, amount);
-  _checkTiers(id);
+  _logLevelProgress(id);          // record advance for the post-level modal
+  _checkTiers(id);                // may upgrade isNew if a tier was crossed
   return total;
 }
 
@@ -368,6 +397,7 @@ function _weeklyUnlock(id) {
   if (!reg || reg.stub || !reg.weekly) return;
   if (_unlockWeekly(id)) {
     _incWeekly(id);
+    _logLevelProgress(id, { newTier: true });
     _pushBanner(reg.name, 'Weekly progress');
   }
 }
@@ -398,6 +428,7 @@ function _onRunStart() {
 }
 
 function _onLevelStart({ terminalCount, workerCount, levelNumber, isAuthored }) {
+  _levelProgressLog = {};          // reset per-level progress for the post-level modal
   _session.levelStartTime = Date.now();
   _session.levelShotsFired = 0;
   _session.levelBoltHits = 0;
@@ -1044,6 +1075,7 @@ export function initAchievements() {
   _session.consecutiveNoRescueLevels = 0;
 
   _bannerQueue = [];
+  _levelProgressLog = {};
 
   /* Load and validate persistent state; detect week rollover. */
   _loadLifetime();
@@ -1122,7 +1154,81 @@ export function getWeeklyAchievements() {
   return entries;
 }
 
-/* Getters for render / UI modules (Phase 5+, stubs here). */
-export function getLevelAchievementSummary() { return []; }
-export function getLifetimeAchievements() { return _lifetime; }
+/* ---- Phase 6: post-level modal summary ----------------------------------
+   Returns every achievement that advanced during the level just completed, as an
+   array of { id, name, description, progress, target, tier, isNew }. Empty when
+   nothing progressed (the modal is then skipped). Populated by _logLevelProgress
+   from _inc / _checkTiers / weekly-unlock; cleared on level:start. NEW! entries
+   (newly-promoted tiers / newly-unlocked weeklies) sort to the top. ----------- */
+export function getLevelAchievementSummary() {
+  const entries = Object.values(_levelProgressLog).map(e => ({
+    id: e.id,
+    name: e.name,
+    description: e.description,
+    progress: e.progress,
+    target: e.target,
+    tier: e.tier,
+    isNew: !!e.isNew,
+  }));
+  entries.sort((a, b) => (b.isNew ? 1 : 0) - (a.isNew ? 1 : 0));
+  return entries;
+}
+
+/* ---- Phase 6: lifetime achievements modal -------------------------------
+   Category metadata in ACHIEVEMENTS.md order (emoji + display name). Each entry's
+   category is derived from its id prefix. -------------------------------------- */
+const CATEGORIES = [
+  { key: 'acc',  emoji: '🎯', name: 'Accuracy' },
+  { key: 'bnc',  emoji: '💥', name: 'Bounce Shot' },
+  { key: 'surv', emoji: '🧹', name: 'Survival & Damage' },
+  { key: 'spd',  emoji: '⚡', name: 'Speed' },
+  { key: 'dust', emoji: '💣', name: 'Atomic Dustbin' },
+  { key: 'wrk',  emoji: '👷', name: 'Worker Rescue' },
+  { key: 'cmb',  emoji: '🤖', name: 'Combat & Enemy-Specific' },
+  { key: 'conv', emoji: '🏭', name: 'Conveyor Belt' },
+  { key: 'itm',  emoji: '🛠️', name: 'Power-Ups & Items' },
+  { key: 'scr',  emoji: '📈', name: 'Score' },
+  { key: 'prg',  emoji: '📅', name: 'Progression' },
+];
+
+function _categoryFor(id) {
+  const prefix = id.split('_')[0];
+  return CATEGORIES.find(c => c.key === prefix) ?? null;
+}
+
+/* Returns the full registry grouped by category (ACHIEVEMENTS.md order), each
+   achievement merged with current tier/progress from localStorage. Hidden
+   achievements at tier 0 are masked as '???'. Compat (_compat_*) and stub
+   entries are omitted. Shape:
+     [{ emoji, name, achievements: [
+        { id, name, description, tier, progress, tiers, nextTarget, hidden } ] }] */
+export function getLifetimeAchievements() {
+  const groups = CATEGORIES.map(c => ({ emoji: c.emoji, name: c.name, achievements: [] }));
+  const groupByKey = Object.fromEntries(CATEGORIES.map((c, i) => [c.key, groups[i]]));
+
+  for (const [id, reg] of Object.entries(REGISTRY)) {
+    if (reg.stub) continue;
+    if (reg.name.startsWith('_compat')) continue;
+    const cat = _categoryFor(id);
+    if (!cat) continue;
+    const stored = _lifetime[id] ?? { tier: 0, progress: 0 };
+    const tier = stored.tier ?? 0;
+    const tiers = reg.tiers ?? [];
+    const masked = reg.hidden && tier === 0;
+    const nextTarget = tier < tiers.length ? tiers[tier]
+                     : (tiers[tiers.length - 1] ?? 0);
+    groupByKey[cat.key].achievements.push(masked
+      ? { id: '???', name: '???', description: '???', tier: 0,
+          progress: 0, tiers, nextTarget, hidden: true }
+      : { id, name: reg.name, description: reg.desc ?? '', tier,
+          progress: stored.progress ?? 0, tiers, nextTarget, hidden: !!reg.hidden });
+  }
+
+  return groups.filter(g => g.achievements.length > 0);
+}
+
+/* Raw lifetime map { [id]: {tier, progress} } — used by headless tests to inspect
+   stored progress directly. The UI uses the grouped getLifetimeAchievements(). */
+export function getLifetimeRaw() { return _lifetime; }
+
 export function getXP() { return lsGet(KEY_XP) ?? 0; }

@@ -68,8 +68,10 @@ export const CFG = {
   GAMEPAD: {
     moveDeadzone: 0.2,
     fireDeadzone: 0.2,
-    BTN_START:   [9, 0],          // start a run / restart (Start or A)
+    BTN_START:   [9, 0],          // start a run / restart (Start or A) — also modal Continue
     BTN_SPECIAL: [4, 5, 6, 7],    // deploy the Atomic Dustbin (any bumper/trigger)
+    BTN_BACK:    [1],             // B — dismiss the lifetime achievements modal
+    BTN_VIEW:    [2],             // X — open "View All Achievements" (title / post-level modal)
   },
 
   // Vending machines (GDD 2.5) — static, contact-triggered HP restoration. Sole
