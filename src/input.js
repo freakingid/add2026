@@ -19,6 +19,7 @@ import { G } from "./state.js";
 import { newGame, nextLevel } from "./level.js";
 import { unlock, toggleMute } from "./audio.js";
 import { emit } from "./events.js";
+import { openPause, handlePauseKeydown } from "./pause.js";
 
 /* ---- Raw input state (still exported: mouse aim, M mute, debug) ---------- */
 export const keys = {};
@@ -78,6 +79,8 @@ export function pollGamepad(){
     if (G.state === "title"){
       if (G._titlePhase === "input") advanceTitleToMode("gamepad");
       // mode/playlist phases handled by pollTitleMenu below
+    } else if (G.state === "playing"){
+      openPause();
     } else if (G.state === "dead" && G.inputMode === "gamepad"){
       startRun("gamepad");
     }
@@ -308,6 +311,19 @@ addEventListener("keydown", e => {
   if (k === "m" && !e.repeat) toggleMute();   // M = mute toggle (GDD §10 audio)
   if (G.state === "playing" && HANDLED_KEYS.has(k)) e.preventDefault();
   keys[k] = true;
+
+  // Delegate to pause.js for name entry (Phase 3) and ESC back-navigation.
+  if (G.state === "paused") handlePauseKeydown(e);
+
+  // ESC while playing → open pause menu.
+  if (e.key === "Escape"
+      && G.state === "playing"
+      && !G._showAchievementModal
+      && !G._showLifetimeModal){
+    openPause();
+    return;
+  }
+
   // Title: SPACE/ENTER selects keyboard+mouse mode and starts. Dead: same key
   // restarts, but only when the run was in keyboard mode (gamepad disables it).
   if (e.key === " " || e.key === "Enter"){

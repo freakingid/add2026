@@ -63,9 +63,14 @@ import "./src/input.js";                 // registers key/mouse/touch listeners 
 import { update } from "./src/update.js";
 import { render } from "./src/render.js";
 import { loadPlaylists } from "./src/playlists.js";
+import { loadHighScore } from "./src/savegame.js";
+import { G } from "./src/state.js";
 
 /* ---- Playlist boot-load (advisory — failure leaves Hand Authored unavailable) */
 loadPlaylists();    // async, non-blocking; populates G.availablePlaylists before first input
+
+/* ---- High score boot-load ------------------------------------------------ */
+G.high = loadHighScore();
 
 /* ---- Main loop (delta-timed) -------------------------------------------- */
 let last = performance.now();

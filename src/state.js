@@ -11,7 +11,7 @@ import { LEVEL_PLAN } from "./config.js";
 
 export const G = {
   // run / meta
-  state:"title",       // title | playing | levelclear | dead
+  state:"title",       // title | playing | paused | levelclear | dead
   score:0,
   high:0,
   level:1,
@@ -24,6 +24,7 @@ export const G = {
   playlistIndex:0,            // current position in playlist.levels[]
   availablePlaylists:[],      // [{name, filename, levels}] loaded at boot
   _titlePhase:"input",        // "input" | "mode" | "playlist" (title sub-state)
+  _loadSaveCursor:0,          // highlighted slot on the title load screen (Phase 3)
 
   // entities (populated by newGame / buildLevel)
   dan:null,

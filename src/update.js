@@ -23,6 +23,7 @@ import { getLevelAchievementSummary } from "./achievements.js";
 import { sfx } from "./audio.js";
 import { emit } from "./events.js";
 import { updateWipe, startWipeClose, startWipeOpen } from "./wipe.js";
+import { pollPause } from "./pause.js";
 
 export function update(dt){
   updateWipe(dt);    // runs in all states including levelclear
@@ -34,6 +35,14 @@ export function update(dt){
   // Modal input (post-level / lifetime achievement modals) is polled every frame,
   // device-agnostically, BEFORE state branching so it works over title + levelclear.
   pollModals(dt);
+
+  // Paused state — world is frozen; only pause polling runs.
+  // updateWipe + pollGamepad still run (above) so the wipe can finish and
+  // START can un-pause via the gamepad path in input.js.
+  if (G.state === "paused"){
+    pollPause(dt);
+    return;
+  }
 
   // Level-clear splash: freeze the world, then build the next level.
   if (G.state === "levelclear"){

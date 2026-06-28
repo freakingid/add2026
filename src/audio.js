@@ -46,6 +46,18 @@ export function toggleMute(){
 }
 export function isMuted(){ return muted; }
 
+// Set master volume (0..1). If muted, the stored value is updated so unmute
+// restores to the new level.
+export function setMasterVolume(v){
+  v = Math.max(0, Math.min(1, v));
+  CFG.AUDIO.master = v;
+  if (master && !muted) master.gain.value = v;
+}
+
+export function getMasterVolume(){
+  return CFG.AUDIO.master;
+}
+
 // Gate a named sound by its throttle window. Returns false if it fired too
 // recently. Sounds without a THROTTLE entry are never gated.
 function allow(name){

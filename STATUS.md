@@ -38,7 +38,7 @@ All core systems are complete. The table below is the canonical build status; GD
 | Audio — 18 SFX + looping conveyor bed | ✅ Built | §10 | `audio.js` |
 | Game states (title / playing / levelclear / dead) | ✅ Built | — | `state.js`, `screens.js` |
 | Achievement system | 🔧 In progress — Phase 5 complete | `ACHIEVEMENTS.md`, `ACHIEVEMENT-BLUEPRINT.md` | `events.js`, `achievements.js`, `screens.js`, `render.js`, `audio.js` |
-| Save/Load system (savegame.js) | 🔧 Phase 1 complete | — | `savegame.js`, `level.js` |
+| Pause menu + Save/Load system | 🔧 Phase 2 complete | — | `pause.js`, `update.js`, `render.js`, `input.js`, `audio.js` |
 | Sprite-art polish | 🔲 Not built | §10 | — |
 
 > Cross-cutting "do not silently change" rules (HP/score persistence, decrement model,
@@ -400,6 +400,27 @@ All core systems are complete. The table below is the canonical build status; GD
   throws during draw.
 
 ---
+
+### Pause menu (Phase 2)
+
+- **`state="paused"` freezes the world.** `update.js` returns immediately after
+  `pollPause(dt)` when `G.state === "paused"` — no Dan, enemies, spawns, or effects
+  run. `updateWipe(dt)` and `pollGamepad()` still run (they're called before the
+  branch) so an in-progress wipe can finish and gamepad START can un-pause.
+- **`pause.js` owns all sub-screen state.** `subScreen` / cursor positions / option
+  values are all module-local in `pause.js` — none are on `G`. Only `G.state` and
+  `G.high` (quit path) are mutated from pause.js.
+- **Module-local `_keys` avoids circular import with `input.js`.** `pause.js` registers
+  its own `keydown`/`keyup` listeners tracking `_keys{}`. `input.js` imports from
+  `pause.js` (to call `openPause` / `handlePauseKeydown`); if `pause.js` imported
+  `keys` from `input.js` there'd be an ES-module evaluation cycle that can leave one
+  side undefined. Duplicate listeners on the same events are harmless.
+- **Belt hum stops immediately on `openPause()`.** `sfx.conveyor(false)` is called
+  inside `openPause`. The hum naturally resumes on the next `update()` frame after
+  `closePause()` if Dan is still on a belt (`G.dan.onBelt` check in `update.js`).
+- **Phase 2 sub-screens:** `menu` / `options` / `confirm_quit`. The `"SAVE & QUIT"`
+  menu entry currently leads to `confirm_quit` as a stub; the real save picker /
+  name-entry flow is Phase 3 (`pause.js` + `screens.js` additions).
 
 ### Save/Load system (savegame.js — Phase 1)
 
