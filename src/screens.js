@@ -9,7 +9,7 @@ import { ctx, VIEW_W, VIEW_H } from "./canvas.js";
 import { G, levelType } from "./state.js";
 import { POWERUPS, POWERUP_KEYS } from "./config.js";
 import { COL } from "./palette.js";
-import { getWeeklyAchievements, getLevelAchievementSummary, getLifetimeAchievements } from "./achievements.js";
+import { getWeeklyAchievements, getLevelAchievementSummary, getLifetimeAchievements, getXP } from "./achievements.js";
 
 /* ---- HUD + screens ------------------------------------------------------ */
 export function drawHUD(){
@@ -243,6 +243,17 @@ export function drawTitle(){
     ctx.fillStyle = "#6f7884";
     ctx.font = "bold 11px 'Courier New', monospace";
     ctx.fillText("HIGH SCORE  " + String(G.high).padStart(6,"0"), VIEW_W/2, VIEW_H - 22);
+  }
+
+  // XP total (Phase 7)
+  {
+    const xp = getXP();
+    if (xp > 0) {
+      ctx.fillStyle = "#ffd24a";
+      ctx.font = "bold 11px 'Courier New', monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("XP  " + xp, VIEW_W/2, VIEW_H - 38);
+    }
   }
 
   drawFireLegend(28, VIEW_H - 150);

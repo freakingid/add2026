@@ -24,7 +24,7 @@ export function hitDanRanged(b){
   G.dan.kvy = Math.sin(a) * CFG.KNOCKBACK_SPEED * 0.6;
   emit('player:hit', { dmg: b.dmg, source: 'ranged' });
   emit('player:hp_changed', { hp: G.dan.hp, maxHp: G.dan.maxHp });
-  if (G.dan.hp <= 0) emit('player:died');
+  if (G.dan.hp <= 0) emit('player:died', { level: G.level });
 }
 
 // Area impact (arc landing): shared i-frame + radial knockback away from the
@@ -38,7 +38,7 @@ export function hitDanArea(x, y, dmg){
   G.dan.kvy = Math.sin(a) * CFG.KNOCKBACK_SPEED * 0.6;
   emit('player:hit', { dmg, source: 'area' });
   emit('player:hp_changed', { hp: G.dan.hp, maxHp: G.dan.maxHp });
-  if (G.dan.hp <= 0) emit('player:died');
+  if (G.dan.hp <= 0) emit('player:died', { level: G.level });
 }
 
 // dx,dy point from the enemy toward Dan; knock Dan AWAY (down +dx/dy).
@@ -54,7 +54,7 @@ export function meleeContact(e, dx, dy, dist, dmg){
     G.dan.kvy = (dy/dist) * CFG.KNOCKBACK_SPEED;
     emit('player:hit', { dmg, source: 'melee' });
     emit('player:hp_changed', { hp: G.dan.hp, maxHp: G.dan.maxHp });
-    if (G.dan.hp <= 0) emit('player:died');
+    if (G.dan.hp <= 0) emit('player:died', { level: G.level });
   }
 
   if (e.hp <= 0){

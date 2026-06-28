@@ -110,6 +110,10 @@ function _pushBanner(text, subtext) {
   // Direct sfx call — same one-way pattern as every other module (achievements
   // → audio). The pub/sub bus is for tracking events, not for audio.
   sfx.achievement();
+  // sec_wrongful: track whether any achievement banner was pushed while playing.
+  // Checked against G.state externally — we use a session flag set here and cleared
+  // on level:start; the player:died handler checks it.
+  _session.achievementEarnedThisLevel = true;
 }
 
 /* ---- Module-local session state ----------------------------------------- */
@@ -184,6 +188,10 @@ let _session = {
 
   /* no-workers-rescued consecutive levels (wrk_understaffed) */
   consecutiveNoRescueLevels: 0,
+
+  /* Phase 7: session-based secret achievement tracking */
+  achievementEarnedThisLevel: false,  // sec_wrongful: any banner pushed during this level
+  sessionPlayMs: 0,                   // sec_mandatory_ot: cumulative ms across run:start→run:end
 };
 
 /* ---- Lifetime state (backed by localStorage) ---------------------------- */
@@ -353,6 +361,21 @@ const REGISTRY = {
   scr_quarterly: { name:'Quarterly Targets',  tiers:null, weekly:true,  stub:true, stubReason:'thresholds not set' },
   scr_annual:    { name:'Annual Review',       tiers:null, weekly:true,  stub:true, stubReason:'thresholds not set' },
 
+  /* Weekly Meta (Phase 7) */
+  meta_eotw:        { name:'Employee of the Week', desc:'Complete all 5 weekly achievements in one calendar week', tiers:[1,5,10,25,52], weekly:false },
+  meta_consecutive: { name:'Consecutive Weeks',    desc:'Earn EOTW two calendar weeks in a row',                  tiers:[1],           weekly:false, hidden:true },
+  meta_model:       { name:'Model Employee',        desc:'Earn Employee of the Week N times total',                tiers:[1,5,10,25,52],weekly:false },
+
+  /* Secret / Hidden (Phase 7) */
+  sec_dead_end:     { name:'Dead End Job',       desc:'Die on level 1',                                                   tiers:[1,5,15,30,60],  weekly:false, hidden:true },
+  sec_pink_slip:    { name:'Pink Slip',           desc:'Your very first game ever ends in a death on level 1',             tiers:[1],             weekly:false, hidden:true },
+  sec_graveyard:    { name:'Graveyard Shift',     desc:'Play between midnight and 4:00 AM',                                tiers:[1,5,15,30,60],  weekly:false, hidden:true },
+  sec_clock_watcher:{ name:'Clock Watcher',       desc:'Play between 5:00 PM and 5:15 PM on a weekday',                   tiers:[1,5,15,30,60],  weekly:false, hidden:true },
+  sec_monday:       { name:'Monday Morning',      desc:'Play between 8:00 AM and 9:00 AM on a Monday',                    tiers:[1,5,15,30,60],  weekly:false, hidden:true },
+  sec_mandatory_ot: { name:'Mandatory Overtime',  desc:'Accumulate 2+ hours of continuous play in a single session',      tiers:[1,3,10,25,50],  weekly:false, hidden:true },
+  sec_phantom:      { name:'Phantom Paycheck',    desc:'Stand completely still for 10 seconds during an active level',    tiers:[1,5,15,30,60],  weekly:false, hidden:true },
+  sec_wrongful:     { name:'Wrongful Termination',desc:'Die in the same level in which you earned an achievement',        tiers:[1,5,15,30,60],  weekly:false, hidden:true },
+
   /* Phase 2 tracking (legacy names kept for localStorage compatibility) */
   wrk_total_rescued: { name:'_compat_wrk_total',  tiers:[25,100,250,500,1000], weekly:false },
   pwr_stocked:       { name:'_compat_pwr_stocked', tiers:[1,5,15,30,60],       weekly:false },
@@ -377,6 +400,10 @@ function _checkTiers(id) {
     entry.tier = next;
     _saveLifetime();
     _logLevelProgress(id, { newTier: true });
+    // Award XP for each newly crossed tier (only new tiers, not previously earned ones)
+    for (let t = prev; t < next; t++) {
+      _addXP(XP_PER_TIER[t] ?? XP_PER_TIER[XP_PER_TIER.length - 1]);
+    }
     _pushBanner(reg.name, `${TIER_NAMES[next - 1]} unlocked`);
   }
 }
@@ -391,22 +418,152 @@ function _inc(id, amount = 1) {
   return total;
 }
 
+/* ---- XP helpers (Phase 7) -----------------------------------------------
+   XP is cumulative lifetime, stored in add_xp (number).
+   Tier XP: Bronze=10, Silver=25, Gold=50, Platinum=100, Diamond=200.
+   Weekly completion = 10 XP per achievement unlocked.
+   EOTW bonus = 50 XP.  */
+const XP_PER_TIER   = [10, 25, 50, 100, 200]; // indexed by tier-1
+const XP_WEEKLY     = 10;
+const XP_EOTW_BONUS = 50;
+
+function _addXP(amount) {
+  const current = lsGet(KEY_XP) ?? 0;
+  lsSet(KEY_XP, (current + amount));
+}
+
 /* Unlock a weekly achievement once (idempotent). */
 function _weeklyUnlock(id) {
   const reg = REGISTRY[id];
   if (!reg || reg.stub || !reg.weekly) return;
   if (_unlockWeekly(id)) {
     _incWeekly(id);
+    _addXP(XP_WEEKLY);
     _logLevelProgress(id, { newTier: true });
     _pushBanner(reg.name, 'Weekly progress');
+    // Check if all 5 active weeklies are now complete → EOTW
+    _checkEOTW();
   }
 }
 
-/* Increment a weekly count (for weekly achievements that accumulate per week). */
+/* Increment a weekly count (for weekly achievements that accumulate per week).
+   On the first increment (progress 0→1), award XP and check EOTW — this
+   achievement is now "complete this week" for panel purposes. */
 function _weeklyInc(id) {
   const reg = REGISTRY[id];
   if (!reg || reg.stub || !reg.weekly) return;
+  const prev = (_weekly[id]?.progress ?? 0);
   _incWeekly(id);
+  if (prev === 0) {
+    _addXP(XP_WEEKLY);   // first weekly completion this week → award XP
+    _checkEOTW();        // check if all 5 active weeklies are now complete
+  }
+}
+
+/* ---- EOTW completion logic (Phase 7) ------------------------------------
+   Called from _weeklyUnlock after each weekly is newly completed. Checks whether
+   all 5 active weeklies are done; if so, fires EOTW exactly once per week (guarded
+   by the meta_eotw weekly unlock flag), then handles meta_consecutive + meta_model. */
+function _checkEOTW() {
+  const activeIds = _activeWeeklyIds();
+  const allDone = activeIds.length > 0 && activeIds.every(id => {
+    const w = _weekly[id];
+    return w && (w.unlocked || (w.progress ?? 0) >= 1);
+  });
+  if (!allDone) return;
+
+  // Guard: fire EOTW at most once per week (use a weekly flag keyed to meta_eotw)
+  const eotwFlag = _weekly['meta_eotw'];
+  if (eotwFlag && eotwFlag.unlocked) return; // already fired this week
+  if (!_weekly['meta_eotw']) _weekly['meta_eotw'] = { unlocked: false, progress: 0 };
+  _weekly['meta_eotw'].unlocked = true;
+  _weekly['meta_eotw'].progress = activeIds.length;
+  _saveWeekly();
+
+  // Increment lifetime meta_eotw progress + push banner
+  _inc('meta_eotw');
+  _addXP(XP_EOTW_BONUS);
+  _pushBanner('Employee of the Week', 'All 5 weeklies complete! +bonus XP');
+
+  // meta_model: EOTW earned N times total (same as meta_eotw lifetime progress)
+  // Already handled by _inc('meta_eotw') above which calls _checkTiers.
+
+  // meta_consecutive: EOTW earned two calendar weeks in a row.
+  // Read the streak state from localStorage; check if lastWeekKey is the
+  // immediately preceding ISO week. Unlock at streak >= 2.
+  _updateEOTWStreak();
+}
+
+/* Returns the ISO week key for the week immediately before the given key.
+   Handles year boundaries by decrementing the date by 7 days. */
+function _prevISOWeekKey(currentKey) {
+  const [year, week] = currentKey.split('_').map(Number);
+  // Build a date in the given year+week, then subtract 7 days.
+  // Jan 4 is always in ISO week 1; start there and advance.
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const dayOfWeek = jan4.getUTCDay() || 7;           // 1=Mon … 7=Sun
+  const weekStart = new Date(jan4);
+  weekStart.setUTCDate(jan4.getUTCDate() - dayOfWeek + 1 + (week - 1) * 7);
+  // Step back 7 days to the previous week
+  const prevWeekDate = new Date(weekStart);
+  prevWeekDate.setUTCDate(weekStart.getUTCDate() - 7);
+  // Compute its ISO week key using the same formula as isoWeekKey()
+  const d = new Date(Date.UTC(prevWeekDate.getUTCFullYear(), prevWeekDate.getUTCMonth(), prevWeekDate.getUTCDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}_${weekNo}`;
+}
+
+function _updateEOTWStreak() {
+  const currentKey = isoWeekKey();
+  const streak = lsGet(KEY_EOTW_STREAK) ?? { count: 0, lastWeekKey: '' };
+  const prevKey = _prevISOWeekKey(currentKey);
+
+  if (streak.lastWeekKey === prevKey) {
+    streak.count++;
+  } else if (streak.lastWeekKey === currentKey) {
+    // Same week — streak already counted; don't double-count
+  } else {
+    streak.count = 1;
+  }
+  streak.lastWeekKey = currentKey;
+  lsSet(KEY_EOTW_STREAK, streak);
+
+  if (streak.count >= 2) {
+    // meta_consecutive: one-time hidden unlock (tiers=[1])
+    _inc('meta_consecutive');
+    _pushBanner('Consecutive Weeks', 'Secret unlocked');
+  }
+}
+
+/* ---- Time-based hidden achievements (Phase 7) ---------------------------
+   Called once at the start of each new game (initAchievements). Checks the
+   current local wall clock and increments progress for whichever time windows
+   the player is in. Uses local time (getHours/getDay) matching the spec. */
+function _checkTimeBased() {
+  const now = new Date();
+  const h = now.getHours();
+  const m = now.getMinutes();
+  const day = now.getDay(); // 0=Sun 1=Mon … 6=Sat
+
+  // sec_graveyard: midnight (00:00) to before 04:00
+  if (h >= 0 && h < 4) {
+    _inc('sec_graveyard');
+    _pushBanner('Graveyard Shift', 'Secret unlocked');
+  }
+
+  // sec_clock_watcher: 17:00–17:14 on a weekday (Mon–Fri)
+  if (day >= 1 && day <= 5 && h === 17 && m <= 14) {
+    _inc('sec_clock_watcher');
+    _pushBanner('Clock Watcher', 'Secret unlocked');
+  }
+
+  // sec_monday: 08:00–08:59 on Monday
+  if (day === 1 && h === 8) {
+    _inc('sec_monday');
+    _pushBanner('Monday Morning', 'Secret unlocked');
+  }
 }
 
 /* ---- Event handlers ----------------------------------------------------- */
@@ -454,6 +611,7 @@ function _onLevelStart({ terminalCount, workerCount, levelNumber, isAuthored }) 
   _session.levelManagerKilledBeforeFired = false;
   _session.workerFollowingMs = {};
   _session.runWorkersAvailableTotal += (workerCount ?? 5);
+  _session.achievementEarnedThisLevel = false;  // sec_wrongful: reset per level
 }
 
 function _onLevelEnd({ levelTime, workersRescued, levelNumber, isAuthored, shotsHits, shotsFired }) {
@@ -683,6 +841,17 @@ function _onRunEnd({ runTime, levelsCompleted, totalScore, inputMode }) {
     _inc('prg_manual');
   }
 
+  /* -- sec_mandatory_ot: 2+ continuous hours of play in one session.
+       Accumulate the elapsed ms for this run into sessionPlayMs, then check. */
+  {
+    const runMs = Date.now() - _session.runStartTime;
+    _session.sessionPlayMs += runMs;
+    if (_session.sessionPlayMs >= 7200000) {
+      _inc('sec_mandatory_ot');
+      _pushBanner('Mandatory Overtime', 'Secret unlocked');
+    }
+  }
+
   /* Score stubs: do nothing (stub entries short-circuit at _inc). */
 }
 
@@ -877,13 +1046,45 @@ function _onPlayerHpChanged({ hp, maxHp }) {
   _session.levelEndHp = hp; // updated every HP change; last value at level:end is current HP
 }
 
-function _onPlayerDied() {
+function _onPlayerDied({ level } = {}) {
   /* Reset consecutive survive streak on death. */
   _session.consecutiveSurviveCount = 0;
+
+  /* sec_dead_end: died on level 1 */
+  if (level === 1) {
+    _inc('sec_dead_end');
+    _pushBanner('Dead End Job', 'Secret unlocked');
+  }
+
+  /* sec_pink_slip: very first game ever ends in death on level 1.
+     One-time only; no further tiers. Guard by checking prg_temp progress (levels
+     completed lifetime) = 0, which means no level has ever been cleared. */
+  if (level === 1) {
+    const prg = _lifetime['prg_temp'];
+    const lifetimeProgress = prg ? prg.progress : 0;
+    if (lifetimeProgress === 0) {
+      const stored = _lifetime['sec_pink_slip'];
+      if (!stored || stored.progress === 0) {
+        _inc('sec_pink_slip');
+        _pushBanner('Pink Slip', 'Secret unlocked');
+      }
+    }
+  }
+
+  /* sec_wrongful: died in the same level in which an achievement was earned */
+  if (_session.achievementEarnedThisLevel) {
+    _inc('sec_wrongful');
+    _pushBanner('Wrongful Termination', 'Secret unlocked');
+  }
 }
 
 function _onPlayerStoodStill({ durationMs }) {
   _session.levelStoodStill = true;
+  // sec_phantom: stood completely still for 10+ continuous seconds
+  if (typeof durationMs === 'number' && durationMs >= 10000) {
+    _inc('sec_phantom');
+    _pushBanner('Phantom Paycheck', 'Secret unlocked');
+  }
 }
 
 function _onConveyorPushStart() {
@@ -1073,6 +1274,8 @@ export function initAchievements() {
   _session.consecutiveDamageFreeCount = 0;
   _session.consecutiveSurviveCount = 0;
   _session.consecutiveNoRescueLevels = 0;
+  _session.achievementEarnedThisLevel = false;
+  _session.sessionPlayMs = 0;
 
   _bannerQueue = [];
   _levelProgressLog = {};
@@ -1080,6 +1283,9 @@ export function initAchievements() {
   /* Load and validate persistent state; detect week rollover. */
   _loadLifetime();
   _loadWeekly();
+
+  /* Time-based hidden achievements: check local time at session load. */
+  _checkTimeBased();
 
   /* Re-register handlers (off+on pattern prevents duplicates across newGame() calls). */
   for (const [event, handler] of Object.entries(_handlers)) {
@@ -1189,6 +1395,8 @@ const CATEGORIES = [
   { key: 'itm',  emoji: '🛠️', name: 'Power-Ups & Items' },
   { key: 'scr',  emoji: '📈', name: 'Score' },
   { key: 'prg',  emoji: '📅', name: 'Progression' },
+  { key: 'meta', emoji: '🏅', name: 'Weekly Meta' },
+  { key: 'sec',  emoji: '🎭', name: 'Secret' },
 ];
 
 function _categoryFor(id) {
@@ -1232,3 +1440,6 @@ export function getLifetimeAchievements() {
 export function getLifetimeRaw() { return _lifetime; }
 
 export function getXP() { return lsGet(KEY_XP) ?? 0; }
+
+/* Exported for headless tests (Phase 7: consecutive-week streak math). */
+export { _prevISOWeekKey };

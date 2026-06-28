@@ -1,6 +1,6 @@
 ---
 
-## Achievement system (Phase 6 complete)
+## Achievement system (Phase 7 complete)
 
 See **`ACHIEVEMENTS.md`** for the full specification and **`ACHIEVEMENT-BLUEPRINT.md`** for the implementation plan.
 
@@ -112,3 +112,27 @@ See **`ACHIEVEMENTS.md`** for the full specification and **`ACHIEVEMENT-BLUEPRIN
 - **Modal state lives on `G` (`_showAchievementModal`, `_showLifetimeModal`, `_lifetimeModalFrom`, `_lifetimeScrollY`, `_lifetimeMaxScroll`, `_levelEndEmitted`).** These are render/input flags read by `update.js`/`screens.js`/`input.js` and set by game lifecycle code — NOT achievement-tracking state, which stays module-local in `achievements.js` (per the Phase 1 non-negotiable). The blueprint UI spec names `G._showAchievementModal`/`G._lifetimeScrollY` explicitly; the rest follow the same convention as `G._allEnemiesDeadEmitted`.
 
 - **233/233 headless tests pass** (`node test-achievements.js`). Section 38 adds 17 checks: empty-then-populated summary, summary well-formedness + isNew flagging + NEW!-first ordering + per-level reset, grouped lifetime shape + ordering (Accuracy first), hidden-masking (`???`) and unmask-on-Bronze, and stub/compat exclusion.
+
+**Phase 7 decisions (hidden, time-based, weekly meta):**
+
+- **Time-based achievements checked once at `initAchievements()`.** `_checkTimeBased()` reads `new Date()` local time (getHours/getMinutes/getDay) and fires `_inc` + `_pushBanner` for whichever windows the player is in: `sec_graveyard` (00:00–03:59), `sec_clock_watcher` (17:00–17:14 Mon–Fri), `sec_monday` (08:00–08:59 on getDay()===1). Banners push immediately; XP is awarded via `_checkTiers` when Bronze is crossed.
+
+- **`sec_phantom` extends the existing `player:stood_still` handler.** The handler already set `_session.levelStoodStill = true`; Phase 7 adds a `durationMs >= 10000` guard before incrementing `sec_phantom` and pushing a banner. The event is emitted by `player.js` with `durationMs` already in the payload.
+
+- **`sec_wrongful` uses `_session.achievementEarnedThisLevel`.** The flag is set inside `_pushBanner` (every banner push sets it true) and cleared by `_onLevelStart`. `_onPlayerDied` checks it; this correctly captures any achievement banner earned after `level:start` but before death. Fires `_inc` + `_pushBanner` on detection.
+
+- **`sec_dead_end` and `sec_pink_slip` both read `level` from the `player:died` payload.** All three `player:died` emits in `combat.js` now pass `{ level: G.level }`. `sec_dead_end` fires whenever `level === 1`. `sec_pink_slip` (one-time only) additionally guards on `prg_temp.progress === 0` (no levels ever cleared) and `sec_pink_slip.progress === 0` (not already earned).
+
+- **`sec_mandatory_ot`: session playtime accumulated across `run:start`→`run:end` into `_session.sessionPlayMs`.** `_onRunEnd` adds `Date.now() - _session.runStartTime` to `sessionPlayMs`, then checks whether the total exceeds 7,200,000 ms (2 hours). `sessionPlayMs` resets in `initAchievements()` (new game), so it measures continuous same-session play.
+
+- **EOTW detection fires from both `_weeklyUnlock` and `_weeklyInc` first-completion.** `_checkEOTW()` is called by `_weeklyInc` (on the first increment of each weekly, progress 0→1) and by `_weeklyUnlock` (one-shot weeklies). Inside `_checkEOTW`, all 5 active weeklies are checked via `_weekly[id].progress >= 1 || _weekly[id].unlocked`; a `meta_eotw` weekly flag guards against double-firing within the same week. `_inc('meta_eotw')` then increments lifetime progress and `_checkTiers` handles tier banners.
+
+- **`meta_consecutive` via `add_eotw_streak` in localStorage.** `_updateEOTWStreak()` is called after each EOTW completion. It reads `{ count, lastWeekKey }` from localStorage, checks whether `lastWeekKey` equals `_prevISOWeekKey(currentKey)` (the immediately preceding ISO week), and increments the streak if so; otherwise resets to 1. `meta_consecutive` is incremented (via `_inc`) when `streak.count >= 2`. `_prevISOWeekKey` is exported for unit testing.
+
+- **`meta_model` is implicitly tracked via `_inc('meta_eotw')`.** Since `meta_eotw` is in REGISTRY with tiers `[1,5,10,25,52]`, each EOTW completion increments its lifetime progress and `_checkTiers` awards tier banners and XP at each threshold. No separate counter needed.
+
+- **XP schema:** `add_xp` in localStorage (number). Per-tier XP: 10/25/50/100/200 (Bronze→Diamond). Weekly first-completion: 10 XP (both `_weeklyUnlock` and `_weeklyInc` first-completion paths). EOTW bonus: 50 XP. Amounts are provisional (ACHIEVEMENTS.md marks thresholds as TODO pending playtesting). `_addXP(amount)` is a single helper called from `_checkTiers`, `_weeklyUnlock`, `_weeklyInc`, and `_checkEOTW`. `getXP()` is exported; `screens.js` imports it to display total XP on the title screen (amber text above the high-score line; only shown when XP > 0).
+
+- **New REGISTRY categories: `meta` (Weekly Meta) and `sec` (Secret).** Added to `CATEGORIES` in `achievements.js`; the lifetime modal now shows them in two new groups after Progression. Hidden achievements in both categories (`sec_*`, `meta_consecutive`) follow the standard masking rule (masked as `???` until Bronze earned). `meta_eotw` and `meta_model` are not hidden. `sec_pink_slip` and `meta_consecutive` have tiers `[1]` (one-time only; no further tiers).
+
+- **263/263 headless tests pass** (`node test-achievements.js`). Sections 39–45 add 30 checks: time-based fire/no-fire at window boundaries (graveyard, clock_watcher, monday including weekday gate), sec_phantom 10s threshold vs 5s, sec_pink_slip one-time-only + not-after-prior-progress, sec_wrongful fires-with-achievement / does-not-fire-without, EOTW structural (panel shape + initial lock), EOTW functional (all 5 accuracy weeklies complete → meta_eotw lifetime progress increments), meta_consecutive consecutive vs non-consecutive week detection, _prevISOWeekKey format and adjacency, XP starts at 0 + increments on tier unlock + increments on weekly completion.
