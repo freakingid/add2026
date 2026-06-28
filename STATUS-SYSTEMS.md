@@ -1,3 +1,10 @@
+# Atomic Dustbin Dan — Completed System Decisions
+
+Cold-storage reference for finished systems. Open this only when modifying one
+of these specifically. Active system decisions are in STATUS.md.
+
+---
+
 ### Ranged system (Security / `ebolts`)
 
 - **Shared i-frame window:** enemy bolts use the SAME `CFG.DAN_IFRAME` window as melee, so a Forklift charge and a taser bolt landing the same instant can't double-dip. (Alt: per-bolt independent invuln.)

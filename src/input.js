@@ -16,7 +16,8 @@
 import { CFG } from "./config.js";
 import { canvas, VIEW_W, VIEW_H } from "./canvas.js";
 import { G } from "./state.js";
-import { newGame, nextLevel } from "./level.js";
+import { newGame, nextLevel, resumeFromSave } from "./level.js";
+import { loadSave } from "./savegame.js";
 import { unlock, toggleMute } from "./audio.js";
 import { emit } from "./events.js";
 import { openPause, handlePauseKeydown } from "./pause.js";
@@ -258,6 +259,17 @@ function startRun(inputDevice, gameMode = "levelPlan", playlist = null){
   emit('run:input_mode_set', { mode: inputDevice });
 }
 
+// Load a save from the title load screen. Empty slot = no-op.
+// Always uses keyboard mode — the opposing device still works in-game.
+function _tryLoadFromTitle(slot){
+  const data = loadSave(slot);
+  if (!data) return;
+  newGame();
+  G.inputMode = "keyboard";
+  resumeFromSave(data, G.availablePlaylists);
+  G._titlePhase = "input";
+}
+
 // Advance _titlePhase after the player has locked an input device.
 // Called from keydown (keyboard) and pollGamepad (gamepad) once device is chosen.
 function advanceTitleToMode(inputDevice){
@@ -321,6 +333,24 @@ addEventListener("keydown", e => {
       && !G._showAchievementModal
       && !G._showLifetimeModal){
     openPause();
+    return;
+  }
+
+  // Title "load" phase key handling
+  if (G.state === "title" && G._titlePhase === "load" && !G._showLifetimeModal){
+    if (k === "escape")                         { G._titlePhase = "input"; return; }
+    if (k === "arrowup"   || k === "w")
+      G._loadSaveCursor = (G._loadSaveCursor - 1 + 5) % 5;
+    if (k === "arrowdown" || k === "s")
+      G._loadSaveCursor = (G._loadSaveCursor + 1) % 5;
+    if (k === "enter" || k === " ")             { _tryLoadFromTitle(G._loadSaveCursor); }
+    return;
+  }
+
+  // Title "input" phase: L key opens the load screen
+  if (G.state === "title" && G._titlePhase === "input" && k === "l"){
+    G._titlePhase = "load";
+    G._loadSaveCursor = 0;
     return;
   }
 

@@ -10,6 +10,7 @@ import { G, levelType } from "./state.js";
 import { POWERUPS, POWERUP_KEYS } from "./config.js";
 import { COL } from "./palette.js";
 import { getWeeklyAchievements, getLevelAchievementSummary, getLifetimeAchievements, getXP } from "./achievements.js";
+import { listSaves } from "./savegame.js";
 
 /* ---- HUD + screens ------------------------------------------------------ */
 export function drawHUD(){
@@ -227,6 +228,7 @@ function drawTitleLogo(yOffset){
 }
 
 export function drawTitle(){
+  if (G._titlePhase === "load")     { _drawTitleLoadScreen(); return; }
   if (G._titlePhase === "mode")     { drawTitleModeSelect(); return; }
   if (G._titlePhase === "playlist") { drawTitlePlaylistPicker(); return; }
 
@@ -248,6 +250,11 @@ export function drawTitle(){
     ctx.fillStyle = COL.atomic;
     ctx.fillText("A / START — GAMEPAD", VIEW_W/2, VIEW_H/2 + 174);
   }
+  // L key hint to load a saved game
+  ctx.font = "bold 13px 'Courier New', monospace";
+  ctx.fillStyle = "#6f7884";
+  ctx.fillText("L — LOAD GAME", VIEW_W/2, VIEW_H/2 + 198);
+
   if (G.high > 0){
     ctx.fillStyle = "#6f7884";
     ctx.font = "bold 11px 'Courier New', monospace";
@@ -267,6 +274,58 @@ export function drawTitle(){
 
   drawFireLegend(28, VIEW_H - 150);
   drawWeeklyPanel(VIEW_W - 300, 64);
+}
+
+// Title load screen — shows all 5 save slots for selection.
+function _drawTitleLoadScreen(){
+  drawTitleBackdrop();
+
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "bold 28px 'Arial Black', sans-serif";
+  ctx.fillStyle = COL.soap;
+  ctx.fillText("LOAD GAME", VIEW_W/2, VIEW_H/2 - 140);
+
+  const saves = listSaves();
+  const startY = VIEW_H/2 - 96;
+  for (let i = 0; i < 5; i++){
+    const slot = saves[i];
+    const sy = startY + i * 58;
+    const selected = (G._loadSaveCursor === i);
+
+    if (selected){
+      ctx.fillStyle = "rgba(95, 210, 255, 0.08)";
+      ctx.fillRect(VIEW_W/2 - 220, sy - 4, 440, 50);
+      ctx.strokeStyle = COL.soap; ctx.lineWidth = 1; ctx.globalAlpha = 0.5;
+      ctx.strokeRect(VIEW_W/2 - 220, sy - 4, 440, 50);
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.font = "bold 11px 'Courier New', monospace";
+    ctx.fillStyle = selected ? COL.soap : "#6f7884";
+    ctx.fillText(`SLOT ${i + 1}`, VIEW_W/2 - 208, sy + 10);
+
+    if (slot.data){
+      ctx.font = "bold 15px 'Courier New', monospace";
+      ctx.fillStyle = selected ? COL.text : "rgba(232,235,239,0.7)";
+      ctx.fillText(slot.data.name, VIEW_W/2 - 208, sy + 28);
+      ctx.font = "11px 'Courier New', monospace";
+      ctx.fillStyle = "#6f7884";
+      ctx.fillText(`LV ${slot.data.level}  ·  ${String(slot.data.score).padStart(6,"0")} PTS`, VIEW_W/2 - 60, sy + 28);
+      ctx.textAlign = "right";
+      ctx.fillText(new Date(slot.data.savedAt).toLocaleDateString(), VIEW_W/2 + 208, sy + 28);
+    } else {
+      ctx.font = "italic 13px 'Courier New', monospace";
+      ctx.fillStyle = "#2a303a";
+      ctx.textAlign = "center";
+      ctx.fillText("— EMPTY —", VIEW_W/2, sy + 22);
+    }
+  }
+
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "bold 12px 'Courier New', monospace";
+  ctx.fillStyle = "#6f7884";
+  ctx.fillText("↑ / ↓ — SELECT   ·   ENTER — LOAD   ·   ESC — BACK", VIEW_W/2, VIEW_H/2 + 168);
 }
 
 // Mode select screen: LEVEL PLAN vs HAND AUTHORED.

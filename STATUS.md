@@ -38,7 +38,7 @@ All core systems are complete. The table below is the canonical build status; GD
 | Audio — 18 SFX + looping conveyor bed | ✅ Built | §10 | `audio.js` |
 | Game states (title / playing / levelclear / dead) | ✅ Built | — | `state.js`, `screens.js` |
 | Achievement system | 🔧 In progress — Phase 5 complete | `ACHIEVEMENTS.md`, `ACHIEVEMENT-BLUEPRINT.md` | `events.js`, `achievements.js`, `screens.js`, `render.js`, `audio.js` |
-| Pause menu + Save/Load system | 🔧 Phase 2 complete | — | `pause.js`, `update.js`, `render.js`, `input.js`, `audio.js` |
+| Pause menu + Save/Load system | ✅ Built | — | `savegame.js`, `pause.js`, `screens.js`, `input.js`, `level.js`, `audio.js`, `update.js`, `render.js` |
 | Sprite-art polish | 🔲 Not built | §10 | — |
 
 > Cross-cutting "do not silently change" rules (HP/score persistence, decrement model,
@@ -294,7 +294,7 @@ All core systems are complete. The table below is the canonical build status; GD
 
 ---
 
-### Pause menu (Phase 2)
+### Pause menu + Save/Load system
 
 - **`state="paused"` freezes the world.** `update.js` returns immediately after
   `pollPause(dt)` when `G.state === "paused"` — no Dan, enemies, spawns, or effects
@@ -311,9 +311,26 @@ All core systems are complete. The table below is the canonical build status; GD
 - **Belt hum stops immediately on `openPause()`.** `sfx.conveyor(false)` is called
   inside `openPause`. The hum naturally resumes on the next `update()` frame after
   `closePause()` if Dan is still on a belt (`G.dan.onBelt` check in `update.js`).
-- **Phase 2 sub-screens:** `menu` / `options` / `confirm_quit`. The `"SAVE & QUIT"`
-  menu entry currently leads to `confirm_quit` as a stub; the real save picker /
-  name-entry flow is Phase 3 (`pause.js` + `screens.js` additions).
+- **All pause sub-screens:** `menu` / `options` / `save` / `confirm_overwrite` /
+  `confirm_quit` / `name_entry`. `SAVE & QUIT` opens the 5-slot picker; picking an
+  occupied slot shows overwrite confirm; an empty slot (or YES on overwrite) goes to
+  name entry; committing calls `saveGame()` then `_doQuitToTitle()`.
+- **Save = level start, not mid-level position.** `_buildSnapshot()` reads G fields at
+  save time; on resume `resumeFromSave` restores those fields then calls `buildLevel()`
+  — the player re-plays from the top of the saved level.
+- **Gamepad name entry accepts default name `"SAVE N"`.** Keyboard gets full typed
+  entry via `handlePauseKeydown` (printable chars, Backspace, Enter); gamepad players
+  confirm with A/Start to accept the default (or B to cancel back to the slot picker).
+- **Title load screen is `G._titlePhase = "load"`.** L key on the input phase
+  activates it; rendered by `_drawTitleLoadScreen()` in `screens.js`. Up/Down to
+  navigate, Enter to load, ESC to return. Empty slot Enter = no-op.
+- **Load always sets `G.inputMode = "keyboard"` before `resumeFromSave`.** This must
+  be set before `resumeFromSave` calls `buildLevel` → `G.state = "playing"`, so audio
+  and the game loop have a non-null mode immediately. Gamepad still works in-game via
+  the existing polling.
+- **High score loaded at boot** from `add_high` localStorage key via
+  `atomic-dustbin-dan.html` (`G.high = loadHighScore()` before the loop starts).
+  `_doQuitToTitle()` also updates `G.high` from `G.score` before quitting.
 
 ### Save/Load system (savegame.js — Phase 1)
 
