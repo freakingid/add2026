@@ -9,6 +9,7 @@ import { ctx, VIEW_W, VIEW_H } from "./canvas.js";
 import { G, levelType } from "./state.js";
 import { POWERUPS, POWERUP_KEYS } from "./config.js";
 import { COL } from "./palette.js";
+import { getWeeklyAchievements } from "./achievements.js";
 
 /* ---- HUD + screens ------------------------------------------------------ */
 export function drawHUD(){
@@ -164,6 +165,73 @@ export function drawTitle(){
   }
 
   drawFireLegend(28, VIEW_H - 150);
+  drawWeeklyPanel(VIEW_W - 300, 64);
+}
+
+// Right-side column listing this week's 5 active weekly achievements plus the
+// Employee-of-the-Week meta slot (Phase 5). Reads live progress from
+// achievements.js via getWeeklyAchievements(); does not overlap the centered
+// title/options or the lower-left fire legend. Title-state only.
+const GOLD = "#ffd24a";
+function drawWeeklyPanel(ox, oy){
+  const data = getWeeklyAchievements();
+  if (!data || data.length === 0) return;
+
+  const PANEL_W = 272, ROW_H = 28;
+  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+
+  // header
+  ctx.fillStyle = "#9aa3ae";
+  ctx.font = "bold 11px 'Courier New', monospace";
+  ctx.fillText("WEEKLY ACHIEVEMENTS", ox, oy - 8);
+
+  for (let i = 0; i < data.length; i++){
+    const e = data[i];
+    const y = oy + i * ROW_H;
+    const isMeta = e.id === 'meta_eotw';
+
+    // subtle row backing; the EOTW meta row gets a faint divider above it
+    if (isMeta){
+      ctx.strokeStyle = "#2c333d";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(ox, y - 5.5);
+      ctx.lineTo(ox + PANEL_W, y - 5.5);
+      ctx.stroke();
+    }
+
+    const done = e.unlocked;
+    // name (white, dimmed when complete)
+    ctx.fillStyle = done ? "#b9c0c9" : (isMeta ? COL.amber : "#e8ebef");
+    ctx.font = (isMeta ? "bold 13px" : "bold 12px") + " 'Courier New', monospace";
+    ctx.fillText(e.name, ox, y + 4);
+
+    // description (grey, smaller)
+    ctx.fillStyle = "#727b86";
+    ctx.font = "9px 'Courier New', monospace";
+    ctx.fillText(e.description || "", ox, y + 15);
+
+    // progress indicator, right-aligned
+    ctx.textAlign = "right";
+    if (done){
+      ctx.fillStyle = GOLD;
+      ctx.font = "bold 13px 'Courier New', monospace";
+      ctx.fillText("✔", ox + PANEL_W, y + 6);
+    } else {
+      ctx.fillStyle = "#8b94a0";
+      ctx.font = "bold 11px 'Courier New', monospace";
+      const label = e.target > 1 ? `${e.progress} / ${e.target}` : "☐";
+      ctx.fillText(label, ox + PANEL_W, y + 4);
+    }
+    ctx.textAlign = "left";
+  }
+
+  // "View All Achievements" text button (Phase 5: visual placeholder only;
+  // interaction lands in Phase 6).
+  const by = oy + data.length * ROW_H + 10;
+  ctx.fillStyle = COL.soap;
+  ctx.font = "bold 11px 'Courier New', monospace";
+  ctx.fillText("▸ VIEW ALL ACHIEVEMENTS", ox, by);
 }
 
 // Compact 3x3 reference of the keyboard fire layout (GDD §4.3): O/P/L/K cardinals,

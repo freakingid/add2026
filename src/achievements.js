@@ -14,6 +14,7 @@
    Imports only from events.js (dependency flows one way to game modules).
    ========================================================================= */
 import { on, off } from './events.js';
+import { sfx } from './audio.js';
 
 /* ---- localStorage helpers (no-op when localStorage is unavailable) ------- */
 function lsGet(key) {
@@ -79,6 +80,9 @@ export function popAchievementBanner() {
 function _pushBanner(text, subtext) {
   if (_bannerQueue.length >= 5) _bannerQueue.shift(); // cap queue at 5
   _bannerQueue.push({ text, subtext, timestamp: Date.now() });
+  // Direct sfx call — same one-way pattern as every other module (achievements
+  // → audio). The pub/sub bus is for tracking events, not for audio.
+  sfx.achievement();
 }
 
 /* ---- Module-local session state ----------------------------------------- */
@@ -225,13 +229,13 @@ function _unlockWeekly(id) {
    -------------------------------------------------------------------- */
 const REGISTRY = {
   /* Accuracy (Phase 4: evaluated at level:end from levelShotsFired / levelShotsHits) */
-  acc_participation: { name:'Participation Trophy', tiers:[5,15,35,75,150],  weekly:true  },
-  acc_spray:         { name:'Spray and Pray',       tiers:[3,10,25,50,100],  weekly:false },
-  acc_marksman:      { name:'Marksman',             tiers:[5,15,35,75,150],  weekly:true  },
-  acc_sharpshooter:  { name:'Sharpshooter',         tiers:[3,10,25,50,100],  weekly:true  },
-  acc_surgical:      { name:'Surgical',             tiers:[1,5,15,35,75],    weekly:true  },
-  acc_one_job:       { name:'One Job',              tiers:[1,3,10,25,50],    weekly:false },
-  acc_quality:       { name:'Quality over Quantity',tiers:[3,10,25,50,100],  weekly:true  },
+  acc_participation: { name:'Participation Trophy', desc:'Clear a level at 50% accuracy or less', tiers:[5,15,35,75,150],  weekly:true  },
+  acc_spray:         { name:'Spray and Pray',       desc:'Clear a level at 30% accuracy or less', tiers:[3,10,25,50,100],  weekly:false },
+  acc_marksman:      { name:'Marksman',             desc:'Clear a level at 75%+ accuracy',        tiers:[5,15,35,75,150],  weekly:true  },
+  acc_sharpshooter:  { name:'Sharpshooter',         desc:'Clear a level at 85%+ accuracy',        tiers:[3,10,25,50,100],  weekly:true  },
+  acc_surgical:      { name:'Surgical',             desc:'Clear a level at 95%+ accuracy',        tiers:[1,5,15,35,75],    weekly:true  },
+  acc_one_job:       { name:'One Job',              desc:'Clear a level with no missed shots',    tiers:[1,3,10,25,50],    weekly:false },
+  acc_quality:       { name:'Quality over Quantity',desc:'Clear a level using 10 shots or fewer', tiers:[3,10,25,50,100],  weekly:true  },
 
   /* Bounce Shot (Phase 4: per-shot tracking on enemy:died payload) */
   bnc_bank:            { name:'Bank Shot',          tiers:[10,30,75,150,300], weekly:true  },
@@ -1052,8 +1056,73 @@ export function initAchievements() {
   }
 }
 
+/* ---- Weekly rotation (Phase 5) ------------------------------------------
+   The active weekly set is selected by `setIndex = isoWeekNumber % totalSets`.
+   The full set-by-set rotation has NOT been authored yet, so as a PLACEHOLDER
+   we return the first 5 weekly-eligible achievements from the registry as the
+   active set for every week. Replace this with the authored rotation table
+   (sets of 5 achievement ids, indexed by setIndex) once it exists — only this
+   `_activeWeeklyIds()` body needs to change; the assembly below stays.
+   -------------------------------------------------------------------------- */
+function _isoWeekNumber() {
+  // Mirrors isoWeekKey(); returns just the integer ISO week number.
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
+
+function _activeWeeklyIds() {
+  // PLACEHOLDER: first 5 weekly-eligible, non-stub, non-compat achievements.
+  // setIndex is computed for forward-compat but unused until a rotation table exists.
+  const setIndex = _isoWeekNumber() % 1; // totalSets === 1 placeholder → always 0
+  void setIndex;
+  const ids = [];
+  for (const [id, reg] of Object.entries(REGISTRY)) {
+    if (reg.weekly && !reg.stub && !reg.name.startsWith('_compat')) ids.push(id);
+    if (ids.length === 5) break;
+  }
+  return ids;
+}
+
+/* Returns 6 entries for the title-screen weekly panel: the 5 active weekly
+   achievements plus the meta_eotw slot (count of the 5 completed this week).
+   Each entry: { id, name, description, progress, target, unlocked }. */
+export function getWeeklyAchievements() {
+  const activeIds = _activeWeeklyIds();
+  const entries = activeIds.map(id => {
+    const reg = REGISTRY[id];
+    const w = _weekly[id] ?? { unlocked: false, progress: 0 };
+    const progress = w.progress ?? 0;
+    // "Completed this week" = completed at least once. Accumulating weeklies bump
+    // `progress` via _weeklyInc without flipping `unlocked`, so derive completion
+    // from either signal.
+    const unlocked = !!w.unlocked || progress >= 1;
+    return {
+      id,
+      name: reg.name,
+      description: reg.desc ?? '',
+      progress,
+      target: 1,                 // weekly = complete-at-least-once this week
+      unlocked,
+    };
+  });
+
+  const completedCount = entries.filter(e => e.unlocked).length;
+  entries.push({
+    id: 'meta_eotw',
+    name: 'Employee of the Week',
+    description: 'Complete all 5 weekly achievements',
+    progress: completedCount,
+    target: activeIds.length,
+    unlocked: completedCount >= activeIds.length && activeIds.length > 0,
+  });
+
+  return entries;
+}
+
 /* Getters for render / UI modules (Phase 5+, stubs here). */
-export function getWeeklyAchievements() { return []; }
 export function getLevelAchievementSummary() { return []; }
 export function getLifetimeAchievements() { return _lifetime; }
 export function getXP() { return lsGet(KEY_XP) ?? 0; }

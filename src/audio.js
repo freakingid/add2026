@@ -242,6 +242,13 @@ export const sfx = {
       { type:"sine", gain:0.22, gap:0.06 });
     tone({ type:"triangle", freq:110, freqEnd:55, dur:0.95, gain:0.15 }); },
 
+  // Achievement unlocked / weekly progress — a short, bright ascending two-tone
+  // blip. Deliberately distinct from `rescue` (triangle up-blip): this is a
+  // crisper square pair climbing a perfect fifth, signalling a meta reward
+  // rather than an in-world rescue.
+  achievement(){ if (!ensure()) return;
+    sequence([{freq:784,dur:0.07},{freq:1175,dur:0.13}], { type:"square", gain:0.18, gap:0.02 }); },
+
   // Level cleared — 4-note ascending victory jingle.
   levelClear(){ if (!ensure()) return;
     sequence([{freq:523,dur:0.11},{freq:659,dur:0.11},{freq:784,dur:0.11},{freq:1047,dur:0.2}],

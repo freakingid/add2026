@@ -15,7 +15,12 @@ import { drawEnemies, drawEbolts } from "./render-entities.js";
 import { drawHUD, drawTitle, drawLevelClear, drawGameOver } from "./screens.js";
 import { popAchievementBanner } from "./achievements.js";
 
-/* ---- Achievement banner ------------------------------------------------- */
+/* ---- Achievement banner (Phase 5: full spec) ----------------------------
+   Bottom-center, semi-transparent dark rect. Top line = achievement name
+   (bold white); bottom line = subtext ("Bronze unlocked" for lifetime tiers,
+   "Weekly progress" for weekly), supplied by achievements.js at push time.
+   The queue drains one banner at a time, each shown for BANNER_DURATION ms;
+   a new pop only happens once the current banner expires (or none is active). */
 const BANNER_DURATION = 2500; // ms
 let _currentBanner = null;
 let _bannerReceivedAt = 0;

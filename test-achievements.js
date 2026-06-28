@@ -14,6 +14,9 @@ globalThis.localStorage = {
 };
 // performance.now stub
 globalThis.performance = { now: () => 1000 };
+// window stub — audio.js's ensure() reads window.AudioContext; absent here so
+// sfx calls (fired when a banner is pushed) safely no-op.
+globalThis.window = {};
 
 function clearStorage() { for (const k of Object.keys(_store)) delete _store[k]; }
 
@@ -21,7 +24,7 @@ function clearStorage() { for (const k of Object.keys(_store)) delete _store[k];
 const { emit, on, off } = await import('./src/events.js');
 const {
   initAchievements, popAchievementBanner, isoWeekKey,
-  getLifetimeAchievements,
+  getLifetimeAchievements, getWeeklyAchievements,
   noLateralMovement, aimFightsBelt,
 } = await import('./src/achievements.js');
 
@@ -1646,6 +1649,55 @@ console.log('\n=== Section 36 (P4): cmb_recall_notice ===');
   assertEq(getLifetimeAchievements()['cmb_recall_notice']?.progress, 1, 'cmb_recall_notice on homing→wall redirect');
   emit('bolt:homing_redirected', { hit:'enemy' });
   assertEq(getLifetimeAchievements()['cmb_recall_notice']?.progress, 2, 'cmb_recall_notice on homing→enemy redirect');
+}
+
+/* ==========================================================================
+   SECTION 37 (P5): getWeeklyAchievements() — title-screen panel data
+   ========================================================================== */
+console.log('\n=== Section 37 (P5): getWeeklyAchievements() ===');
+
+{
+  freshInit();
+  const weekly = getWeeklyAchievements();
+
+  // 5 active weekly achievements + the meta_eotw slot.
+  assertEq(weekly.length, 6, 'getWeeklyAchievements returns 6 entries');
+
+  // Last entry is the EOTW meta slot, target == number of active weeklies.
+  const meta = weekly[weekly.length - 1];
+  assertEq(meta.id, 'meta_eotw', 'last entry is meta_eotw');
+  assertEq(meta.target, 5, 'meta_eotw target is 5 (one per active weekly)');
+
+  // Every entry is well-formed.
+  const wellFormed = weekly.every(e =>
+    typeof e.id === 'string' && e.id.length > 0 &&
+    typeof e.name === 'string' && e.name.length > 0 &&
+    typeof e.description === 'string' &&
+    typeof e.progress === 'number' &&
+    typeof e.target === 'number' &&
+    typeof e.unlocked === 'boolean');
+  assert(wellFormed, 'every weekly entry is well-formed {id,name,description,progress,target,unlocked}');
+
+  // Fresh week → nothing unlocked yet, meta progress 0.
+  assert(weekly.every(e => e.unlocked === false), 'fresh week: no weekly entry unlocked');
+  assertEq(meta.progress, 0, 'fresh week: meta_eotw progress is 0');
+
+  // Completing an active weekly reflects in the panel (unlocked + meta count up).
+  const firstId = weekly[0].id;
+  // acc_marksman is the first placeholder weekly id; trigger its high-accuracy path.
+  emit('run:start'); emit('level:start', { terminalCount:1, workerCount:5 });
+  // Fire 4 shots, hit 4 → 100% accuracy → unlocks the high-accuracy weeklies.
+  for (let i = 0; i < 4; i++) emit('bolt:fired', { kind:'standard', isTripleShotActive:false });
+  for (let i = 0; i < 4; i++) emit('bolt:hit', { targetType:'picker' });
+  emit('level:all_enemies_dead');
+  emit('level:end', { levelTime:30000, workersRescued:0, levelNumber:1 });
+
+  const after = getWeeklyAchievements();
+  const someUnlocked = after.some(e => e.id !== 'meta_eotw' && e.unlocked);
+  assert(someUnlocked, 'completing an accuracy weekly marks it unlocked in the panel');
+  const metaAfter = after[after.length - 1];
+  assert(metaAfter.progress >= 1, 'meta_eotw progress reflects completed weeklies');
+  void firstId;
 }
 
 /* ==========================================================================

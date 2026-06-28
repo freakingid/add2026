@@ -33,9 +33,9 @@ All core systems are complete. The table below is the canonical build status; GD
 | Level Definition format + loader | ✅ Built | §8.1 | `level.js`, `world.js` |
 | Hand-authored levels (5 levels) | ✅ Built | §8.1 | `levels/authored-levels.js` |
 | Conveyor push mechanic + rendering + hum | ✅ Built | §8.1.2 | `world.js`, `render.js` |
-| Audio — 17 SFX + looping conveyor bed | ✅ Built | §10 | `audio.js` |
+| Audio — 18 SFX + looping conveyor bed | ✅ Built | §10 | `audio.js` |
 | Game states (title / playing / levelclear / dead) | ✅ Built | — | `state.js`, `screens.js` |
-| Achievement system | 🔧 In progress — Phase 4 complete | `ACHIEVEMENTS.md`, `ACHIEVEMENT-BLUEPRINT.md` | `events.js`, `achievements.js` |
+| Achievement system | 🔧 In progress — Phase 5 complete | `ACHIEVEMENTS.md`, `ACHIEVEMENT-BLUEPRINT.md` | `events.js`, `achievements.js`, `screens.js`, `render.js`, `audio.js` |
 | Sprite-art polish | 🔲 Not built | §10 | — |
 
 > Cross-cutting "do not silently change" rules (HP/score persistence, decrement model,
@@ -368,7 +368,7 @@ All core systems are complete. The table below is the canonical build status; GD
 
 ---
 
-## Achievement system (Phase 1 complete)
+## Achievement system (Phase 5 complete)
 
 See **`ACHIEVEMENTS.md`** for the full specification and **`ACHIEVEMENT-BLUEPRINT.md`** for the implementation plan.
 
@@ -405,7 +405,7 @@ See **`ACHIEVEMENTS.md`** for the full specification and **`ACHIEVEMENT-BLUEPRIN
 
 - **`G._levelStartTime` / `G._runStartTime` / `G._allEnemiesDeadEmitted`.** Three new tracking fields added to `G` in `state.js`. These are set by game lifecycle code (`level.js`, `update.js`), not by `achievements.js`, so they aren't achievement-module state on `G` — they're timing primitives used by emitter call sites. `achievements.js` never writes to `G`.
 
-- **80/80 headless tests pass (Phase 2), 149/149 (Phase 3), 211/211 (Phase 4)** (`node test-achievements.js`). Phase 2: 22 sections covering pub/sub correctness, isoWeekKey format, init round-trip, cmb_foam_party Bronze trigger and cross-session persistence, all payload shapes, week rollover discard, parallel lifetime counters, and banner queue behaviour. Phase 3: 8 additional sections (23–30) covering Progression, Survival, Speed, Worker Rescue, Atomic Dustbin, Power-Ups & Items, Score stubs, and Combat. Phase 4: 6 additional sections (31–36) covering bounce-shot thresholds, final-sweep/wall-flower, accuracy at level:end, the Confrontational cross-product math (unit-tested directly), Blind Shot / Wrong Aisle, and Recall Notice.
+- **80/80 headless tests pass (Phase 2), 149/149 (Phase 3), 211/211 (Phase 4), 219/219 (Phase 5)** (`node test-achievements.js`). Phase 2: 22 sections covering pub/sub correctness, isoWeekKey format, init round-trip, cmb_foam_party Bronze trigger and cross-session persistence, all payload shapes, week rollover discard, parallel lifetime counters, and banner queue behaviour. Phase 3: 8 additional sections (23–30) covering Progression, Survival, Speed, Worker Rescue, Atomic Dustbin, Power-Ups & Items, Score stubs, and Combat. Phase 4: 6 additional sections (31–36) covering bounce-shot thresholds, final-sweep/wall-flower, accuracy at level:end, the Confrontational cross-product math (unit-tested directly), Blind Shot / Wrong Aisle, and Recall Notice. Phase 5: Section 37 covers `getWeeklyAchievements()` shape (6 entries, EOTW meta slot, well-formedness, fresh-week zeros, and reflecting a completed accuracy weekly).
 
 **Phase 3 decisions:**
 
@@ -450,3 +450,15 @@ See **`ACHIEVEMENTS.md`** for the full specification and **`ACHIEVEMENT-BLUEPRIN
 - **Accuracy is evaluated once at `level:end` from `levelShotsFired` vs `levelBoltHits`.** `bolt:fired` increments fired (one per trigger); `bolt:hit` increments hits (one per connecting bullet, so a Triple can give 3 hits / 1 fired → accuracy can exceed 1.0). `acc_one_job` ("no missed shots") = `hits >= fired`; `acc_quality` = `fired <= 10 && levelAllEnemiesDeadReached`. No award when zero shots were fired.
 
 - **Recall Notice via a new `bolt:homing_redirected` event from `projectiles.js`.** Homing missiles get `targetedDan:true` at creation (they always acquire Dan). `updateHoming` emits `bolt:homing_redirected` when a Dan-targeting missile detonates on a wall or runs into a ground robot (i.e. anything but Dan); range-expiry and Dan-hits do not emit. The handler increments `cmb_recall_notice`. (`projectiles.js` now imports `emit` — it was the one emitter module the blueprint left off the Phase 2 wiring.)
+
+**Phase 5 decisions (UI — weekly panel + full banner):**
+
+- **`getWeeklyAchievements()` returns a fixed 6-entry array — placeholder active set.** The 5 active weekly slots + the `meta_eotw` slot. The active set is meant to be selected by `setIndex = isoWeekNumber % totalSets`, but the per-set rotation table isn't authored yet, so `_activeWeeklyIds()` returns the first 5 weekly-eligible, non-stub, non-`_compat` achievements from `REGISTRY` for every week (clearly commented as the single body to replace once the rotation exists; `_isoWeekNumber()` is already computed for forward-compat). Each entry is `{ id, name, description, progress, target, unlocked }`. The accuracy-set placeholders (`acc_participation/marksman/sharpshooter/surgical/quality`) gained `desc:` fields in `REGISTRY` so the panel shows real one-liners; all other entries fall back to `''`.
+
+- **Panel `unlocked` is derived (`progress >= 1 || stored.unlocked`).** Accumulating weeklies use `_weeklyInc` (bumps `progress`) and never flip the stored `unlocked` flag, which is only set by the one-shot `_weeklyUnlock` path. Per the blueprint's "completed at least once this week" semantics, the panel treats either signal as completion. `meta_eotw.progress` = count of active weeklies with `unlocked` true; its `target` = number of active weeklies (5).
+
+- **Weekly panel = right-side column in `drawTitle()` (`screens.js`).** Drawn at `(VIEW_W-300, 64)` as a 6-row × ~28px list; it clears the centered title/options (centered at `VIEW_W/2`) and the lower-left fire legend. Name in white (dimmed grey when complete), description in small grey, progress right-aligned: a gold `✔` when complete, else `n / target` (when target>1) or `☐`. The EOTW meta row is amber with a divider above it. A `▸ VIEW ALL ACHIEVEMENTS` soap-colored text button sits below the list — **visual placeholder only**; interaction lands in Phase 6. `screens.js` now imports `getWeeklyAchievements` from `achievements.js` (one-way: render reads achievements).
+
+- **Full in-play banner in `render.js`.** Bottom-center semi-transparent dark rounded rect; top line = achievement name (bold white), bottom line = subtext supplied by `achievements.js` at push time (`"Bronze unlocked"` for lifetime tiers, `"Weekly progress"` for weekly). 2500 ms display; the queue drains one at a time, with a new `popAchievementBanner()` only after the current banner expires or none is active (`_currentBanner`/`_bannerReceivedAt` module-locals in `render.js`).
+
+- **`sfx.achievement()` (audio.js, 18th SFX) wired at the push site.** A short ascending two-tone square blip (784→1175 Hz), deliberately distinct from the triangle `rescue` up-blip. `achievements.js` imports `sfx` from `audio.js` and calls `sfx.achievement()` inside `_pushBanner` — the same one-way achievements→audio direct-call pattern every other module uses; the pub/sub bus is for tracking events only, not audio. (audio.js stays a leaf; importing it into achievements.js does not create a cycle. Headless tests shim `globalThis.window = {}` so `ensure()` safely no-ops.)
