@@ -33,6 +33,35 @@ export function isoWeekKey() {
   return `${d.getUTCFullYear()}_${weekNo}`;
 }
 
+/* ---- Phase 4 geometry helpers (pure, unit-testable) ---------------------- */
+
+/* Confrontational: true iff NO movement-history entry has a lateral component
+   (relative to the Dan→bot axis) above the noise threshold. Zero-magnitude
+   (no input) entries pass. Mirrors blueprint Task 2: lateral = |dx·uy − dy·ux|. */
+export function noLateralMovement(history, danPos, botPos, threshold = 0.1) {
+  const vx = botPos.x - danPos.x, vy = botPos.y - danPos.y;
+  const mag = Math.hypot(vx, vy);
+  if (mag === 0) return true;                 // degenerate: treat as head-on
+  const ux = vx / mag, uy = vy / mag;
+  for (const m of (history ?? [])) {
+    if (m.dx === 0 && m.dy === 0) continue;   // no input — non-lateral
+    const lateral = Math.abs(m.dx * uy - m.dy * ux);
+    if (lateral > threshold) return false;
+  }
+  return true;
+}
+
+/* Wrong Aisle: true iff the belt is actively pushing and Dan's aim heading
+   differs from the belt push direction by more than 45°. */
+export function aimFightsBelt(aimAngle, beltPush, threshold = Math.PI / 4) {
+  if (!beltPush || (beltPush.dx === 0 && beltPush.dy === 0)) return false;
+  const beltAngle = Math.atan2(beltPush.dy, beltPush.dx);
+  let diff = aimAngle - beltAngle;
+  while (diff >  Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  return Math.abs(diff) > threshold;
+}
+
 /* ---- localStorage schema keys ------------------------------------------- */
 const KEY_LIFETIME    = 'add_lifetime';
 const KEY_WEEKLY_META = 'add_weekly_meta';
@@ -84,6 +113,11 @@ let _session = {
   levelAllEnemiesDeadReached: false,
   levelEnemyTypesKilled: null,       // Set of types killed this level
   levelManagerHit: false,            // hit by manager this level
+
+  /* per-level bounce/accuracy tracking (Phase 4) */
+  levelNonBounceKill: false,         // any non-bounce kill this level (fails bnc_wall_flower)
+  levelAnyKill: false,               // at least one enemy killed this level
+  lastKillWasBounce: false,          // most recent kill came from a bounce shot (bnc_final_sweep)
 
   /* recent-kill timestamps for speed-kill achievements */
   recentKillTimes: [],
@@ -190,8 +224,31 @@ function _unlockWeekly(id) {
    stub: true → handler registered but short-circuits immediately.
    -------------------------------------------------------------------- */
 const REGISTRY = {
-  /* Accuracy (Phase 3: stubs — require shot-hit data gated at level:end; implemented in Phase 3 via level:end stats) */
-  /* These ARE implemented in Phase 3 via level:end. */
+  /* Accuracy (Phase 4: evaluated at level:end from levelShotsFired / levelShotsHits) */
+  acc_participation: { name:'Participation Trophy', tiers:[5,15,35,75,150],  weekly:true  },
+  acc_spray:         { name:'Spray and Pray',       tiers:[3,10,25,50,100],  weekly:false },
+  acc_marksman:      { name:'Marksman',             tiers:[5,15,35,75,150],  weekly:true  },
+  acc_sharpshooter:  { name:'Sharpshooter',         tiers:[3,10,25,50,100],  weekly:true  },
+  acc_surgical:      { name:'Surgical',             tiers:[1,5,15,35,75],    weekly:true  },
+  acc_one_job:       { name:'One Job',              tiers:[1,3,10,25,50],    weekly:false },
+  acc_quality:       { name:'Quality over Quantity',tiers:[3,10,25,50,100],  weekly:true  },
+
+  /* Bounce Shot (Phase 4: per-shot tracking on enemy:died payload) */
+  bnc_bank:            { name:'Bank Shot',          tiers:[10,30,75,150,300], weekly:true  },
+  bnc_cue_ball:        { name:'Cue Ball',           tiers:[5,20,50,100,200],  weekly:true  },
+  bnc_pool_shark:      { name:'Pool Shark',         tiers:[3,10,25,50,100],   weekly:true  },
+  bnc_geometry_brain:  { name:'Geometry Brain',     tiers:[3,10,25,50,100],   weekly:true  },
+  bnc_geometry_teacher:{ name:'Geometry Teacher',   tiers:[3,10,25,50,100],   weekly:true  },
+  bnc_chain:           { name:'Chain Reaction',     tiers:[3,10,25,50,100],   weekly:true  },
+  bnc_long_way:        { name:'The Long Way Round', tiers:[5,15,35,75,150],   weekly:true  },
+  bnc_final_sweep:     { name:'Final Sweep',        tiers:[5,15,35,75,150],   weekly:true  },
+  bnc_wall_flower:     { name:'Wall Flower',        tiers:[1,5,15,30,60],     weekly:true  },
+
+  /* Phase 4 combat / conveyor — complex positional conditions */
+  cmb_confrontational: { name:'Confrontational',    tiers:[5,20,50,100,200],  weekly:true  },
+  cmb_blind_shot:      { name:'Blind Shot',         tiers:[3,10,25,50,100],   weekly:true  },
+  cmb_recall_notice:   { name:'Recall Notice',      tiers:[5,20,50,100,200],  weekly:true  },
+  conv_wrong_aisle:    { name:'Wrong Aisle',        tiers:[3,10,25,50,100],   weekly:true  },
 
   /* Progression */
   prg_temp:       { name:'The Temp',          tiers:[1,10,25,50,100],   weekly:false },
@@ -353,6 +410,9 @@ function _onLevelStart({ terminalCount, workerCount, levelNumber, isAuthored }) 
   _session.levelAllEnemiesDeadReached = false;
   _session.levelEnemyTypesKilled = new Set();
   _session.levelManagerHit = false;
+  _session.levelNonBounceKill = false;
+  _session.levelAnyKill = false;
+  _session.lastKillWasBounce = false;
   _session.recentKillTimes = [];
   _session.lastRescueTime = 0;
   _session.levelManagerSpawnTime = 0;
@@ -366,6 +426,35 @@ function _onLevelEnd({ levelTime, workersRescued, levelNumber, isAuthored, shots
 
   /* -- prg_temp: cumulative levels completed -- */
   _inc('prg_temp');
+
+  /* ===== Phase 4: accuracy (hits / fired), evaluated at level end ===== */
+  {
+    const fired = _session.levelShotsFired;
+    const hits  = _session.levelBoltHits;
+    if (fired > 0) {
+      const acc = hits / fired;            // can exceed 1.0 (Triple = 3 hits / 1 fired)
+      /* -- low-accuracy "participation" awards -- */
+      if (acc <= 0.50) { _inc('acc_participation'); _weeklyInc('acc_participation'); }
+      if (acc <= 0.30) { _inc('acc_spray'); }
+      /* -- high-accuracy awards -- */
+      if (acc >= 0.75) { _inc('acc_marksman'); _weeklyInc('acc_marksman'); }
+      if (acc >= 0.85) { _inc('acc_sharpshooter'); _weeklyInc('acc_sharpshooter'); }
+      if (acc >= 0.95) { _inc('acc_surgical'); _weeklyInc('acc_surgical'); }
+    }
+    /* -- acc_one_job: no missed shots (every fired trigger connected) --
+         A "miss" = a fired trigger with no hit. With Triple, hits can exceed
+         fired, so "no misses" is hits >= fired (and at least one shot fired). -- */
+    if (fired > 0 && hits >= fired) { _inc('acc_one_job'); }
+    /* -- acc_quality: cleared the level's enemies using ≤10 shots -- */
+    if (fired > 0 && fired <= 10 && _session.levelAllEnemiesDeadReached) {
+      _inc('acc_quality'); _weeklyInc('acc_quality');
+    }
+  }
+
+  /* -- bnc_wall_flower: every enemy this level killed by a bounce shot -- */
+  if (_session.levelAnyKill && !_session.levelNonBounceKill) {
+    _inc('bnc_wall_flower'); _weeklyInc('bnc_wall_flower');
+  }
 
   /* -- spd_rush: level under 45 seconds -- */
   if (typeof levelTime === 'number' && levelTime <= 45000) {
@@ -570,23 +659,73 @@ function _onBoltFired({ kind, isTripleShotActive }) {
 }
 
 function _onBoltHit({ targetType, bounceCount, uniqueWallCount }) {
+  // Each connecting bullet counts as a hit (Triple = up to 3 hits / 1 fired).
+  // Accuracy is evaluated at level:end; bounce-kill credit is on enemy:died.
   _session.levelBoltHits++;
-  // Bounce achievements handled in Phase 4.
 }
 
 function _onBoltMissed() {
-  // Accuracy achievements handled in Phase 4.
+  // Accuracy is computed at level:end from levelShotsFired vs levelBoltHits.
 }
 
 function _onBoltExpired() {
-  // Accuracy achievements handled in Phase 4.
+  // Accuracy is computed at level:end from levelShotsFired vs levelBoltHits.
 }
 
-function _onEnemyDied({ type, killerKind, bounceCount, uniqueWallCount, hadLOSAtFire, timeAliveMs, isBounceKill }) {
+/* cmb_recall_notice: a homing missile that had acquired Dan hit a wall or another
+   entity instead of him. */
+function _onHomingRedirected() {
+  _inc('cmb_recall_notice'); _weeklyInc('cmb_recall_notice');
+}
+
+function _onEnemyDied({ type, killerKind, bounceCount, uniqueWallCount, chainCount, hadLOSAtFire,
+                       timeAliveMs, isBounceKill, pos, danPos, danMoveHistory, danOnBelt,
+                       danAimAngle, beltPush }) {
   _session.levelEnemiesKilled++;
   _session.levelEnemyTypesKilled.add(type);
   if (!_session.runEnemyTypesKilled) _session.runEnemyTypesKilled = new Set();
   _session.runEnemyTypesKilled.add(type);
+
+  /* ===== Phase 4: bounce-shot, accuracy-context, and positional kills ===== */
+  const bc  = bounceCount ?? 0;
+  const uwc = uniqueWallCount ?? 0;
+
+  _session.levelAnyKill = true;
+  _session.lastKillWasBounce = !!isBounceKill;
+  if (!isBounceKill) _session.levelNonBounceKill = true;   // fails bnc_wall_flower
+
+  if (isBounceKill) {
+    /* -- bnc_bank: bounced exactly once -- */
+    if (bc === 1) { _inc('bnc_bank'); _weeklyInc('bnc_bank'); }
+    /* -- bnc_cue_ball: bounced 3+ times -- */
+    if (bc >= 3) { _inc('bnc_cue_ball'); _weeklyInc('bnc_cue_ball'); }
+    /* -- bnc_pool_shark: bounced 5+ times -- */
+    if (bc >= 5) { _inc('bnc_pool_shark'); _weeklyInc('bnc_pool_shark'); }
+    /* -- bnc_geometry_brain: 4+ total bounces (wall may repeat) -- */
+    if (bc >= 4) { _inc('bnc_geometry_brain'); _weeklyInc('bnc_geometry_brain'); }
+    /* -- bnc_geometry_teacher: 4+ UNIQUE walls -- */
+    if (uwc >= 4) { _inc('bnc_geometry_teacher'); _weeklyInc('bnc_geometry_teacher'); }
+    /* -- bnc_long_way: bounce kill that rounded a corner (≥2 unique walls) -- */
+    if (uwc >= 2) { _inc('bnc_long_way'); _weeklyInc('bnc_long_way'); }
+    /* -- bnc_chain: one bounce shot hit 4+ enemies in sequence --
+         Wired per Phase 4 spec; dormant while shots are consumed on first hit
+         (chainCount never exceeds 1 without a pierce mechanic). -- */
+    if ((chainCount ?? 0) >= 4) { _inc('bnc_chain'); _weeklyInc('bnc_chain'); }
+    /* -- cmb_blind_shot: ricochet kill with no LOS to the target at fire time -- */
+    if (hadLOSAtFire === false) { _inc('cmb_blind_shot'); _weeklyInc('cmb_blind_shot'); }
+  }
+
+  /* -- cmb_confrontational: Security Bot killed head-on (no lateral input in
+        the 500 ms window before the kill) -- */
+  if (type === 'security' && danPos && pos &&
+      noLateralMovement(danMoveHistory, danPos, pos)) {
+    _inc('cmb_confrontational'); _weeklyInc('cmb_confrontational');
+  }
+
+  /* -- conv_wrong_aisle: killed a target while a belt pushed Dan off his aim -- */
+  if (danOnBelt && aimFightsBelt(danAimAngle ?? 0, beltPush)) {
+    _inc('conv_wrong_aisle'); _weeklyInc('conv_wrong_aisle');
+  }
 
   /* -- cmb_decommissioned: total kills -- */
   _inc('cmb_decommissioned');
@@ -810,6 +949,11 @@ function _onDustbinDetonated({ killCount }) {
 
 function _onLevelAllEnemiesDead() {
   _session.levelAllEnemiesDeadReached = true;
+
+  /* -- bnc_final_sweep: the kill that emptied the level was a bounce kill -- */
+  if (_session.lastKillWasBounce) {
+    _inc('bnc_final_sweep'); _weeklyInc('bnc_final_sweep');
+  }
 }
 
 function _onRunInputModeSet({ mode }) {
@@ -826,6 +970,7 @@ const _handlers = {
   'bolt:hit':               _onBoltHit,
   'bolt:missed':            _onBoltMissed,
   'bolt:expired':           _onBoltExpired,
+  'bolt:homing_redirected': _onHomingRedirected,
   'enemy:died':             _onEnemyDied,
   'enemy:spawned':          _onEnemySpawned,
   'enemy:fired':            _onEnemyFired,
@@ -869,6 +1014,9 @@ export function initAchievements() {
   _session.levelAllEnemiesDeadReached = false;
   _session.levelEnemyTypesKilled = new Set();
   _session.levelManagerHit = false;
+  _session.levelNonBounceKill = false;
+  _session.levelAnyKill = false;
+  _session.lastKillWasBounce = false;
   _session.recentKillTimes = [];
   _session.recentCleanerKills = [];
   _session.lastRescueTime = 0;

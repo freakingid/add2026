@@ -16,6 +16,7 @@ import { G } from "./state.js";
 import { isWall } from "./world.js";
 import { hitDanRanged, hitDanArea, damageEnemy } from "./combat.js";
 import { sfx } from "./audio.js";
+import { emit } from "./events.js";
 
 // Fire a homing missile from Manager `e`. The missile's initial direction is toward
 // Dan, but it can steer each frame (capped turn rate — outrunnable, lure-into-walls).
@@ -39,6 +40,7 @@ export function fireEnemyHoming(e, d){
     traveled: 0,
     range: d.missileRange,
     spin: Math.random() * Math.PI * 2,
+    targetedDan: true,   // homing missiles always acquire Dan (for cmb_recall_notice)
   });
 }
 
@@ -241,6 +243,8 @@ function updateHoming(b, dt){
 
   // Wall impact: small AoE burst, then remove. Harmless if Dan is out of blast.
   if (isWall((b.x / CFG.TILE)|0, (b.y / CFG.TILE)|0)){
+    // A Dan-targeting missile that hits a wall instead of Dan (cmb_recall_notice).
+    if (b.targetedDan) emit('bolt:homing_redirected', { hit: 'wall' });
     detonateHoming(b);
     return true;
   }
@@ -249,7 +253,11 @@ function updateHoming(b, dt){
   // Skip fliers (drones) and still-spawning bots; terminals aren't enemies.
   for (const e of G.enemies){
     if (e.flying || e.spawn > 0) continue;
-    if (Math.hypot(b.x - e.x, b.y - e.y) <= b.r + e.r){ detonateHoming(b); return true; }
+    if (Math.hypot(b.x - e.x, b.y - e.y) <= b.r + e.r){
+      // A Dan-targeting missile redirected into a robot instead of Dan.
+      if (b.targetedDan) emit('bolt:homing_redirected', { hit: 'enemy' });
+      detonateHoming(b); return true;
+    }
   }
 
   // Hit Dan.

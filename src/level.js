@@ -41,6 +41,8 @@ export function newGame(){
     hasDustbin:false,           // carrying an Atomic Dustbin special? (GDD 5)
     stillInputMs:0, _stoodStillEmitted:false,  // for player:stood_still achievement event
     _prevOnBelt:false,                         // for conveyor:push_start edge detection
+    lastAimAngle:0,                            // last frame's aim heading (for conv_wrong_aisle)
+    moveHistory:[],                            // ring buffer {dx,dy,t} last 500ms (for cmb_confrontational)
   };
   G.powerups = { rapid:0, triple:0, bounce:0 };
   G.score = 0;

@@ -29,6 +29,18 @@ export function updateDan(dt){
   // movement input — already normalized (mag 0 or 1) by the input layer.
   const mv = getMoveVec();
 
+  // Aim heading bookkeeping for conv_wrong_aisle: store the angle Dan is facing
+  // this frame (fire heading when firing, else cursor/last-heading from above).
+  G.dan.lastAimAngle = G.dan.angle;
+
+  // Movement-input ring buffer for cmb_confrontational: one {dx,dy,t} per frame,
+  // trimmed to the last 500 ms. Records intent (getMoveVec), not velocity.
+  const _now = performance.now();
+  G.dan.moveHistory.push({ dx: mv.x, dy: mv.y, t: _now });
+  while (G.dan.moveHistory.length && _now - G.dan.moveHistory[0].t > 500) {
+    G.dan.moveHistory.shift();
+  }
+
   // player:stood_still — accumulate stillness; emit once at 1000 ms, then reset.
   if (mv.x !== 0 || mv.y !== 0) {
     G.dan.stillInputMs = 0;
@@ -124,6 +136,7 @@ function fireBubble(angle, big, bounce){
     big: !!big,          // Triple Shot -> larger, opaque cleaning pod
     bounce: !!bounce,    // Bounce Shot -> ricochet off walls
     bounceCount: 0,      // wall bounce tally (for bounce achievements)
+    chainCount: 0,       // enemies struck by this shot in sequence (for bnc_chain)
     wallsHit: null,      // Set of stringified tile coords hit (lazy-init on first bounce)
     danPosAtFire: { x: G.dan.x, y: G.dan.y },  // for blind-shot LOS check at hit time
     spawnTime: performance.now(),               // for timeAliveMs context
@@ -183,6 +196,7 @@ export function updateShots(dt){
       if (Math.hypot(e.x - s.x, e.y - s.y) <= e.r + s.r){
         e.hp -= 1; e.hitFlash = 0.1;
         sfx.pop();   // soap bubble pops on a robot
+        s.chainCount = (s.chainCount ?? 0) + 1;   // enemies hit by this shot in sequence
         const bc = s.bounceCount ?? 0;
         const uwc = s.wallsHit?.size ?? 0;
         const hadLOS = hasLineOfSight(s.danPosAtFire.x, s.danPosAtFire.y, e.x, e.y);
@@ -192,7 +206,9 @@ export function updateShots(dt){
           killerKind: 'bubble',
           bounceCount: bc,
           uniqueWallCount: uwc,
+          chainCount: s.chainCount,
           hadLOSAtFire: hadLOS,
+          pos: { x: e.x, y: e.y },
           timeAliveMs: performance.now() - (e._spawnTime ?? 0),
         });
         consumed = true;

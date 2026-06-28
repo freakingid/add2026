@@ -35,7 +35,7 @@ All core systems are complete. The table below is the canonical build status; GD
 | Conveyor push mechanic + rendering + hum | ✅ Built | §8.1.2 | `world.js`, `render.js` |
 | Audio — 17 SFX + looping conveyor bed | ✅ Built | §10 | `audio.js` |
 | Game states (title / playing / levelclear / dead) | ✅ Built | — | `state.js`, `screens.js` |
-| Achievement system | 🔧 In progress — Phase 3 complete | `ACHIEVEMENTS.md`, `ACHIEVEMENT-BLUEPRINT.md` | `events.js`, `achievements.js` |
+| Achievement system | 🔧 In progress — Phase 4 complete | `ACHIEVEMENTS.md`, `ACHIEVEMENT-BLUEPRINT.md` | `events.js`, `achievements.js` |
 | Sprite-art polish | 🔲 Not built | §10 | — |
 
 > Cross-cutting "do not silently change" rules (HP/score persistence, decrement model,
@@ -405,7 +405,7 @@ See **`ACHIEVEMENTS.md`** for the full specification and **`ACHIEVEMENT-BLUEPRIN
 
 - **`G._levelStartTime` / `G._runStartTime` / `G._allEnemiesDeadEmitted`.** Three new tracking fields added to `G` in `state.js`. These are set by game lifecycle code (`level.js`, `update.js`), not by `achievements.js`, so they aren't achievement-module state on `G` — they're timing primitives used by emitter call sites. `achievements.js` never writes to `G`.
 
-- **80/80 headless tests pass (Phase 2), 149/149 (Phase 3)** (`node test-achievements.js`). Phase 2: 22 sections covering pub/sub correctness, isoWeekKey format, init round-trip, cmb_foam_party Bronze trigger and cross-session persistence, all payload shapes, week rollover discard, parallel lifetime counters, and banner queue behaviour. Phase 3: 8 additional sections (23–30) covering Progression, Survival, Speed, Worker Rescue, Atomic Dustbin, Power-Ups & Items, Score stubs, and Combat.
+- **80/80 headless tests pass (Phase 2), 149/149 (Phase 3), 211/211 (Phase 4)** (`node test-achievements.js`). Phase 2: 22 sections covering pub/sub correctness, isoWeekKey format, init round-trip, cmb_foam_party Bronze trigger and cross-session persistence, all payload shapes, week rollover discard, parallel lifetime counters, and banner queue behaviour. Phase 3: 8 additional sections (23–30) covering Progression, Survival, Speed, Worker Rescue, Atomic Dustbin, Power-Ups & Items, Score stubs, and Combat. Phase 4: 6 additional sections (31–36) covering bounce-shot thresholds, final-sweep/wall-flower, accuracy at level:end, the Confrontational cross-product math (unit-tested directly), Blind Shot / Wrong Aisle, and Recall Notice.
 
 **Phase 3 decisions:**
 
@@ -428,3 +428,25 @@ See **`ACHIEVEMENTS.md`** for the full specification and **`ACHIEVEMENT-BLUEPRIN
 - **`dust_disgruntled` implemented in Phase 3 (not Phase 4)** because it only needs `dustbin:bounced.totalWallCount` — no per-shot state. The blueprint listed it under Phase 4, but it fits Phase 3's "no per-shot tracking" constraint. Handled in `_onDustbinBounced`.
 
 - **`cmb_cleaning_spree` / `cmb_downsizing` use a sliding time window.** `_session.recentKillTimes` is an array of `Date.now()` timestamps, filtered on each kill to the last 10 seconds. If ≥10 kills, Downsizing fires; else if ≥5, Cleaning Spree fires. Both can fire on the same kill. Same pattern for `cmb_deep_clean` (cleaner-specific, 5s window, 3 kills).
+
+**Phase 4 decisions:**
+
+- **Bounce + complex-positional kills read an enriched `enemy:died` payload — `achievements.js` still imports only `events.js`.** Phase 4 conditions need Dan's positional/movement state at kill time (move-history for Confrontational, belt vector + aim for Wrong Aisle, bot position for the converging-axis math). Rather than break the one-way dependency (achievements → events only), `killEnemy` in `combat.js` snapshots that state into the `enemy:died` payload: `pos` (bot), `danPos`, `danMoveHistory` (the live ring buffer), `danOnBelt`, `danAimAngle`, `beltPush` (from `pushAtWorld`). `combat.js` already imports `G` and now `world.pushAtWorld`. (Alt: have `achievements.js` reach into `G.dan` directly per the blueprint's literal text — rejected; it would reverse the dependency invariant kept since Phase 1.)
+
+- **`G.dan.moveHistory` ring buffer + `G.dan.lastAimAngle`, maintained in `player.js`.** `updateDan` pushes one `{dx,dy,t}` per frame from `getMoveVec()` (intent, not velocity — per blueprint Task 2 / `surv_no_stopping` rationale) and trims to the last 500 ms by timestamp; `lastAimAngle` snapshots `G.dan.angle` each frame. Both are added to Dan's init in `level.js`. These are timing/input primitives owned by game code (like `stillInputMs`/`_prevOnBelt`), not achievement state on `G`.
+
+- **Confrontational = pure cross-product check, exported + unit-tested.** `noLateralMovement(history, danPos, botPos, threshold=0.1)` computes the Dan→bot unit vector and fails if ANY history entry's lateral magnitude `|dx·uy − dy·ux|` exceeds the threshold; zero-input and zero-distance entries pass (degenerate = head-on). Exported from `achievements.js` so the math is tested directly (Section 34) independent of the event plumbing. Only Security kills are evaluated.
+
+- **Wrong Aisle = `aimFightsBelt(aimAngle, beltPush, threshold=π/4)`, also exported/unit-tested.** Returns false when the belt isn't pushing; otherwise true when the aim heading differs from `atan2(beltPush.dy,beltPush.dx)` by more than 45° (the blueprint's tightened threshold — 90° would count diagonals as "with the flow"). Gated on `danOnBelt` at kill time.
+
+- **Blind Shot uses the existing `hadLOSAtFire` payload field.** `player.js` already computes `hasLineOfSight(shot.danPosAtFire, enemy)` at hit time (Phase 2). The handler fires `cmb_blind_shot` only when `isBounceKill && hadLOSAtFire === false` — a ricochet that killed a target Dan couldn't see when he pulled the trigger.
+
+- **Bounce thresholds split Brain vs Teacher on the same payload.** `bnc_geometry_brain` reads `bounceCount` (4+ total, walls may repeat); `bnc_geometry_teacher` reads `uniqueWallCount` (4+ distinct walls, from `shot.wallsHit.size`). `bnc_long_way` ("around a corner") = `uniqueWallCount >= 2` on a bounce kill. `bnc_bank` is `bounceCount === 1` exactly; `cue_ball`/`pool_shark` are `>=3`/`>=5`.
+
+- **`bnc_final_sweep` checks `_session.lastKillWasBounce` at `level:all_enemies_dead`.** Every `enemy:died` records whether that kill was a bounce; the all-enemies-dead handler reads the most-recent flag. `bnc_wall_flower` tracks `levelNonBounceKill` (set by any non-bounce kill) + `levelAnyKill`, and at `level:end` awards only if there was ≥1 kill and none were non-bounce.
+
+- **`bnc_chain` wired but dormant (no pierce mechanic).** `shot.chainCount` is added in `player.js` and incremented on each enemy hit, but soap shots are consumed on first contact, so `chainCount` never exceeds 1 — the handler (`>=4`) can't fire in current gameplay. Wired per the Phase 4 spec rather than stubbed (per design decision) so it activates automatically if a pierce mechanic is ever added; a test asserts it fires when the payload carries `chainCount >= 4`. (Alt: make bounce shots pierce enemies — rejected; that changes the Bounce power-up's feel and the max-shots non-negotiable.)
+
+- **Accuracy is evaluated once at `level:end` from `levelShotsFired` vs `levelBoltHits`.** `bolt:fired` increments fired (one per trigger); `bolt:hit` increments hits (one per connecting bullet, so a Triple can give 3 hits / 1 fired → accuracy can exceed 1.0). `acc_one_job` ("no missed shots") = `hits >= fired`; `acc_quality` = `fired <= 10 && levelAllEnemiesDeadReached`. No award when zero shots were fired.
+
+- **Recall Notice via a new `bolt:homing_redirected` event from `projectiles.js`.** Homing missiles get `targetedDan:true` at creation (they always acquire Dan). `updateHoming` emits `bolt:homing_redirected` when a Dan-targeting missile detonates on a wall or runs into a ground robot (i.e. anything but Dan); range-expiry and Dan-hits do not emit. The handler increments `cmb_recall_notice`. (`projectiles.js` now imports `emit` — it was the one emitter module the blueprint left off the Phase 2 wiring.)

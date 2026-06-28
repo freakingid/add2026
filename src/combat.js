@@ -11,6 +11,7 @@ import { G } from "./state.js";
 import { addFloat } from "./effects.js";
 import { sfx } from "./audio.js";
 import { emit } from "./events.js";
+import { pushAtWorld } from "./world.js";
 
 // Apply a ranged hit to Dan: shared i-frame + a lighter knockback along the
 // bolt's travel direction.
@@ -78,16 +79,27 @@ export function damageEnemy(e, dmg){
 
 // `score:false` (e.g. robot-on-robot missile/bolt friendly fire) skips the points
 // award + score float but keeps the death sound, Manager berserk pulse, and splice.
-export function killEnemy(index, { score = true, killerKind = 'mop', bounceCount = 0, uniqueWallCount = 0, hadLOSAtFire = true, timeAliveMs = 0 } = {}){
+export function killEnemy(index, { score = true, killerKind = 'mop', bounceCount = 0, uniqueWallCount = 0, chainCount = 0, hadLOSAtFire = true, timeAliveMs = 0, pos = null } = {}){
   const e = G.enemies[index];
+  const botPos = pos ?? { x: e.x, y: e.y };   // bot position at kill time
+  // Snapshot Dan's positional state so achievements.js can evaluate movement /
+  // conveyor conditions at kill time WITHOUT importing G (one-way dependency).
+  const belt = pushAtWorld(G.dan.x, G.dan.y);
   emit('enemy:died', {
     type: e.type,
     killerKind,
     bounceCount,
     uniqueWallCount,
+    chainCount,
     hadLOSAtFire,
     timeAliveMs,
     isBounceKill: bounceCount > 0,
+    pos: botPos,
+    danPos: { x: G.dan.x, y: G.dan.y },
+    danMoveHistory: G.dan.moveHistory,         // ring buffer {dx,dy,t} (cmb_confrontational)
+    danOnBelt: !!G.dan.onBelt,                  // (conv_wrong_aisle)
+    danAimAngle: G.dan.lastAimAngle ?? G.dan.angle,
+    beltPush: { dx: belt.dx, dy: belt.dy },     // belt vector at Dan's cell
   });
   if (score){
     G.score += ENEMY[e.type].points;
