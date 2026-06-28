@@ -52,14 +52,29 @@ function keyboardVec(map){
 // getters below read fresh axes/buttons. Null when nothing is connected.
 let pad = null;
 let prevStart = false;        // edge-detect BTN_START (start/restart a run)
+let padWasNull = true;        // true until first frame a pad is visible
+
+window.addEventListener('gamepadconnected',    () => { prevStart = false; padWasNull = false; });
+window.addEventListener('gamepaddisconnected', () => { pad = null; prevStart = false; padWasNull = true; });
 
 // Poll the first gamepad each frame, in EVERY state (so the title can be started
 // by a pad). No-op when none is connected. Edge-triggers a run start/restart from
 // BTN_START. Called from update.js before any state branching.
 export function pollGamepad(){
   pad = (navigator.getGamepads ? navigator.getGamepads()[0] : null) || null;
-  if (!pad){ prevStart = false; return; }
+  if (!pad){ prevStart = false; padWasNull = true; return; }
+
   const start = CFG.GAMEPAD.BTN_START.some(i => pad.buttons[i] && pad.buttons[i].pressed);
+
+  // First frame the pad becomes visible: seed prevStart without acting.
+  // Prevents a button held at page-load time from auto-firing, and avoids
+  // a missed-edge when the tap straddles the gamepadconnected boundary.
+  if (padWasNull){
+    prevStart = start;
+    padWasNull = false;
+    return;
+  }
+
   if (start && !prevStart && !G._showLifetimeModal && !G._showAchievementModal){
     unlock();
     if (G.state === "title") startRun("gamepad");
