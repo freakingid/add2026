@@ -10,7 +10,7 @@ design intent is in **GDD.md**. Behavior described here is the source of truth f
 Work these **one at a time, then test**. Once a change is built + tested, fold its
 decisions into the relevant "Subsystem decisions" entry and remove the entry here.
 
-- _(none queued — the conveyor PUSH mechanic just landed; see "Conveyors" below.)_
+- _(none queued — level progression overhaul just landed; see "Level progression overhaul" below.)_
 
 ---
 
@@ -32,6 +32,7 @@ All core systems are complete. The table below is the canonical build status; GD
 | Shared enemy-projectile pool (ebolts) | ✅ Built | — | `projectiles.js` |
 | Level Definition format + loader | ✅ Built | §8.1 | `level.js`, `world.js` |
 | Hand-authored levels (5 levels) | ✅ Built | §8.1 | `levels/authored-levels.js` |
+| Level progression overhaul (MAP_POOL, playlists, mode select) | ✅ Built | — | `level.js`, `state.js`, `input.js`, `screens.js`, `src/playlists.js` |
 | Conveyor push mechanic + rendering + hum | ✅ Built | §8.1.2 | `world.js`, `render.js` |
 | Screen transition wipe | ✅ Built | — | `wipe.js`, `render.js`, `update.js`, `level.js` |
 | Audio — 18 SFX + looping conveyor bed | ✅ Built | §10 | `audio.js` |
@@ -322,6 +323,54 @@ All core systems are complete. The table below is the canonical build status; GD
   ground bodies + summed diagonally at an intersection, ignored by fliers; Dan's net
   speed clamped + with-belt faster than against; ground enemy carried via `updateEnemies`;
   bolt + settled dustbin unaffected; the demo level loads with belts/diagonal correct.
+
+---
+
+### Level progression overhaul
+
+- **Map layout and level type are now independent axes.** `buildLevel` picks a map at
+  random from `MAP_POOL` (6 entries: `null` = procgen + the 5 authored keys); the enemy
+  type/composition is still set by `LEVEL_PLAN` index (level-plan mode) or the playlist
+  entry (hand-authored mode). The authored maps' baked-in terminal `enemy:` fields are
+  **ignored** at runtime — `buildAuthoredDef` replaces them from `buildSpawnRulesForType`
+  so the map geometry stays authored but the enemies match the current level type.
+- **`buildSpawnRulesForType` is the shared terminal-rule builder.** Extracted from
+  `generateLevelDef` so both the procgen path and the authored-map path produce identical
+  terminal composition. The Manager/Scanner companion-Picker rule, the `"mixed"` one-of-
+  every-type seeding, and the level-scaling `termCount` formula all live here and are not
+  duplicated.
+- **`G.gameMode` is set at the title, NOT by `newGame`.** `newGame()` builds the world
+  using whatever `G.gameMode` is already set; `startRun(inputDevice, gameMode, playlist)`
+  in `input.js` is the sole setter before each run. This means `newGame()` is safe to call
+  from any surface without resetting the chosen mode.
+- **Playlist files live in `data/playlists/`.** `data/playlists/index.json` is an array of
+  filenames; `src/playlists.js` fetches it at boot via `loadPlaylists()` (called from
+  `atomic-dustbin-dan.html` before the loop starts). Each file is validated at load time:
+  unknown map key, unknown enemy key, or missing `terminalCount` → warn + skip that entry;
+  if all entries fail → skip the playlist. `G.availablePlaylists` is populated once and
+  never reset. If `index.json` is absent or empty, Hand Authored mode is hidden.
+- **Title screen now has three phases** (`G._titlePhase`): `"input"` (device selection,
+  original screen), `"mode"` (Level Plan vs Hand Authored), `"playlist"` (if ≥2 playlists
+  available). Mode select and playlist picker are rendered by `screens.js`
+  (`drawTitleModeSelect`, `drawTitlePlaylistPicker`). Keyboard: 1/2/3… select; SPACE/Enter
+  on `"input"` advances to `"mode"`. Gamepad: D-pad up/down + A/START via `pollTitleMenu`
+  (called from `pollGamepad`). `G._titlePhase` resets to `"input"` on each `startRun`.
+- **`]` debug authored-level cycle removed.** The key, its cycle state vars
+  (`authoredIdx`, `cycleAuthoredLevel`), and the `AUTHORED_LEVELS` import in `input.js`
+  are all gone. Authored levels are live gameplay via `MAP_POOL` now.
+- **`nextLevel` advances `G.playlistIndex`** (wraps modulo `playlist.levels.length`) in
+  hand-authored mode. Loop-back (index wraps to 0) is noted with a TODO for difficulty
+  escalation — not implemented yet.
+- **`buildSpawnRulesFromEntry` handles three entry shapes:** single-enemy (1 terminal pool),
+  multi-enemy non-mixed (terminals split round-robin via `floor(terminalCount/types.length)`,
+  min 1), and `mixed:true` (one terminal per listed enemy, count=1 preplace=1 — the
+  standard multi-type spawn loop runs all of them).
+- **Tests.** `test-level-routing.js` (197 lines, 11 checks): MAP_POOL contents,
+  `buildSpawnRulesForType` scaling/capping/mixed/companion rules, `buildAuthoredDef`
+  terminal replacement, `nextLevel` index wrapping. `test-playlist.js` (229 lines, 17
+  checks): `validateEntry` / `validatePlaylist` for all bad-field variants, skip behavior,
+  `buildSpawnRulesFromEntry` for all three entry shapes including the actual
+  `warehouse-warmup.json`, `playlistIndex` modular loop math.
 
 ---
 

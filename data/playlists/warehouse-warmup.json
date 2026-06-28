@@ -1,0 +1,21 @@
+{
+  "name": "Warehouse Warmup",
+  "levels": [
+    {
+      "map": "receiving_dock",
+      "enemies": ["picker"],
+      "terminalCount": 3
+    },
+    {
+      "map": "cold_storage_vault",
+      "enemies": ["forklift", "security"],
+      "terminalCount": 4
+    },
+    {
+      "map": "mezzanine_ring",
+      "enemies": ["picker", "sorter", "cleaner", "drone", "manager", "scanner", "inventory", "forklift", "security"],
+      "terminalCount": 4,
+      "mixed": true
+    }
+  ]
+}

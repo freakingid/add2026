@@ -16,10 +16,8 @@
 import { CFG } from "./config.js";
 import { canvas, VIEW_W, VIEW_H } from "./canvas.js";
 import { G } from "./state.js";
-import { newGame, loadLevel, nextLevel } from "./level.js";
+import { newGame, nextLevel } from "./level.js";
 import { unlock, toggleMute } from "./audio.js";
-import { AUTHORED_LEVELS } from "./levels/authored-levels.js";
-import { addFloat } from "./effects.js";
 import { emit } from "./events.js";
 
 /* ---- Raw input state (still exported: mouse aim, M mute, debug) ---------- */
@@ -77,11 +75,20 @@ export function pollGamepad(){
 
   if (start && !prevStart && !G._showLifetimeModal && !G._showAchievementModal){
     unlock();
-    if (G.state === "title") startRun("gamepad");
-    else if (G.state === "dead" && G.inputMode === "gamepad") startRun("gamepad");
+    if (G.state === "title"){
+      if (G._titlePhase === "input") advanceTitleToMode("gamepad");
+      // mode/playlist phases handled by pollTitleMenu below
+    } else if (G.state === "dead" && G.inputMode === "gamepad"){
+      startRun("gamepad");
+    }
     // levelclear auto-advances; nothing to trigger there.
   }
   prevStart = start;
+
+  // Navigate the mode/playlist menu via d-pad when the title is past "input" phase.
+  if (G.state === "title" && (G._titlePhase === "mode" || G._titlePhase === "playlist")){
+    pollTitleMenu();
+  }
 }
 
 /* ---- Achievement modal input (Phase 6) ----------------------------------
@@ -234,27 +241,64 @@ export function isDeploySpecial(){
 }
 
 /* ---- Run start / restart ------------------------------------------------ */
-// Begin a run in the chosen mode. newGame() builds the world; we lock the mode
-// after so the rest of the run reads input from that device only (GDD §4.5).
-function startRun(mode){
+// Begin a run in the chosen device mode + game mode. newGame() builds the world;
+// we lock the input device after so the rest of the run reads from that only
+// (GDD §4.5). gameMode and playlist are set on G before newGame() so buildLevel
+// can route correctly.
+function startRun(inputDevice, gameMode = "levelPlan", playlist = null){
+  G.gameMode = gameMode;
+  G.playlist = playlist;
+  G.playlistIndex = 0;
   newGame();
-  G.inputMode = mode;
-  emit('run:input_mode_set', { mode });
+  G.inputMode = inputDevice;
+  G._titlePhase = "input";    // reset for next visit to title
+  emit('run:input_mode_set', { mode: inputDevice });
 }
 
-/* ---- Debug: cycle the hand-authored levels (src/levels/authored-levels.js) --
-   `]` loads the next AUTHORED_LEVELS entry through the SAME loader the game uses,
-   so each can be walked/inspected without playing through generated levels to
-   reach it. Playing-only: loadLevel repositions the existing Dan but never
-   allocates one (G.dan is null on the title). G.level is left untouched, so the
-   spawn cadence keeps running off the authored terminals' own enemy types. */
-const AUTHORED_KEYS = Object.keys(AUTHORED_LEVELS);
-let authoredIdx = -1;
-function cycleAuthoredLevel(){
-  authoredIdx = (authoredIdx + 1) % AUTHORED_KEYS.length;
-  const key = AUTHORED_KEYS[authoredIdx];
-  loadLevel(AUTHORED_LEVELS[key]);
-  addFloat(G.dan.x, G.dan.y - 22, "▶ " + key, "#7fd1ff");
+// Advance _titlePhase after the player has locked an input device.
+// Called from keydown (keyboard) and pollGamepad (gamepad) once device is chosen.
+function advanceTitleToMode(inputDevice){
+  G.inputMode = inputDevice;   // lock device for menu navigation
+  G._titlePhase = "mode";
+}
+
+// Handle a numeric selection [1..n] on the mode or playlist screen.
+function titleMenuSelect(n){
+  if (G._titlePhase === "mode"){
+    if (n === 1){
+      startRun(G.inputMode, "levelPlan", null);
+    } else if (n === 2 && G.availablePlaylists.length > 0){
+      if (G.availablePlaylists.length === 1){
+        startRun(G.inputMode, "handAuthored", G.availablePlaylists[0]);
+      } else {
+        G._titlePhase = "playlist";
+      }
+    }
+  } else if (G._titlePhase === "playlist"){
+    const pl = G.availablePlaylists[n - 1];
+    if (pl) startRun(G.inputMode, "handAuthored", pl);
+  }
+}
+
+// Gamepad D-pad / cursor selection for the mode + playlist menus.
+let _menuCursor = 0;   // 0-based index into visible options
+let _prevConfirm = false, _prevUp = false, _prevDown = false;
+function pollTitleMenu(){
+  if (!pad) return;
+  const confirm = CFG.GAMEPAD.BTN_START.some(i => pad.buttons[i] && pad.buttons[i].pressed);
+  const up   = pad.buttons[12] && pad.buttons[12].pressed;
+  const down = pad.buttons[13] && pad.buttons[13].pressed;
+
+  if (up && !_prevUp)   _menuCursor = Math.max(0, _menuCursor - 1);
+  if (down && !_prevDown){
+    const maxOpts = G._titlePhase === "mode"
+      ? (G.availablePlaylists.length > 0 ? 2 : 1)
+      : G.availablePlaylists.length;
+    _menuCursor = Math.min(maxOpts - 1, _menuCursor + 1);
+  }
+  if (confirm && !_prevConfirm) titleMenuSelect(_menuCursor + 1);
+
+  _prevConfirm = confirm; _prevUp = up; _prevDown = down;
 }
 
 /* ---- Listeners ---------------------------------------------------------- */
@@ -262,7 +306,6 @@ addEventListener("keydown", e => {
   const k = e.key.toLowerCase();
   unlock();                          // resume AudioContext on first gesture (autoplay policy)
   if (k === "m" && !e.repeat) toggleMute();   // M = mute toggle (GDD §10 audio)
-  if (k === "]" && !e.repeat && G.state === "playing") cycleAuthoredLevel();   // debug: cycle authored levels
   if (G.state === "playing" && HANDLED_KEYS.has(k)) e.preventDefault();
   keys[k] = true;
   // Title: SPACE/ENTER selects keyboard+mouse mode and starts. Dead: same key
@@ -271,8 +314,16 @@ addEventListener("keydown", e => {
     // A lifetime modal over the title swallows the start key (it's dismissed via
     // ESC/BACKSPACE, handled in pollModals), so SPACE doesn't punch into a run.
     if (G._showLifetimeModal){ /* modal owns input */ }
-    else if (G.state === "title") startRun("keyboard");
+    else if (G.state === "title"){
+      if (G._titlePhase === "input") advanceTitleToMode("keyboard");
+      // mode/playlist phases use numeric keys (1/2/3…) handled below
+    }
     else if (G.state === "dead" && G.inputMode === "keyboard") startRun("keyboard");
+  }
+  // Numeric key selection on mode/playlist screens (keyboard mode, title phase > "input")
+  if (G.state === "title" && G._titlePhase !== "input" && !G._showLifetimeModal){
+    const digit = parseInt(e.key, 10);
+    if (digit >= 1 && digit <= 9) titleMenuSelect(digit);
   }
 });
 addEventListener("keyup", e => {
@@ -288,8 +339,8 @@ canvas.addEventListener("mousedown", () => {
   mouse.down = true;
   unlock();                          // resume AudioContext on first gesture (autoplay policy)
   if (G._showLifetimeModal) return;  // modal over the title swallows the click
-  // Mouse is part of keyboard+mouse mode: clicking the title/dead screen starts there.
-  if (G.state === "title") startRun("keyboard");
+  // Mouse is part of keyboard+mouse mode: clicking title advances phase like SPACE.
+  if (G.state === "title" && G._titlePhase === "input") advanceTitleToMode("keyboard");
   else if (G.state === "dead" && G.inputMode === "keyboard") startRun("keyboard");
 });
 addEventListener("mouseup", () => { mouse.down = false; });
@@ -297,6 +348,6 @@ addEventListener("mouseup", () => { mouse.down = false; });
 canvas.addEventListener("touchstart", e => {
   e.preventDefault();
   unlock();                          // resume AudioContext on first gesture (autoplay policy)
-  if (G.state === "title") startRun("keyboard");
+  if (G.state === "title" && G._titlePhase === "input") advanceTitleToMode("keyboard");
   else if (G.state === "dead" && G.inputMode === "keyboard") startRun("keyboard");
 }, {passive:false});

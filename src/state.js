@@ -18,6 +18,13 @@ export const G = {
   transition:0,        // countdown timer for the level-clear splash
   inputMode:null,      // null (choose on title) | "keyboard" | "gamepad" (GDD §4.5)
 
+  // game mode + playlist (set at title before the run starts)
+  gameMode:"levelPlan",       // "levelPlan" | "handAuthored"
+  playlist:null,              // loaded playlist object or null
+  playlistIndex:0,            // current position in playlist.levels[]
+  availablePlaylists:[],      // [{name, filename, levels}] loaded at boot
+  _titlePhase:"input",        // "input" | "mode" | "playlist" (title sub-state)
+
   // entities (populated by newGame / buildLevel)
   dan:null,
   powerups:null,

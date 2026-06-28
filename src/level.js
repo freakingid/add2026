@@ -18,6 +18,7 @@
    power-up pickup seeding/collection.
    ========================================================================= */
 import { CFG, ENEMY, POWERUPS, POWERUP_KEYS, LEVEL_PLAN } from "./config.js";
+import { AUTHORED_LEVELS } from "./levels/authored-levels.js";
 import { initAchievements } from "./achievements.js";
 import { emit } from "./events.js";
 import { G, levelType } from "./state.js";
@@ -60,19 +61,58 @@ export function nextLevel(){
   // post-level achievement modal can read getLevelAchievementSummary() during the
   // splash. By the time nextLevel runs, that emit has already happened.
   G.level++;
+  if (G.gameMode === "handAuthored" && G.playlist){
+    G.playlistIndex = (G.playlistIndex + 1) % G.playlist.levels.length;
+    // TODO: on wrap (playlistIndex === 0), apply difficulty escalation — not implemented yet
+  }
   buildLevel();
   G.state = "playing";
 }
 
-// Generate this level's definition, then load it. The generator is a PRODUCER of
-// Level Definitions; loadLevel is the only entry point to a playable level. Dan's
-// hp/powerups/score are untouched (loadLevel only repositions him). When
-// CFG.CONVEYOR_TEST_LEVEL matches the current level, the hand-authored conveyor
-// demo is loaded instead — through the SAME loader (default 0 = never, so normal
-// play is untouched; set it to a level number to walk the belt level).
-function buildLevel(){
-  const def = (G.level === CFG.CONVEYOR_TEST_LEVEL) ? conveyorTestLevelDef() : generateLevelDef();
+// Map pool: the 6 available map layouts. null = procgen; strings are AUTHORED_LEVELS keys.
+const MAP_POOL = [
+  null,
+  "receiving_dock",
+  "pick_and_pack",
+  "cold_storage_vault",
+  "mezzanine_ring",
+  "conveyor_hub",
+];
+
+// Authored map with terminal rules rebuilt from the current level type (ignoring
+// the authored def's baked-in enemy: fields). Non-terminal rules (workers,
+// powerups, vending, dustbin) are preserved from the authored def as-is.
+function buildAuthoredDef(mapName){
+  const base = AUTHORED_LEVELS[mapName];
+  const type = levelType();
+  const spawnRules = [
+    ...buildSpawnRulesForType(type),
+    ...base.spawnRules.filter(r => r.type !== "terminal"),
+  ];
+  return { ...base, spawnRules };
+}
+
+// Level Plan mode: pick a random map from the pool each call. Conveyor test
+// level override (CFG.CONVEYOR_TEST_LEVEL) still applies — always uses the
+// hand-authored conveyor demo through the same loader.
+function buildLevelPlanLevel(){
+  if (G.level === CFG.CONVEYOR_TEST_LEVEL){
+    loadLevel(conveyorTestLevelDef());
+    return;
+  }
+  const pick = MAP_POOL[Math.floor(Math.random() * MAP_POOL.length)];
+  const def = pick === null ? generateLevelDef() : buildAuthoredDef(pick);
   loadLevel(def);
+}
+
+// Generate this level's definition, then load it. Routes to hand-authored or
+// level-plan depending on G.gameMode (set at title before the run starts).
+function buildLevel(){
+  if (G.gameMode === "handAuthored" && G.playlist){
+    buildHandAuthoredLevel();
+  } else {
+    buildLevelPlanLevel();
+  }
 }
 
 /* =========================================================================
@@ -135,9 +175,84 @@ export function conveyorTestLevelDef(){
 }
 
 /* =========================================================================
+   Hand-Authored Playlist mode builders (Part 2 of spec).
+   buildHandAuthoredLevel picks the current playlist entry and routes to either
+   an authored map or procgen, replacing terminal rules from the entry data.
+   ========================================================================= */
+
+// Build terminal spawn rules from a playlist entry.
+function buildSpawnRulesFromEntry(entry){
+  const rules = [];
+  if (entry.mixed){
+    for (const t of entry.enemies)
+      rules.push({ type:"terminal", enemy:t, count:1, preplace:1, zone:"combat", avoid:"spawn" });
+  } else {
+    const types = entry.enemies;
+    const perType = Math.max(1, Math.floor(entry.terminalCount / types.length));
+    for (const t of types){
+      const d = ENEMY[t];
+      rules.push({ type:"terminal", enemy:t, count:perType, preplace:(d.preplace||0), zone:"combat", avoid:"spawn" });
+    }
+  }
+  return rules;
+}
+
+// Playlist entry on an authored map: authored geometry + entry terminal rules.
+function buildAuthoredDefFromEntry(entry){
+  const base = AUTHORED_LEVELS[entry.map];
+  const spawnRules = [
+    ...buildSpawnRulesFromEntry(entry),
+    ...base.spawnRules.filter(r => r.type !== "terminal"),
+  ];
+  return { ...base, spawnRules };
+}
+
+// Playlist entry on procgen: generate geometry but replace terminals from entry.
+function generateLevelDefFromEntry(entry){
+  // Generate the full procgen def first (which sets tiles + zones etc.), then
+  // replace its terminal rules with the entry-driven ones.
+  const def = generateLevelDef();
+  const termRules = buildSpawnRulesFromEntry(entry);
+  const nonTermRules = def.spawnRules.filter(r => r.type !== "terminal");
+  def.spawnRules = [...termRules, ...nonTermRules];
+  return def;
+}
+
+// Drive one level from the current playlist entry.
+function buildHandAuthoredLevel(){
+  const entry = G.playlist.levels[G.playlistIndex % G.playlist.levels.length];
+  const def = entry.map === "procgen"
+    ? generateLevelDefFromEntry(entry)
+    : buildAuthoredDefFromEntry(entry);
+  loadLevel(def);
+}
+
+/* =========================================================================
    The procedural generator — emits a valid Level Definition (GDD §8.1).
    Its whole job is to produce data; it never touches G's entities directly.
    ========================================================================= */
+
+// Build the terminal spawn rules for a level type. Shared between the procgen
+// path and the authored-map path so both produce identical terminal composition.
+function buildSpawnRulesForType(type){
+  const rules = [];
+  if (type === "mixed"){
+    // Sandbox: one terminal of EVERY real enemy type, each preplacing one.
+    for (const t of LEVEL_PLAN){
+      if (t === "mixed") continue;
+      rules.push({ type:"terminal", enemy:t, count:1, preplace:1, zone:"combat", avoid:"spawn" });
+    }
+  } else {
+    const d = ENEMY[type];
+    const termCount = Math.min((d.spawners || 3) + ((G.level - 1) / 2 | 0), 6);
+    rules.push({ type:"terminal", enemy:type, count:termCount, preplace:(d.preplace || 0), zone:"combat", avoid:"spawn" });
+    // Manager / Scanner levels also seed a Picker cluster for the pulse/alarm to amplify.
+    if (type === "manager" || type === "scanner")
+      rules.push({ type:"terminal", enemy:"picker", count:2, preplace:3, zone:"combat", avoid:"spawn" });
+  }
+  return rules;
+}
+
 function generateLevelDef(){
   const cols = CFG.GEN_COLS, rows = CFG.GEN_ROWS;
 
@@ -193,22 +308,7 @@ function generateLevelDef(){
 
   // --- Layer 3c: spawn rules — terminals (level composition), then the guaranteed
   // set (workers, power-ups, two vending machines, a rare Atomic Dustbin) per §8.1.3.
-  const spawnRules = [];
-  const type = levelType();
-  if (type === "mixed"){
-    // Sandbox: one terminal of EVERY real enemy type, each preplacing one.
-    for (const t of LEVEL_PLAN){
-      if (t === "mixed") continue;
-      spawnRules.push({ type:"terminal", enemy:t, count:1, preplace:1, zone:"combat", avoid:"spawn" });
-    }
-  } else {
-    const d = ENEMY[type];
-    const termCount = Math.min((d.spawners || 3) + ((G.level - 1) / 2 | 0), 6);
-    spawnRules.push({ type:"terminal", enemy:type, count:termCount, preplace:(d.preplace || 0), zone:"combat", avoid:"spawn" });
-    // Manager / Scanner levels also seed a Picker cluster for the pulse/alarm to amplify.
-    if (type === "manager" || type === "scanner")
-      spawnRules.push({ type:"terminal", enemy:"picker", count:2, preplace:3, zone:"combat", avoid:"spawn" });
-  }
+  const spawnRules = [...buildSpawnRulesForType(levelType())];
   spawnRules.push({ type:"worker",       count:CFG.WORKER.count, zone:"combat", avoid:"spawn" });
   spawnRules.push({ type:"powerup",      count:CFG.MAX_PICKUPS,  zone:"combat", avoid:"spawn" });
   spawnRules.push({ type:"vendingSmall", count:1, zone:"cover",  avoid:"spawn" });   // §2.5: small in cover

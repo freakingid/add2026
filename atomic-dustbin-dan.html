@@ -62,6 +62,10 @@
 import "./src/input.js";                 // registers key/mouse/touch listeners (side-effect)
 import { update } from "./src/update.js";
 import { render } from "./src/render.js";
+import { loadPlaylists } from "./src/playlists.js";
+
+/* ---- Playlist boot-load (advisory — failure leaves Hand Authored unavailable) */
+loadPlaylists();    // async, non-blocking; populates G.availablePlaylists before first input
 
 /* ---- Main loop (delta-timed) -------------------------------------------- */
 let last = performance.now();

@@ -204,28 +204,37 @@ function drawPostLevelModal(){
   ctx.textBaseline = "alphabetic";
 }
 
-export function drawTitle(){
-  // dim warehouse backdrop
+// Shared title backdrop — the checkerboard warehouse floor behind all title phases.
+function drawTitleBackdrop(){
   ctx.fillStyle = "#15181f";
   ctx.fillRect(0,0,VIEW_W,VIEW_H);
   ctx.fillStyle = "#1c2129";
   for (let y=0; y<VIEW_H; y+=48) for (let x=0; x<VIEW_W; x+=48)
     if (((x+y)/48)&1) ctx.fillRect(x,y,48,48);
+}
 
+// Shared title logo (ATOMIC / DUSTBIN / DAN).
+function drawTitleLogo(yOffset){
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-
-  // ATOMIC — atomic green
   ctx.font = "bold 64px 'Arial Black', sans-serif";
   ctx.fillStyle = COL.atomic;
-  ctx.fillText("ATOMIC", VIEW_W/2, VIEW_H/2 - 86);
-  // DUSTBIN — amber
+  ctx.fillText("ATOMIC", VIEW_W/2, VIEW_H/2 - 86 + yOffset);
   ctx.fillStyle = COL.amber;
-  ctx.fillText("DUSTBIN", VIEW_W/2, VIEW_H/2 - 22);
-  // DAN — soap, oversized
+  ctx.fillText("DUSTBIN", VIEW_W/2, VIEW_H/2 - 22 + yOffset);
   ctx.font = "bold 92px 'Arial Black', sans-serif";
   ctx.fillStyle = COL.soap;
-  ctx.fillText("DAN", VIEW_W/2, VIEW_H/2 + 56);
+  ctx.fillText("DAN", VIEW_W/2, VIEW_H/2 + 56 + yOffset);
+}
 
+export function drawTitle(){
+  if (G._titlePhase === "mode")     { drawTitleModeSelect(); return; }
+  if (G._titlePhase === "playlist") { drawTitlePlaylistPicker(); return; }
+
+  // --- "input" phase: device selection (original title screen) ---
+  drawTitleBackdrop();
+  drawTitleLogo(0);
+
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.font = "bold 14px 'Courier New', monospace";
   ctx.fillStyle = "#aeb6c0";
   ctx.fillText("THE ROBOTS HAVE TURNED. GRAB YOUR MOP.", VIEW_W/2, VIEW_H/2 + 122);
@@ -258,6 +267,58 @@ export function drawTitle(){
 
   drawFireLegend(28, VIEW_H - 150);
   drawWeeklyPanel(VIEW_W - 300, 64);
+}
+
+// Mode select screen: LEVEL PLAN vs HAND AUTHORED.
+function drawTitleModeSelect(){
+  drawTitleBackdrop();
+  drawTitleLogo(-60);
+
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+
+  ctx.font = "bold 18px 'Courier New', monospace";
+  ctx.fillStyle = "#aeb6c0";
+  ctx.fillText("SELECT MODE", VIEW_W/2, VIEW_H/2 + 36);
+
+  ctx.font = "bold 20px 'Arial Black', sans-serif";
+  ctx.fillStyle = COL.soap;
+  ctx.fillText("[1]  LEVEL PLAN", VIEW_W/2, VIEW_H/2 + 76);
+
+  const hasPlaylists = G.availablePlaylists.length > 0;
+  ctx.fillStyle = hasPlaylists ? COL.atomic : "#4a5260";
+  ctx.fillText("[2]  HAND AUTHORED" + (hasPlaylists ? "" : "  (unavailable)"), VIEW_W/2, VIEW_H/2 + 108);
+
+  ctx.font = "bold 11px 'Courier New', monospace";
+  ctx.fillStyle = "#6f7884";
+  const gpHint = G.inputMode === "gamepad"
+    ? "D-PAD UP/DOWN + A — SELECT"
+    : "1 / 2 — SELECT";
+  ctx.fillText(gpHint, VIEW_W/2, VIEW_H/2 + 148);
+}
+
+// Playlist picker screen: list available playlists by name.
+function drawTitlePlaylistPicker(){
+  drawTitleBackdrop();
+
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "bold 28px 'Arial Black', sans-serif";
+  ctx.fillStyle = COL.atomic;
+  ctx.fillText("CHOOSE PLAYLIST", VIEW_W/2, VIEW_H/2 - 80);
+
+  const playlists = G.availablePlaylists;
+  const startY = VIEW_H/2 - 30;
+  for (let i = 0; i < playlists.length; i++){
+    ctx.font = "bold 20px 'Arial Black', sans-serif";
+    ctx.fillStyle = COL.soap;
+    ctx.fillText(`[${i+1}]  ${playlists[i].name}`, VIEW_W/2, startY + i * 44);
+  }
+
+  ctx.font = "bold 11px 'Courier New', monospace";
+  ctx.fillStyle = "#6f7884";
+  const gpHint = G.inputMode === "gamepad"
+    ? "D-PAD UP/DOWN + A — SELECT"
+    : "1-9 — SELECT";
+  ctx.fillText(gpHint, VIEW_W/2, VIEW_H/2 + 120);
 }
 
 // Right-side column listing this week's 5 active weekly achievements plus the
