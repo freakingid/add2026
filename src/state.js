@@ -39,6 +39,7 @@ export const G = {
   _allEnemiesDeadEmitted:false,  // one-shot guard for level:all_enemies_dead
 
   // Achievement UI modal state (Phase 6 — render/input flags, not sim state).
+  _wipeOpenPending:false,         // set by loadLevel; consumed by update.js after updateCamera()
   _levelEndEmitted:false,        // one-shot guard: emit level:end once on entering levelclear
   _showAchievementModal:false,   // post-level achievement modal active (intercepts advance)
   _showLifetimeModal:false,      // lifetime achievements modal active (over title or post-level)

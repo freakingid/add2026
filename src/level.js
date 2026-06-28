@@ -30,7 +30,6 @@ import { spawnVendingMachine } from "./vending.js";
 import { spawnDustbinPickup } from "./dustbin.js";
 import { addFloat } from "./effects.js";
 import { sfx } from "./audio.js";
-import { startWipeOpen } from "./wipe.js";
 
 // Full reset — new run from level 1. HP, power-ups, score all cleared.
 export function newGame(){
@@ -265,10 +264,7 @@ export function loadLevel(def){
     workerCount: G.workers.length,
   });
 
-  // Iris Out: camera is {0,0} here so screen-space == world-space.
-  const sx = G.dan.x - G.camera.x;
-  const sy = G.dan.y - G.camera.y;
-  startWipeOpen(sx, sy);
+  G._wipeOpenPending = true;
 }
 
 // §8.1.4 validation: exactly one `player`, at least one `exit`, and every spawn

@@ -22,7 +22,7 @@ import { nextLevel, spawnWave, spawnPickup, updatePickups } from "./level.js";
 import { getLevelAchievementSummary } from "./achievements.js";
 import { sfx } from "./audio.js";
 import { emit } from "./events.js";
-import { updateWipe, startWipeClose } from "./wipe.js";
+import { updateWipe, startWipeClose, startWipeOpen } from "./wipe.js";
 
 export function update(dt){
   updateWipe(dt);    // runs in all states including levelclear
@@ -95,6 +95,13 @@ export function update(dt){
   updateWorkers(dt);
   updateEffects(dt);
   updateCamera();
+
+  if (G._wipeOpenPending) {
+    G._wipeOpenPending = false;
+    const sx = G.dan.x - G.camera.x;
+    const sy = G.dan.y - G.camera.y;
+    startWipeOpen(sx, sy);
+  }
 
   for (const t of G.terminals){
     t.pulse += dt * 3;

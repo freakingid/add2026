@@ -1,18 +1,17 @@
 /* =========================================================================
    wipe.js — iris wipe screen transition.
 
-   A grid of mop-bucket icons scales up (Iris In / closing) to cover the screen
-   or scales down (Iris Out / opening) to reveal it. Every icon scales from the
-   same focal point — Dan's screen-space position at trigger time.
+   A single 5-point star scales up (closing) to cover the screen or scales
+   down (opening) to reveal it, centered on Dan's screen-space position at
+   trigger time.
 
    All state is module-local; nothing goes on G. Wire-in:
      update.js  — updateWipe(dt) each frame; startWipeClose on exit collision
-     level.js   — startWipeOpen at end of loadLevel
+                  startWipeOpen deferred to first playing frame (G._wipeOpenPending)
      render.js  — drawWipe() as the absolute last draw call
    ========================================================================= */
 import { ctx, VIEW_W, VIEW_H } from './canvas.js';
 import { CFG } from './config.js';
-import { COL } from './palette.js';
 
 let phase = 'none';   // 'none' | 'opening' | 'hold_out' | 'closing' | 'hold_in'
 let t = 0;            // normalized 0..1 within the current animated phase
@@ -58,6 +57,35 @@ export function updateWipe(dt) {
   }
 }
 
+let _offscreen = null;
+let _octx = null;
+
+function getOffscreen() {
+  if (!_offscreen) {
+    _offscreen = document.createElement('canvas');
+    _offscreen.width = VIEW_W;
+    _offscreen.height = VIEW_H;
+    _octx = _offscreen.getContext('2d');
+  }
+  return { oc: _offscreen, octx: _octx };
+}
+
+function drawStar(octx, cx, cy, R) {
+  const r = R * 0.38;
+  const points = 5;
+  octx.beginPath();
+  for (let i = 0; i < points * 2; i++) {
+    const angle = (i * Math.PI / points) - Math.PI / 2;
+    const radius = i % 2 === 0 ? R : r;
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+    if (i === 0) octx.moveTo(x, y);
+    else octx.lineTo(x, y);
+  }
+  octx.closePath();
+  octx.fill();
+}
+
 export function drawWipe() {
   if (phase === 'none') return;
 
@@ -67,65 +95,22 @@ export function drawWipe() {
   else if (phase === 'hold_out') scale = 1;
   else if (phase === 'opening')  scale = 1 - easeInOut(t);
 
-  const size = CFG.WIPE_ICON_SIZE;
-  const cols = CFG.WIPE_COLS;
-  const rows = CFG.WIPE_ROWS;
+  const { oc, octx } = getOffscreen();
 
-  const gridW = cols * size;
-  const gridH = rows * size;
-  const originX = (VIEW_W - gridW) / 2;
-  const originY = (VIEW_H - gridH) / 2;
+  octx.clearRect(0, 0, VIEW_W, VIEW_H);
+  octx.globalCompositeOperation = 'source-over';
+  octx.fillStyle = 'rgba(28,31,38,0.80)';
+  octx.fillRect(0, 0, VIEW_W, VIEW_H);
 
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const cellX = originX + c * size + size / 2;
-      const cellY = originY + r * size + size / 2;
+  octx.globalCompositeOperation = 'destination-out';
+  const MAX_R = Math.hypot(VIEW_W, VIEW_H) * 0.75;
+  const R = MAX_R * (1 - scale);
+  drawStar(octx, focalX, focalY, R);
 
-      ctx.save();
-      ctx.translate(focalX, focalY);
-      ctx.scale(scale, scale);
-      ctx.translate(cellX - focalX, cellY - focalY);
-      drawWipeIcon(size);
-      ctx.restore();
-    }
-  }
+  octx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(oc, 0, 0);
 }
 
 function easeInOut(t) {
   return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-}
-
-function drawWipeIcon(size) {
-  ctx.strokeStyle = COL.atomic;
-  ctx.lineWidth = Math.max(1, size * 0.045);
-
-  // Body (trapezoid)
-  ctx.beginPath();
-  ctx.moveTo(-0.30 * size, -0.28 * size);
-  ctx.lineTo( 0.30 * size, -0.28 * size);
-  ctx.lineTo( 0.22 * size,  0.32 * size);
-  ctx.lineTo(-0.22 * size,  0.32 * size);
-  ctx.closePath();
-  ctx.stroke();
-
-  // Wringer (small rect, right side of body)
-  ctx.beginPath();
-  ctx.rect(0.22 * size, -0.10 * size, 0.14 * size, 0.20 * size);
-  ctx.closePath();
-  ctx.stroke();
-
-  // Handle (arc bowing upward above body)
-  ctx.beginPath();
-  ctx.arc(0, -0.28 * size, 0.22 * size, Math.PI, 0, true);
-  ctx.stroke();
-
-  // Left wheel
-  ctx.beginPath();
-  ctx.arc(-0.12 * size, 0.38 * size, 0.05 * size, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // Right wheel
-  ctx.beginPath();
-  ctx.arc( 0.12 * size, 0.38 * size, 0.05 * size, 0, Math.PI * 2);
-  ctx.stroke();
 }

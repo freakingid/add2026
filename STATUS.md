@@ -327,15 +327,22 @@ All core systems are complete. The table below is the canonical build status; GD
 
 ### Iris wipe transition
 
-- **Focal point is screen-space Dan position captured at trigger time, held fixed for
-  the animation duration.** Camera is at {0,0} during `loadLevel` so focal = world pos.
+- **Single star shape** (5-point, outer radius = `hypot(VIEW_W, VIEW_H) * 0.75` at full
+  scale) used as a compositing mask. Drawn on an offscreen canvas with `destination-out`
+  to punch a hole in the dark overlay (`rgba(28,31,38,0.80)`), then blitted to the main
+  canvas. NOT a grid of icons. The star hole reveals the game; the dark surround is
+  80% opaque so the game is faintly visible through it.
+- **Level-start focal point deferred to first playing frame (`G._wipeOpenPending` flag)**
+  so camera is settled before screen-space coords are computed. `loadLevel` sets the flag;
+  `update.js` consumes it immediately after `updateCamera()`.
+- **Scale semantics:** `scale` in `drawWipe` is the "covered fraction" — `R = MAX_R * (1 - scale)`.
+  `scale=0` → R=MAX_R (huge star, fully revealed); `scale=1` → R=0 (tiny star, fully covered).
+  Closing: scale 0→1 (star shrinks, dark covers). Opening: scale 1→0 (star grows, reveals).
 - **Wipe state is module-local in `wipe.js` (not on G)** — ephemeral render state that
   doesn't need to survive a reload or be inspectable by other systems.
 - **`G.transition` is set to `WIPE_CLOSE_DUR + WIPE_HOLD_IN + 0.05`** so `nextLevel()`
   fires when the screen is fully covered. Achievement modal pauses `G.transition`
   naturally, keeping the screen covered while the modal is displayed.
-- **Opening wipe starts in `hold_out` (not `opening`)** so the camera has one frame to
-  snap to Dan before the icon grid begins shrinking.
 - **`drawWipe()` is the last call in `render()`** — renders on top of HUD, achievement
   banners, and all state screens.
 - **Tests.** `test-wipe.js` (`node test-wipe.js`, 13 checks): all phase transitions

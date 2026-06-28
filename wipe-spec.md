@@ -1,386 +1,250 @@
-# Iris Wipe Transition — Implementation Spec
+# Iris Wipe Transition — Corrected Implementation Spec
 
 Screen transition effect for level start and level end.
-This file is the sole implementation brief — read it fully before writing any code.
+This is a CORRECTION of the previous spec. Read it fully before touching any code.
 
 ---
 
-## What it is
+## What the effect actually is
 
-A grid of mop-bucket icons that simultaneously scale up (Iris In, covers screen)
-or scale down (Iris Out, reveals screen). Every icon scales around the same focal
-point — Dan's screen-space position at the moment of the trigger — so the effect
-reads as the world collapsing onto or expanding from Dan.
+A single large **star shape** acts as a window into the game world.
+- Inside the star = game visible.
+- Outside the star = dark overlay (floor color, 80% opaque).
+- The star scales up (reveals) or down (covers) centered on Dan's screen position.
 
-## Phases
-
-### Level end — Iris In
-
-Triggered the instant Dan touches the exit (currently in `update.js` lines ~104–111).
-
-```
-world visible → icons grow 0→1 (WIPE_CLOSE_DUR) → hold full (WIPE_HOLD_IN) → nextLevel()
-```
-
-### Level start — Iris Out
-
-Triggered from `loadLevel()` in `level.js`, after Dan's position and camera are set.
-
-```
-icons at full scale (WIPE_HOLD_OUT) → icons shrink 1→0 (WIPE_OPEN_DUR) → none
-```
-
-During the Iris Out, `G.state` is already `"playing"` — the wipe just overlays the
-live game world while it opens. No state freezing needed.
+This is NOT a grid of icons. It is ONE shape that scales.
 
 ---
 
-## New file: `src/wipe.js`
+## Render approach — compositing
 
-Self-contained module. No imports from `state.js` — keep all wipe state
-**module-local**. Import `ctx`, `VIEW_W`, `VIEW_H` from `canvas.js`; `CFG` from
-`config.js`; `COL` from `palette.js`.
+`drawWipe()` uses a two-layer compositing technique:
 
-### Module-local state
+1. Draw a full-screen dark rectangle (`rgba(28,31,38,0.80)`) — covers everything.
+2. Use `ctx.globalCompositeOperation = 'destination-out'` to punch the star shape
+   out of that rectangle, revealing the game underneath.
 
-```js
-let phase = 'none';   // 'none' | 'opening' | 'hold_out' | 'closing' | 'hold_in'
-let t = 0;            // normalized 0..1 within the current animated phase
-let holdTimer = 0;    // counts down during hold phases
-let focalX = 0;       // screen-space X when wipe was triggered (held fixed)
-let focalY = 0;       // screen-space Y when wipe was triggered (held fixed)
+The star path must be drawn AFTER the dark rect, with destination-out active,
+then compositing must be reset to `'source-over'` immediately after.
+
+Because destination-out punches through whatever is on the canvas at that pixel,
+the entire sequence must be isolated in a `ctx.save()` / `ctx.restore()` block.
+Actually, destination-out on the main canvas will punch through ALL previously
+drawn content — to avoid this, use an **offscreen canvas** as a compositing buffer:
+
+```
+1. Draw dark rect onto offscreen canvas (fill entire offscreen surface)
+2. Set offscreen ctx compositeOperation to 'destination-out'
+3. Draw star path onto offscreen canvas (punches hole in the dark rect)
+4. Reset offscreen ctx compositeOperation to 'source-over'
+5. Draw offscreen canvas onto main canvas with ctx.drawImage()
 ```
 
-### Exports
+The offscreen canvas is created once at module load (same size as the game canvas).
+This is the correct pattern — it avoids punching holes in the game world itself.
+
+---
+
+## Star geometry
+
+A standard 5-point star, centered at (0, 0), drawn with two radii:
+- Outer radius (`R`): tip of each point
+- Inner radius (`r`): valley between points, = `R * 0.38` (classic star proportion)
 
 ```js
-export function startWipeClose(sx, sy)   // Iris In  — call when Dan hits exit
-export function startWipeOpen(sx, sy)    // Iris Out — call from loadLevel
-export function updateWipe(dt)           // advance t; handle phase transitions
-export function drawWipe()               // draw grid; no-op when phase === 'none'
-```
-
-### `startWipeClose(sx, sy)`
-
-```js
-phase = 'closing';
-t = 0;
-focalX = sx;
-focalY = sy;
-```
-
-### `startWipeOpen(sx, sy)`
-
-```js
-phase = 'hold_out';
-t = 0;
-holdTimer = CFG.WIPE_HOLD_OUT;
-focalX = sx;
-focalY = sy;
-```
-
-Starting in `hold_out` (not `opening`) means the screen is covered for a beat before
-it starts to open. This gives the player a moment after `nextLevel()` fires before
-the world is revealed.
-
-### `updateWipe(dt)`
-
-```js
-if (phase === 'none') return;
-
-if (phase === 'closing') {
-  t += dt / CFG.WIPE_CLOSE_DUR;
-  if (t >= 1) { t = 1; phase = 'hold_in'; holdTimer = CFG.WIPE_HOLD_IN; }
-
-} else if (phase === 'hold_in') {
-  holdTimer -= dt;
-  // Do NOT call nextLevel() here — update.js's G.transition countdown does that.
-  // This phase just keeps the screen covered until that fires.
-  if (holdTimer <= 0) phase = 'none';   // safety fallback
-
-} else if (phase === 'hold_out') {
-  holdTimer -= dt;
-  if (holdTimer <= 0) { phase = 'opening'; t = 0; }
-
-} else if (phase === 'opening') {
-  t += dt / CFG.WIPE_OPEN_DUR;
-  if (t >= 1) { t = 1; phase = 'none'; }
+function drawStar(octx, cx, cy, R) {
+  const r = R * 0.38;
+  const points = 5;
+  octx.beginPath();
+  for (let i = 0; i < points * 2; i++) {
+    const angle = (i * Math.PI / points) - Math.PI / 2;
+    const radius = i % 2 === 0 ? R : r;
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+    if (i === 0) octx.moveTo(x, y);
+    else octx.lineTo(x, y);
+  }
+  octx.closePath();
+  octx.fill();   // fill, not stroke — destination-out needs a filled shape
 }
 ```
 
-### `drawWipe()`
+`- Math.PI / 2` rotates so one point faces straight up (classic star orientation).
+
+**Radius at full scale:** must be large enough that the star covers the entire
+viewport even when focalX/focalY is near an edge. Use:
 
 ```js
+const MAX_R = Math.hypot(VIEW_W, VIEW_H) * 0.75;
+```
+
+`Math.hypot(960, 640) ≈ 1155`, so `MAX_R ≈ 866`. A star of that outer radius
+centered anywhere on the viewport will fully cover it. The `* 0.75` accounts for
+the fact that the star's points extend to R but the valleys only reach `0.38 * R`,
+so a modest oversize ensures solid coverage between the points too. If testing
+reveals gaps at corners when focal is at an edge, increase to `* 0.85`.
+
+**Radius at current animation time:**
+
+```js
+const R = MAX_R * currentScale;
+```
+
+where `currentScale` is the eased 0..1 value (same scale formula as before).
+
+---
+
+## Full `drawWipe()` implementation
+
+```js
+// Module-level: create offscreen canvas once
+let _offscreen = null;
+let _octx = null;
+
+function getOffscreen() {
+  if (!_offscreen) {
+    _offscreen = document.createElement('canvas');
+    _offscreen.width = VIEW_W;
+    _offscreen.height = VIEW_H;
+    _octx = _offscreen.getContext('2d');
+  }
+  return { oc: _offscreen, octx: _octx };
+}
+
 export function drawWipe() {
   if (phase === 'none') return;
 
-  // Compute per-icon scale from phase + t.
   let scale;
   if      (phase === 'closing')  scale = easeInOut(t);
   else if (phase === 'hold_in')  scale = 1;
   else if (phase === 'hold_out') scale = 1;
   else if (phase === 'opening')  scale = 1 - easeInOut(t);
 
-  const size = CFG.WIPE_ICON_SIZE;
-  const cols = CFG.WIPE_COLS;
-  const rows = CFG.WIPE_ROWS;
+  const { oc, octx } = getOffscreen();
 
-  // Center the grid on the viewport; let it bleed off edges slightly.
-  const gridW = cols * size;
-  const gridH = rows * size;
-  const originX = (VIEW_W - gridW) / 2;
-  const originY = (VIEW_H - gridH) / 2;
+  // 1. Fill offscreen with the dark overlay color
+  octx.clearRect(0, 0, VIEW_W, VIEW_H);
+  octx.globalCompositeOperation = 'source-over';
+  octx.fillStyle = 'rgba(28,31,38,0.80)';
+  octx.fillRect(0, 0, VIEW_W, VIEW_H);
 
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const cellX = originX + c * size + size / 2;  // cell center X
-      const cellY = originY + r * size + size / 2;  // cell center Y
+  // 2. Punch the star hole
+  octx.globalCompositeOperation = 'destination-out';
+  const MAX_R = Math.hypot(VIEW_W, VIEW_H) * 0.75;
+  const R = MAX_R * scale;
+  drawStar(octx, focalX, focalY, R);
 
-      ctx.save();
-      ctx.translate(focalX, focalY);
-      ctx.scale(scale, scale);
-      ctx.translate(cellX - focalX, cellY - focalY);
-      drawWipeIcon(size);   // draws centered at (0, 0)
-      ctx.restore();
-    }
-  }
+  // 3. Reset and blit to main canvas
+  octx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(oc, 0, 0);
 }
 ```
-
-The `translate → scale → translate` pattern is what makes every icon scale
-from the same focal point. Do not change this ordering.
-
-### `easeInOut(t)` — cubic, no dependencies
-
-```js
-function easeInOut(t) {
-  return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-}
-```
-
-### `drawWipeIcon(size)` — mop bucket silhouette
-
-Draws centered at `(0, 0)`, scaled to `size`. Caller handles position via ctx transform.
-All stroked in `COL.atomic`, no fill. Line width ~`size * 0.045` (scales with icon).
-
-Geometry (all values as fractions of `size`, centered at origin):
-
-```
-Body (trapezoid):
-  top-left:     (-0.30 * size, -0.28 * size)
-  top-right:    ( 0.30 * size, -0.28 * size)
-  bottom-right: ( 0.22 * size,  0.32 * size)
-  bottom-left:  (-0.22 * size,  0.32 * size)
-
-Wringer (small rect, right side of body, vertically centered):
-  left:   0.22 * size
-  top:   -0.10 * size
-  width:  0.14 * size
-  height: 0.20 * size
-
-Handle (arc, sits above body top edge):
-  Center: (0, -0.28 * size)
-  Radius: 0.22 * size
-  startAngle: Math.PI (left side)
-  endAngle:   0       (right side)
-  anticlockwise: true  → arc bows upward
-
-Wheels (two small circles, bottom of body):
-  left wheel:  (-0.12 * size, 0.38 * size) r = 0.05 * size
-  right wheel: ( 0.12 * size, 0.38 * size) r = 0.05 * size
-```
-
-Use `ctx.beginPath()` / `ctx.closePath()` / `ctx.stroke()` for the trapezoid and
-wringer. Use `ctx.arc()` for the handle and wheels. Set `ctx.strokeStyle = COL.atomic`
-and `ctx.lineWidth = Math.max(1, size * 0.045)` once before drawing.
 
 ---
 
-## Config additions — `src/config.js`
+## Focal point bug fix — level start
 
-Add to the `CFG` object (alongside the existing constants):
+**The problem:** `startWipeOpen` is called inside `loadLevel()`, which sets
+`G.camera = {x:0, y:0}` and places Dan at world center. At that moment
+`sx = G.dan.x - 0 = G.dan.x` (world x), which is correct for the camera-at-origin
+case. BUT `updateCamera()` runs on the first frame of `playing` and snaps the
+camera to follow Dan — after that snap, Dan's world position no longer equals his
+screen position.
 
+**The real issue:** the focal point is computed correctly at loadLevel time, but the
+camera hasn't been applied to the render yet. The wipe draws in SCREEN space, and
+the first rendered frame has the camera already applied, so the focal point is off.
+
+**The fix:** defer `startWipeOpen` to the first frame of `playing` state, AFTER
+`updateCamera()` has run. Use a pending flag on G:
+
+### In `level.js` — replace the current startWipeOpen call
+
+Remove:
 ```js
-// Iris wipe transition (screens.js / wipe.js)
-WIPE_ICON_SIZE: 80,    // px per icon at scale 1.0
-WIPE_COLS: 14,         // columns — intentionally > VIEW_W / ICON_SIZE for edge bleed
-WIPE_ROWS: 10,         // rows    — intentionally > VIEW_H / ICON_SIZE for edge bleed
-WIPE_HOLD_OUT: 0.30,   // s: hold fully-covered at level start before opening
-WIPE_HOLD_IN:  0.30,   // s: hold fully-covered at level end (safety; nextLevel fires first)
-WIPE_CLOSE_DUR: 0.80,  // s: Iris In animation (world → covered)
-WIPE_OPEN_DUR:  0.80,  // s: Iris Out animation (covered → world)
-```
-
-`14 × 80 = 1120 > 960 (VIEW_W)` and `10 × 80 = 800 > 640 (VIEW_H)` — icons bleed
-off all four edges by half an icon width, guaranteeing no gaps at corners.
-
----
-
-## Wire-in: `src/update.js`
-
-### 1. Import at top
-
-```js
-import { updateWipe, startWipeClose } from './wipe.js';
-```
-
-### 2. Call `updateWipe(dt)` — first line of `update(dt)`, before `pollGamepad()`
-
-```js
-export function update(dt) {
-  updateWipe(dt);    // ← ADD: runs in all states including levelclear
-  pollGamepad();
-  pollModals(dt);
-  // ... rest unchanged
-```
-
-Must run before state branching so the opening wipe advances during `'playing'`.
-
-### 3. Trigger Iris In — in the exit collision block (~line 104)
-
-Replace the existing block:
-```js
-// BEFORE:
-if (Math.hypot(G.exit.x - G.dan.x, G.exit.y - G.dan.y) <= G.exit.r + G.dan.r){
-  G.high = Math.max(G.high, G.score);
-  G.state = "levelclear";
-  G.transition = 1.6;
-  sfx.levelClear();
-  return;
-}
-```
-
-With:
-```js
-// AFTER:
-if (Math.hypot(G.exit.x - G.dan.x, G.exit.y - G.dan.y) <= G.exit.r + G.dan.r){
-  G.high = Math.max(G.high, G.score);
-  G.state = "levelclear";
-  G.transition = CFG.WIPE_CLOSE_DUR + CFG.WIPE_HOLD_IN + 0.05;  // tiny buffer
-  const sx = G.dan.x - G.camera.x;
-  const sy = G.dan.y - G.camera.y;
-  startWipeClose(sx, sy);
-  sfx.levelClear();
-  return;
-}
-```
-
-`G.transition` now matches the wipe duration so `nextLevel()` fires precisely when
-the screen is fully covered.
-
----
-
-## Wire-in: `src/level.js`
-
-### 1. Import at top
-
-```js
-import { startWipeOpen } from './wipe.js';
-```
-
-### 2. Trigger Iris Out — end of `loadLevel()`
-
-`loadLevel()` already sets `G.camera = { x:0, y:0 }` (line ~259). The camera is
-reset to origin here, so screen-space = world-space at the moment of this call.
-Dan's spawn is at the world center (`CFG.COLS/2 × CFG.TILE`), so the focal point
-can be computed directly:
-
-```js
-// At the very end of loadLevel(), after all entities are seeded:
-const sx = G.dan.x - G.camera.x;   // camera is {0,0} here, so sx = G.dan.x
-const sy = G.dan.y - G.camera.y;   // sy = G.dan.y
+// Iris Out: camera is {0,0} here so screen-space == world-space.
+const sx = G.dan.x - G.camera.x;
+const sy = G.dan.y - G.camera.y;
 startWipeOpen(sx, sy);
 ```
 
-The camera will snap to follow Dan on the first `updateCamera()` call (first frame
-of `'playing'`). Since `startWipeOpen` enters `hold_out` first (not `opening`),
-the camera has one full frame to settle before the icon grid starts shrinking —
-so the focal point will be off by at most 1 frame of camera movement, which is
-imperceptible.
-
----
-
-## Wire-in: `src/render.js`
-
-### 1. Import at top
-
+Replace with:
 ```js
-import { drawWipe } from './wipe.js';
+G._wipeOpenPending = true;
 ```
 
-### 2. Call `drawWipe()` — absolute last line of `render()`
+Also add `G._wipeOpenPending = false` to the `G` initial state in `state.js`
+(add it near the other underscore-prefixed flags like `_levelEndEmitted`).
+
+### In `update.js` — consume the flag after updateCamera()
+
+`updateCamera()` is called at line ~94, near the top of the `playing` branch.
+Add this immediately after the `updateCamera()` call:
 
 ```js
-  // ... existing end of render():
-  if (G._showLifetimeModal) drawLifetimeModal();
-  drawWipe();    // ← ADD: always last; no-op when phase === 'none'
+if (G._wipeOpenPending) {
+  G._wipeOpenPending = false;
+  const sx = G.dan.x - G.camera.x;
+  const sy = G.dan.y - G.camera.y;
+  startWipeOpen(sx, sy);
 }
 ```
 
-`drawWipe()` must be last so it renders on top of the HUD, achievement banners,
-and all state screens.
+At this point the camera reflects the actual rendered frame, so the screen-space
+focal point is correct.
 
----
-
-## Achievement modal interaction
-
-The existing `G._showAchievementModal` check in `update.js` (levelclear branch)
-pauses `G.transition` while the modal is up. This interacts with the wipe:
-
-- If the modal shows, `G.transition` stops counting down → `nextLevel()` is delayed.
-- The wipe's `closing` phase still completes normally (it runs on its own timer).
-- After closing completes, the screen is covered and stays covered (`hold_in`)
-  while the player reads the modal.
-- When the player dismisses the modal, `G.transition` resumes and soon fires
-  `nextLevel()`.
-
-This is the correct behavior — the screen goes dark, the modal appears over it,
-the player dismisses, and then the next level loads. No extra code needed.
-
-One thing to verify: `drawLevelClear()` and `drawPostLevelModal()` (in `screens.js`)
-draw before `drawWipe()` in the render order, so the wipe will correctly cover
-those screens during the closing phase. Confirmed by the render order above.
-
----
-
-## Smoke test: `test-wipe.js`
-
-Write a headless Node.js smoke test (same pattern as existing tests):
-
+Also add `startWipeOpen` to the import line in `update.js`:
 ```js
-// Mock canvas context (wipe.js imports ctx from canvas.js)
-// Test sequence:
-// 1. startWipeClose(480, 320)
-// 2. run updateWipe in a loop at dt=0.016 for 1.5 s simulated time
-// 3. assert phase transitions: 'closing' → 'hold_in' at ~0.80 s
-// 4. startWipeOpen(480, 320)
-// 5. run updateWipe for 1.5 s
-// 6. assert: 'hold_out' for first 0.30 s, 'opening' next 0.80 s, 'none' after
-// 7. assert drawWipe() returns early when phase === 'none'
+import { updateWipe, startWipeClose, startWipeOpen } from './wipe.js';
 ```
 
-The test must mock `ctx` (stub `save/restore/translate/scale/beginPath/
-closePath/arc/stroke/strokeStyle/lineWidth` as no-ops), `VIEW_W`/`VIEW_H` as
-960/640, and `CFG` with the wipe constants above.
+And remove `startWipeOpen` from the import in `level.js` since it no longer calls it:
+```js
+// level.js: remove startWipeOpen from the wipe.js import
+```
 
 ---
 
-## STATUS.md update (after implementation)
+## What does NOT change
 
-Add to the build status table:
-```
-| Screen transition wipe | ✅ Built | — | `wipe.js`, `render.js`, `update.js`, `level.js` |
-```
+- `startWipeClose`, `startWipeOpen`, `updateWipe` function signatures — unchanged.
+- All phase logic in `updateWipe()` — unchanged.
+- `easeInOut()` — unchanged.
+- All wire-in points in `render.js` and `update.js` (the `updateWipe` call and
+  `startWipeClose` trigger) — unchanged.
+- Config constants — unchanged (WIPE_COLS, WIPE_ROWS, WIPE_ICON_SIZE are now unused
+  but harmless to leave in CFG).
 
-Add a subsystem decisions entry:
+---
+
+## Files to change
+
+1. `src/wipe.js` — replace `drawWipe()` entirely; add `getOffscreen()` and
+   `drawStar()`; remove `drawWipeIcon()` (no longer used).
+2. `src/level.js` — replace `startWipeOpen(sx, sy)` call with
+   `G._wipeOpenPending = true`; remove `startWipeOpen` from import.
+3. `src/state.js` — add `_wipeOpenPending: false` to the G object.
+4. `src/update.js` — add `startWipeOpen` to the wipe.js import; add the
+   pending-flag consumption block after `updateCamera()`.
+
+---
+
+## Smoke test update
+
+The existing `test-wipe.js` tests phase transitions — those still pass unchanged.
+Add one new assertion: after `startWipeOpen` is called, `drawWipe()` at
+`phase === 'hold_out'` should call `octx.fillRect` (dark overlay) and then
+`octx.fill` (star punch). Mock the offscreen canvas in the test.
+
+---
+
+## STATUS.md update after implementation
+
+Update the subsystem decisions entry for "Iris wipe transition":
 ```
-### Iris wipe transition
-- Focal point is screen-space Dan position captured at trigger time, held fixed for
-  the animation duration. Camera is at {0,0} during loadLevel so focal = world pos.
-- Wipe state is module-local in wipe.js (not on G) — ephemeral render state.
-- G.transition is set to WIPE_CLOSE_DUR + WIPE_HOLD_IN + 0.05 so nextLevel fires
-  when the screen is fully covered. Achievement modal pauses G.transition naturally,
-  keeping the screen covered while the modal is displayed.
-- Opening wipe starts in hold_out (not opening) so the camera has one frame to
-  snap to Dan before the grid begins shrinking.
+- Single star shape (5-point, outer radius = hypot(VIEW_W,VIEW_H)*0.75 at full scale)
+  used as a compositing mask. Drawn on an offscreen canvas with destination-out to
+  punch a hole in the dark overlay, then blitted to the main canvas. NOT a grid of icons.
+- Level-start focal point deferred to first playing frame (G._wipeOpenPending flag)
+  so camera is settled before screen-space coords are computed.
 ```
