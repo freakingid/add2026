@@ -38,6 +38,7 @@ All core systems are complete. The table below is the canonical build status; GD
 | Audio — 18 SFX + looping conveyor bed | ✅ Built | §10 | `audio.js` |
 | Game states (title / playing / levelclear / dead) | ✅ Built | — | `state.js`, `screens.js` |
 | Achievement system | 🔧 In progress — Phase 5 complete | `ACHIEVEMENTS.md`, `ACHIEVEMENT-BLUEPRINT.md` | `events.js`, `achievements.js`, `screens.js`, `render.js`, `audio.js` |
+| Save/Load system (savegame.js) | 🔧 Phase 1 complete | — | `savegame.js`, `level.js` |
 | Sprite-art polish | 🔲 Not built | §10 | — |
 
 > Cross-cutting "do not silently change" rules (HP/score persistence, decrement model,
@@ -397,6 +398,34 @@ All core systems are complete. The table below is the canonical build status; GD
 - **Tests.** `test-wipe.js` (`node test-wipe.js`, 13 checks): all phase transitions
   (`closing→hold_in→none`, `hold_out→opening→none`), no-op when `phase=none`, no
   throws during draw.
+
+---
+
+### Save/Load system (savegame.js — Phase 1)
+
+- **Save point = level start, not mid-level.** A save captures the state at the
+  beginning of the current level number (score/HP/powerups/dustbin carried). On
+  resume, `resumeFromSave` restores those fields then calls `buildLevel()` — the
+  player re-plays from the top of the saved level. No mid-run checkpoint.
+- **5 slots, `add_save_N` localStorage keys** (0-indexed, N = 0..4). Separate
+  keys: `add_prefs` (masterVolume), `add_high` (global high score). High score
+  is NOT per-slot; it lives globally so it persists across runs and deletions.
+- **`savegame.js` is a pure leaf.** No imports from any game module. Operates
+  only on `localStorage` + `JSON`. This keeps it testable headlessly (Node.js
+  mock) and avoids circular deps.
+- **`resumeFromSave(saveData, availablePlaylists)` is exported from `level.js`.**
+  It restores `G.score/level/gameMode/playlist/playlistIndex/dan/powerups`, then
+  calls the existing `buildLevel()`. Must be called AFTER `newGame()` so `G.dan`
+  and `G.powerups` are fresh objects before the overrides are applied.
+- **Playlist fallback:** if the saved playlist filename no longer exists in
+  `G.availablePlaylists` (file deleted / renamed), `resumeFromSave` silently
+  falls back to `"levelPlan"` mode. No error thrown; the level still loads.
+- **`buildLevel` is now exported** so `resumeFromSave` (and future callers) can
+  call it directly without going through `newGame` or `nextLevel`.
+- **Tests:** `test-savegame.js` (node, 24 checks): listSaves empty state,
+  saveGame/loadSave round-trip, null untouched slot, deleteSave, version field,
+  corrupt-JSON → null, prefs default/save/load, highScore default/save/load,
+  boundary slot (4), listSaves sparse-write pattern.
 
 ---
 

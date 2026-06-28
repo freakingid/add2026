@@ -107,12 +107,46 @@ function buildLevelPlanLevel(){
 
 // Generate this level's definition, then load it. Routes to hand-authored or
 // level-plan depending on G.gameMode (set at title before the run starts).
-function buildLevel(){
+export function buildLevel(){
   if (G.gameMode === "handAuthored" && G.playlist){
     buildHandAuthoredLevel();
   } else {
     buildLevelPlanLevel();
   }
+}
+
+// Restores G fields from a save object, then builds the level.
+// Call this AFTER newGame() has set a clean slate.
+// availablePlaylists is G.availablePlaylists (needed for playlist lookup).
+export function resumeFromSave(saveData, availablePlaylists){
+  G.score  = saveData.score;
+  G.level  = saveData.level;
+  G.gameMode = saveData.gameMode;
+
+  if (saveData.gameMode === "handAuthored" && saveData.playlistFilename){
+    const match = (availablePlaylists || []).find(
+      p => p.filename === saveData.playlistFilename
+    );
+    if (match){
+      G.playlist = match;
+      G.playlistIndex = saveData.playlistIndex;
+    } else {
+      // Playlist file gone — fall back to levelPlan gracefully
+      G.gameMode = "levelPlan";
+      G.playlist = null;
+      G.playlistIndex = 0;
+    }
+  } else {
+    G.playlist = null;
+    G.playlistIndex = 0;
+  }
+
+  G.dan.hp         = Math.min(saveData.dan.hp, G.dan.maxHp);
+  G.dan.hasDustbin = saveData.dan.hasDustbin;
+  G.powerups       = { ...saveData.powerups };
+
+  buildLevel();
+  G.state = "playing";
 }
 
 /* =========================================================================
