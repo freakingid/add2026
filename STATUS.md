@@ -35,7 +35,7 @@ All core systems are complete. The table below is the canonical build status; GD
 | Conveyor push mechanic + rendering + hum | ✅ Built | §8.1.2 | `world.js`, `render.js` |
 | Audio — 17 SFX + looping conveyor bed | ✅ Built | §10 | `audio.js` |
 | Game states (title / playing / levelclear / dead) | ✅ Built | — | `state.js`, `screens.js` |
-| Achievement system | 🔧 In progress — Phase 2 complete | `ACHIEVEMENTS.md`, `ACHIEVEMENT-BLUEPRINT.md` | `events.js`, `achievements.js` |
+| Achievement system | 🔧 In progress — Phase 3 complete | `ACHIEVEMENTS.md`, `ACHIEVEMENT-BLUEPRINT.md` | `events.js`, `achievements.js` |
 | Sprite-art polish | 🔲 Not built | §10 | — |
 
 > Cross-cutting "do not silently change" rules (HP/score persistence, decrement model,
@@ -405,4 +405,26 @@ See **`ACHIEVEMENTS.md`** for the full specification and **`ACHIEVEMENT-BLUEPRIN
 
 - **`G._levelStartTime` / `G._runStartTime` / `G._allEnemiesDeadEmitted`.** Three new tracking fields added to `G` in `state.js`. These are set by game lifecycle code (`level.js`, `update.js`), not by `achievements.js`, so they aren't achievement-module state on `G` — they're timing primitives used by emitter call sites. `achievements.js` never writes to `G`.
 
-- **80/80 headless tests pass** (`node test-achievements.js`). 22 sections covering pub/sub correctness, isoWeekKey format, init round-trip, cmb_foam_party Bronze trigger and cross-session persistence, all payload shapes (bolt:fired/hit/missed/expired, enemy:died/spawned/fired, player:hit, worker:rescued/died/following, level:start/end, run:end, vending:used, dustbin events, conveyor events), week rollover discard, parallel lifetime counters, and banner queue behaviour.
+- **80/80 headless tests pass (Phase 2), 149/149 (Phase 3)** (`node test-achievements.js`). Phase 2: 22 sections covering pub/sub correctness, isoWeekKey format, init round-trip, cmb_foam_party Bronze trigger and cross-session persistence, all payload shapes, week rollover discard, parallel lifetime counters, and banner queue behaviour. Phase 3: 8 additional sections (23–30) covering Progression, Survival, Speed, Worker Rescue, Atomic Dustbin, Power-Ups & Items, Score stubs, and Combat.
+
+**Phase 3 decisions:**
+
+- **REGISTRY table in achievements.js.** Every achievement is now declared in a module-local `REGISTRY` object `{ name, tiers[], weekly, stub? }`. `_inc(id)` and `_weeklyInc(id)` consult this table; stubs short-circuit immediately without touching progress or banners. This avoids duplicating ID strings across scattered if-chains and makes tier thresholds easy to audit against ACHIEVEMENTS.md.
+
+- **Generic `_checkTiers` + `_inc` helpers.** A single `_checkTiers(id)` walks from the current tier to the new one and pushes banners for each promoted tier in sequence. `_inc(id, amount)` calls `_incLifetime` then `_checkTiers` — one call site per achievement per handler. Per-type lifetime counters (cmb_whistleblower / cmb_blue_collar / cmb_pest_control / cmb_middle_mgmt) all flow through the same helper.
+
+- **cmb_grounded / cmb_early_retirement use spawned+fired+died triplet.** `enemy:spawned` sets a per-session flag; `enemy:fired` clears it (grounded) or clears a kill-before-fire flag (early_retirement); `enemy:died` reads the flags. This avoids storing instance IDs — there's at most one active tracking slot per type per level (the last spawned). Works correctly for the single-enemy-type-per-level constraint; safe for "mixed" since each type still has its own flag.
+
+- **surv_skeleton reads `_session.levelEndHp` set by player:hp_changed.** The level:end payload doesn't carry HP; the last `player:hp_changed` before level:end is taken as Dan's HP at the moment of exit. This is accurate because HP only changes at damage/heal events.
+
+- **wrk_nick threshold = 10 HP (half of maxHp 20).** The `worker:rescued` payload carries `playerHP` but not `maxHp`. Blueprint says "≤ half health" — we use the fixed threshold ≤10 since maxHp is always 20 in the current game. If maxHp ever becomes variable, the `player:hp_changed` payload (which carries `maxHp`) can be used to maintain a `_session.danMaxHp` field.
+
+- **Score stubs registered but short-circuit.** `scr_bonus`, `scr_quarterly`, `scr_annual` exist in REGISTRY with `stub:true` and `tiers:null`. `_inc` and `_weeklyInc` check `reg.stub` before doing anything. No progress is ever stored; no banner is ever pushed. They will remain stubs until playtesting calibrates the thresholds.
+
+- **`prg_ceo` registered as stub** (`stub:true, stubReason:'requires difficulty system'`). No activation path until the difficulty system is designed.
+
+- **Phase 2 counter IDs preserved for localStorage compatibility.** `wrk_total_rescued`, `pwr_stocked`, `pwr_vending_total` are still tracked alongside their Phase 3 canonical equivalents (`wrk_union_rep` etc.) so stored progress from Phase 2 sessions isn't lost. These compat entries appear in REGISTRY with dummy names prefixed `_compat_`.
+
+- **`dust_disgruntled` implemented in Phase 3 (not Phase 4)** because it only needs `dustbin:bounced.totalWallCount` — no per-shot state. The blueprint listed it under Phase 4, but it fits Phase 3's "no per-shot tracking" constraint. Handled in `_onDustbinBounced`.
+
+- **`cmb_cleaning_spree` / `cmb_downsizing` use a sliding time window.** `_session.recentKillTimes` is an array of `Date.now()` timestamps, filtered on each kill to the last 10 seconds. If ≥10 kills, Downsizing fires; else if ≥5, Cleaning Spree fires. Both can fire on the same kill. Same pattern for `cmb_deep_clean` (cleaner-specific, 5s window, 3 kills).

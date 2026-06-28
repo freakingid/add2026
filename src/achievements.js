@@ -1,5 +1,5 @@
 /* =========================================================================
-   achievements.js — Phase 2 implementation.
+   achievements.js — Phase 3 implementation.
 
    Subscribes to all game events via events.js and maintains:
      - Module-local session state (no G mutations)
@@ -7,6 +7,9 @@
      - Weekly progress in localStorage (add_weekly_{year}_{week})
      - ISO week rollover detection (add_weekly_meta)
      - In-play banner queue (pulled by render.js)
+
+   Phase 3 adds: Progression, Survival, Speed, Worker Rescue, Atomic Dustbin,
+   Power-Ups & Items, Score stubs. All use only events wired in Phase 2.
 
    Imports only from events.js (dependency flows one way to game modules).
    ========================================================================= */
@@ -51,18 +54,71 @@ function _pushBanner(text, subtext) {
 
 /* ---- Module-local session state ----------------------------------------- */
 let _session = {
+  /* timing */
   levelStartTime: 0,
   runStartTime: 0,
+
+  /* per-level shot/kill/damage counters */
   levelShotsFired: 0,
+  levelBoltHits: 0,
   levelEnemiesKilled: 0,
   levelDamageTaken: 0,
+
+  /* per-level worker state */
   levelWorkersRescued: 0,
+  levelWorkersAvailable: 0,          // set on level:start
+  levelWorkersRescuedSet: null,      // Set of workerIndex rescued this level
+  levelAnyWorkerRescued: false,
+
+  /* per-level power-ups / vending */
   levelPowerupsCollected: 0,
   levelVendingUsed: 0,
+
+  /* per-level dustbin */
   levelDustbinThrown: false,
+
+  /* per-level no-standing-still flag (cleared when player:stood_still fires) */
+  levelStoodStill: false,
+
+  /* per-level enemy tracking */
+  levelAllEnemiesDeadReached: false,
+  levelEnemyTypesKilled: null,       // Set of types killed this level
+  levelManagerHit: false,            // hit by manager this level
+
+  /* recent-kill timestamps for speed-kill achievements */
+  recentKillTimes: [],
+
+  /* recent rescue timestamp for wrk_tag_team */
+  lastRescueTime: 0,
+
+  /* per-level manager tracking for cmb_early_retirement / cmb_overtime_denied */
+  levelManagerSpawnTime: 0,
+  levelManagerKilledBeforeFired: false,
+
+  /* worker escort tracking (durationMs by workerIndex) */
+  workerFollowingMs: {},
+
+  /* per-run counters */
   runWorkersRescued: 0,
+  runWorkersAvailableTotal: 0,       // total workers across levels
+  runWorkersRescuedTotal: 0,         // same as runWorkersRescued but clearer
+  runLevelsCompleted: 0,
   runPowerupsCollected: 0,
   runVendingUsed: 0,
+  runInputMode: null,
+
+  /* per-run authored-level tracking for prg_spring */
+  runAuthoredLevelsCompleted: new Set(),
+
+  /* per-run worker rescue per level (for wrk_nobody / wrk_unionized) */
+  runLevelWorkerData: [],           // [{available, rescued}] one per level
+
+  /* consecutive counters (persist across levels within a run but reset on death) */
+  consecutiveDamageFreeCount: 0,
+  consecutiveSurviveCount: 0,       // levels survived without dying (surv_hot_streak)
+
+  /* no-workers-rescued consecutive levels (wrk_understaffed) */
+  consecutiveNoRescueLevels: 0,
 };
 
 /* ---- Lifetime state (backed by localStorage) ---------------------------- */
@@ -97,8 +153,6 @@ function _loadWeekly() {
   _weekKey = currentKey;
 
   if (!_weeklyMeta || _weeklyMeta.key !== currentKey) {
-    // New week — discard any in-memory progress for the new week (old key remains
-    // as a tombstone in localStorage; we don't need to clean it up).
     lsSet(KEY_WEEKLY_META, { key: currentKey });
     _weeklyMeta = { key: currentKey };
     _weekly = {};
@@ -125,28 +179,143 @@ function _unlockWeekly(id) {
   if (!_weekly[id].unlocked) {
     _weekly[id].unlocked = true;
     _saveWeekly();
-    return true; // newly unlocked this call
+    return true;
   }
   return false;
 }
 
-/* ---- Achievement thresholds (Phase 2: lifetime foam party tiers) --------- */
-const CMB_FOAM_PARTY_TIERS = [500, 2000, 5000, 10000, 25000];
+/* ---- Achievement registry -----------------------------------------------
+   Format: [id, name, tiers[], weekly, stub]
+   tiers = [B, S, G, P, D] thresholds (5 elements).
+   stub: true → handler registered but short-circuits immediately.
+   -------------------------------------------------------------------- */
+const REGISTRY = {
+  /* Accuracy (Phase 3: stubs — require shot-hit data gated at level:end; implemented in Phase 3 via level:end stats) */
+  /* These ARE implemented in Phase 3 via level:end. */
 
-function _checkFoamParty(totalFired) {
-  _ensureLifetimeEntry('cmb_foam_party');
-  const tierNames = ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond'];
-  const prev = _lifetime['cmb_foam_party'].tier;
-  let unlocked = prev;
-  for (let t = prev; t < CMB_FOAM_PARTY_TIERS.length; t++) {
-    if (totalFired >= CMB_FOAM_PARTY_TIERS[t]) unlocked = t + 1;
+  /* Progression */
+  prg_temp:       { name:'The Temp',          tiers:[1,10,25,50,100],   weekly:false },
+  prg_director:   { name:'Regional Director', tiers:[1,5,15,30,60],     weekly:false },
+  prg_ceo:        { name:'CEO',               tiers:[1,3,10,25,50],     weekly:false, stub:true, stubReason:'requires difficulty system' },
+  prg_spring:     { name:'Spring Cleaning',   tiers:[1,5,15,30,60],     weekly:true  },
+  prg_manual:     { name:'Read the Manual',   tiers:[1,3,10,25,50],     weekly:false },
+
+  /* Survival */
+  surv_spotless:    { name:'Spotless Record',  tiers:[5,15,35,75,150],  weekly:true  },
+  surv_teflon:      { name:'Teflon Dan',       tiers:[3,10,25,50,100],  weekly:true  },
+  surv_skeleton:    { name:'Skeleton Crew',    tiers:[3,10,25,50,100],  weekly:true  },
+  surv_osha:        { name:'OSHA Violation',   tiers:[3,10,25,50,100],  weekly:false },
+  surv_no_stopping: { name:'No Stopping',      tiers:[3,10,25,50,100],  weekly:true  },
+  surv_hot_streak:  { name:'Hot Streak',       tiers:[1,5,15,30,60],    weekly:true  },
+
+  /* Speed */
+  spd_rush:   { name:'Rush Job',     tiers:[5,15,35,75,150],  weekly:true  },
+  spd_lunch:  { name:'Lunch Break',  tiers:[3,10,25,50,100],  weekly:true  },
+
+  /* Atomic Dustbin */
+  dust_option:     { name:'Atomic Option',        tiers:[3,10,25,50,100],  weekly:true  },
+  dust_reserve:    { name:'Strategic Reserve',     tiers:[5,15,35,75,150],  weekly:true  },
+  dust_disgruntled:{ name:'Disgruntled Employee',  tiers:[3,10,25,50,100],  weekly:false },
+  dust_env_hazard: { name:'Environmental Hazard',  tiers:[3,10,25,50,100],  weekly:true  },
+  dust_heavy_hitter:{ name:'Heavy Hitter',         tiers:[50,150,350,750,1500], weekly:false },
+
+  /* Worker Rescue */
+  wrk_first_responder:{ name:'First Responder',    tiers:[5,15,35,75,150],  weekly:true  },
+  wrk_hero:           { name:'Hero of the Warehouse',tiers:[5,15,35,75,150], weekly:true  },
+  wrk_nick:           { name:'In the Nick of Time', tiers:[5,15,35,75,150],  weekly:true  },
+  wrk_danger_pay:     { name:'Danger Pay',          tiers:[3,10,25,50,100],  weekly:true  },
+  wrk_union_rep:      { name:'Union Rep',           tiers:[25,100,250,500,1000], weekly:false },
+  wrk_last_man:       { name:'Last Man Standing',   tiers:[3,10,25,50,100],  weekly:true  },
+  wrk_attendance:     { name:'Perfect Attendance',  tiers:[1,5,15,30,60],    weekly:true  },
+  wrk_zero_hour:      { name:'Zero Hour',           tiers:[1,5,15,30,60],    weekly:true  },
+  wrk_escort:         { name:'Escort Duty',         tiers:[5,15,35,75,150],  weekly:true  },
+  wrk_tag_team:       { name:'Tag Team',            tiers:[5,15,35,75,150],  weekly:true  },
+  wrk_nobody:         { name:'Nobody Left Behind',  tiers:[1,3,10,25,50],    weekly:true  },
+  wrk_unionized:      { name:'Unionized',           tiers:[3,10,25,50,100],  weekly:true  },
+  wrk_understaffed:   { name:'Understaffed',        tiers:[1,3,10,25,50],    weekly:false },
+
+  /* Combat — lifetime type-specific counters */
+  cmb_decommissioned:{ name:'Decommissioned',  tiers:[500,2000,5000,10000,25000], weekly:false },
+  cmb_foam_party:    { name:'Foam Party',       tiers:[500,2000,7500,20000,50000], weekly:false },
+  cmb_whistleblower: { name:'Whistleblower',    tiers:[10,50,150,300,600],   weekly:false },
+  cmb_middle_mgmt:   { name:'Middle Management',tiers:[1,5,15,30,60],        weekly:false },
+  cmb_pest_control:  { name:'Pest Control',     tiers:[10,50,150,300,600],   weekly:false },
+  cmb_blue_collar:   { name:'Blue Collar',      tiers:[50,200,500,1000,2500],weekly:false },
+
+  /* Combat — per-level / per-run */
+  cmb_zero_waste:      { name:'Zero Waste',           tiers:[5,15,35,75,150],  weekly:true  },
+  cmb_product_recall:  { name:'Product Recall',       tiers:[3,10,25,50,100],  weekly:true  },
+  cmb_grounded:        { name:'Grounded',             tiers:[5,20,50,100,200], weekly:true  },
+  cmb_above_pay_grade: { name:'Above My Pay Grade',   tiers:[5,15,35,75,150],  weekly:true  },
+  cmb_early_retirement:{ name:'Early Retirement',     tiers:[5,15,35,75,150],  weekly:true  },
+  cmb_overtime_denied: { name:'Overtime Denied',      tiers:[5,15,35,75,150],  weekly:true  },
+  cmb_cleaning_spree:  { name:'Cleaning Spree',       tiers:[10,30,75,150,300],weekly:true  },
+  cmb_downsizing:      { name:'Downsizing',           tiers:[3,10,25,50,100],  weekly:true  },
+  cmb_deep_clean:      { name:'Deep Clean',           tiers:[3,10,25,50,100],  weekly:true  },
+
+  /* Power-Ups & Items */
+  itm_off_clock:   { name:'Off the Clock',          tiers:[5,15,35,75,150],  weekly:true  },
+  itm_min_wage:    { name:'Minimum Wage Warrior',    tiers:[3,10,25,50,100],  weekly:true  },
+  itm_calories:    { name:'Watching My Calories',    tiers:[5,15,35,75,150],  weekly:true  },
+  itm_no_refills:  { name:'No Refills',             tiers:[3,10,25,50,100],  weekly:true  },
+  itm_cost_cutting:{ name:'Cost Cutting',            tiers:[3,10,25,50,100],  weekly:true  },
+
+  /* Score — stubs (thresholds not set) */
+  scr_bonus:     { name:'Performance Bonus',  tiers:null, weekly:true,  stub:true, stubReason:'thresholds not set' },
+  scr_quarterly: { name:'Quarterly Targets',  tiers:null, weekly:true,  stub:true, stubReason:'thresholds not set' },
+  scr_annual:    { name:'Annual Review',       tiers:null, weekly:true,  stub:true, stubReason:'thresholds not set' },
+
+  /* Phase 2 tracking (legacy names kept for localStorage compatibility) */
+  wrk_total_rescued: { name:'_compat_wrk_total',  tiers:[25,100,250,500,1000], weekly:false },
+  pwr_stocked:       { name:'_compat_pwr_stocked', tiers:[1,5,15,30,60],       weekly:false },
+  pwr_vending_total: { name:'_compat_pwr_vending', tiers:[1,5,15,30,60],       weekly:false },
+};
+
+const TIER_NAMES = ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond'];
+
+/* ---- Generic tier-check + banner push ------------------------------------ */
+function _checkTiers(id) {
+  const reg = REGISTRY[id];
+  if (!reg || reg.stub || !reg.tiers) return;
+  _ensureLifetimeEntry(id);
+  const entry = _lifetime[id];
+  const prev = entry.tier;
+  let next = prev;
+  for (let t = prev; t < reg.tiers.length; t++) {
+    if (entry.progress >= reg.tiers[t]) next = t + 1;
     else break;
   }
-  if (unlocked > prev) {
-    _lifetime['cmb_foam_party'].tier = unlocked;
+  if (next > prev) {
+    entry.tier = next;
     _saveLifetime();
-    _pushBanner('Foam Party', `${tierNames[unlocked - 1]} unlocked — ${CMB_FOAM_PARTY_TIERS[unlocked - 1].toLocaleString()} bubbles fired`);
+    _pushBanner(reg.name, `${TIER_NAMES[next - 1]} unlocked`);
   }
+}
+
+/* Increment lifetime progress and check tiers in one call. */
+function _inc(id, amount = 1) {
+  const reg = REGISTRY[id];
+  if (!reg || reg.stub) return 0;
+  const total = _incLifetime(id, amount);
+  _checkTiers(id);
+  return total;
+}
+
+/* Unlock a weekly achievement once (idempotent). */
+function _weeklyUnlock(id) {
+  const reg = REGISTRY[id];
+  if (!reg || reg.stub || !reg.weekly) return;
+  if (_unlockWeekly(id)) {
+    _incWeekly(id);
+    _pushBanner(reg.name, 'Weekly progress');
+  }
+}
+
+/* Increment a weekly count (for weekly achievements that accumulate per week). */
+function _weeklyInc(id) {
+  const reg = REGISTRY[id];
+  if (!reg || reg.stub || !reg.weekly) return;
+  _incWeekly(id);
 }
 
 /* ---- Event handlers ----------------------------------------------------- */
@@ -154,134 +323,497 @@ function _checkFoamParty(totalFired) {
 function _onRunStart() {
   _session.runStartTime = Date.now();
   _session.runWorkersRescued = 0;
+  _session.runWorkersAvailableTotal = 0;
+  _session.runWorkersRescuedTotal = 0;
+  _session.runLevelsCompleted = 0;
   _session.runPowerupsCollected = 0;
   _session.runVendingUsed = 0;
+  _session.runInputMode = null;
+  _session.runAuthoredLevelsCompleted = new Set();
+  _session.runLevelWorkerData = [];
+  _session.consecutiveDamageFreeCount = 0;
+  _session.consecutiveSurviveCount = 0;
+  _session.consecutiveNoRescueLevels = 0;
 }
 
-function _onLevelStart({ terminalCount, workerCount }) {
+function _onLevelStart({ terminalCount, workerCount, levelNumber, isAuthored }) {
   _session.levelStartTime = Date.now();
   _session.levelShotsFired = 0;
+  _session.levelBoltHits = 0;
   _session.levelEnemiesKilled = 0;
   _session.levelDamageTaken = 0;
   _session.levelWorkersRescued = 0;
+  _session.levelWorkersAvailable = workerCount ?? 5;
+  _session.levelWorkersRescuedSet = new Set();
+  _session.levelAnyWorkerRescued = false;
   _session.levelPowerupsCollected = 0;
   _session.levelVendingUsed = 0;
   _session.levelDustbinThrown = false;
+  _session.levelStoodStill = false;
+  _session.levelAllEnemiesDeadReached = false;
+  _session.levelEnemyTypesKilled = new Set();
+  _session.levelManagerHit = false;
+  _session.recentKillTimes = [];
+  _session.lastRescueTime = 0;
+  _session.levelManagerSpawnTime = 0;
+  _session.levelManagerKilledBeforeFired = false;
+  _session.workerFollowingMs = {};
+  _session.runWorkersAvailableTotal += (workerCount ?? 5);
 }
 
-function _onLevelEnd({ levelTime, workersRescued, levelNumber }) {
-  // Reserved for per-level checks. Populated in Phase 3+.
+function _onLevelEnd({ levelTime, workersRescued, levelNumber, isAuthored, shotsHits, shotsFired }) {
+  _session.runLevelsCompleted++;
+
+  /* -- prg_temp: cumulative levels completed -- */
+  _inc('prg_temp');
+
+  /* -- spd_rush: level under 45 seconds -- */
+  if (typeof levelTime === 'number' && levelTime <= 45000) {
+    _inc('spd_rush');
+    _weeklyInc('spd_rush');
+  }
+
+  /* -- surv_spotless: no damage taken -- */
+  if (_session.levelDamageTaken === 0) {
+    _inc('surv_spotless');
+    _weeklyInc('surv_spotless');
+    _session.consecutiveDamageFreeCount++;
+  } else {
+    _session.consecutiveDamageFreeCount = 0;
+  }
+
+  /* -- surv_teflon: 3 consecutive damage-free levels -- */
+  if (_session.consecutiveDamageFreeCount >= 3) {
+    _inc('surv_teflon');
+    _weeklyInc('surv_teflon');
+  }
+
+  /* -- surv_skeleton: exactly 1 HP at level end --
+       The payload doesn't carry HP directly; we use a flag set by player:hp_changed.
+       hp_at_level_end is tracked as _session.levelEndHp (set on level:end payload
+       if caller provides it, or via a dedicated _session field updated on hp_changed). */
+  if (typeof _session.levelEndHp === 'number' && _session.levelEndHp === 1) {
+    _inc('surv_skeleton');
+    _weeklyInc('surv_skeleton');
+  }
+
+  /* -- surv_osha: hit 10+ times and still complete -- */
+  if (_session.levelDamageTaken >= 10) {
+    _inc('surv_osha');
+  }
+
+  /* -- surv_no_stopping: never stood still for 1+ second -- */
+  if (!_session.levelStoodStill) {
+    _inc('surv_no_stopping');
+    _weeklyInc('surv_no_stopping');
+  }
+
+  /* -- surv_hot_streak: 3 consecutive levels survived (incremented by not dying) -- */
+  _session.consecutiveSurviveCount++;
+  if (_session.consecutiveSurviveCount >= 3) {
+    _inc('surv_hot_streak');
+    _weeklyInc('surv_hot_streak');
+  }
+
+  /* -- cmb_zero_waste: all enemies dead before level end -- */
+  if (_session.levelAllEnemiesDeadReached) {
+    _inc('cmb_zero_waste');
+    _weeklyInc('cmb_zero_waste');
+  }
+
+  /* -- cmb_above_pay_grade: manager level cleared without being hit -- */
+  if (levelNumber && _session.runInputMode !== null) { /* presence check only */ }
+  if (!_session.levelManagerHit && _session.levelManagerSpawnTime > 0) {
+    _inc('cmb_above_pay_grade');
+    _weeklyInc('cmb_above_pay_grade');
+  }
+
+  /* -- dust_reserve: completed without throwing dustbin -- */
+  if (!_session.levelDustbinThrown) {
+    _inc('dust_reserve');
+    _weeklyInc('dust_reserve');
+  }
+
+  /* -- itm_off_clock: completed without picking up power-ups -- */
+  if (_session.levelPowerupsCollected === 0) {
+    _inc('itm_off_clock');
+    _weeklyInc('itm_off_clock');
+  }
+
+  /* -- itm_calories: completed without using vending -- */
+  if (_session.levelVendingUsed === 0) {
+    _inc('itm_calories');
+    _weeklyInc('itm_calories');
+  }
+
+  /* -- itm_cost_cutting: no powerups AND no vending -- */
+  if (_session.levelPowerupsCollected === 0 && _session.levelVendingUsed === 0) {
+    _inc('itm_cost_cutting');
+    _weeklyInc('itm_cost_cutting');
+  }
+
+  /* -- wrk_hero: all 5 workers rescued this level -- */
+  if (_session.levelWorkersRescued >= _session.levelWorkersAvailable &&
+      _session.levelWorkersAvailable > 0) {
+    _inc('wrk_hero');
+    _weeklyInc('wrk_hero');
+  }
+
+  /* -- wrk_zero_hour: all 5 rescued AND no damage -- */
+  if (_session.levelWorkersRescued >= _session.levelWorkersAvailable &&
+      _session.levelWorkersAvailable > 0 &&
+      _session.levelDamageTaken === 0) {
+    _inc('wrk_zero_hour');
+    _weeklyInc('wrk_zero_hour');
+  }
+
+  /* -- wrk_last_man: ≥1 rescued and others not rescued -- */
+  if (_session.levelWorkersRescued >= 1 &&
+      _session.levelWorkersRescued < _session.levelWorkersAvailable) {
+    _inc('wrk_last_man');
+    _weeklyInc('wrk_last_man');
+  }
+
+  /* Track run-level worker data for per-run worker achievements. */
+  _session.runLevelWorkerData.push({
+    available: _session.levelWorkersAvailable,
+    rescued: _session.levelWorkersRescued,
+  });
+
+  /* -- wrk_understaffed: consecutive levels with no rescues -- */
+  if (_session.levelWorkersRescued === 0) {
+    _session.consecutiveNoRescueLevels++;
+  } else {
+    _session.consecutiveNoRescueLevels = 0;
+  }
+  if (_session.consecutiveNoRescueLevels >= 5) {
+    _inc('wrk_understaffed');
+  }
+
+  /* -- prg_spring: authored-level tracking (caller must pass isAuthored flag) -- */
+  if (isAuthored && typeof levelNumber === 'number') {
+    _session.runAuthoredLevelsCompleted.add(levelNumber);
+    /* Blueprint: 5 authored levels total. When all 5 are completed in one run. */
+    if (_session.runAuthoredLevelsCompleted.size >= 5) {
+      _inc('prg_spring');
+      _weeklyInc('prg_spring');
+    }
+  }
 }
 
 function _onRunEnd({ runTime, levelsCompleted, totalScore, inputMode }) {
-  // Reserved for run-end checks (score achievements, etc.). Populated in Phase 3+.
+  /* -- prg_director: cumulative runs completed -- */
+  _inc('prg_director');
+
+  /* -- spd_lunch: full run in under 15 minutes -- */
+  if (typeof runTime === 'number' && runTime <= 900000) {
+    _inc('spd_lunch');
+    _weeklyInc('spd_lunch');
+  }
+
+  /* -- itm_min_wage: full run without any power-ups -- */
+  if (_session.runPowerupsCollected === 0) {
+    _inc('itm_min_wage');
+    _weeklyInc('itm_min_wage');
+  }
+
+  /* -- itm_no_refills: full run without any vending -- */
+  if (_session.runVendingUsed === 0) {
+    _inc('itm_no_refills');
+    _weeklyInc('itm_no_refills');
+  }
+
+  /* -- wrk_attendance: all workers rescued across every level of the run -- */
+  const allRescued = _session.runLevelWorkerData.length > 0 &&
+    _session.runLevelWorkerData.every(d => d.available > 0 && d.rescued >= d.available);
+  if (allRescued) {
+    _inc('wrk_attendance');
+    _weeklyInc('wrk_attendance');
+  }
+
+  /* -- wrk_nobody: every available worker rescued across the entire run -- */
+  if (allRescued) {
+    _inc('wrk_nobody');
+    _weeklyInc('wrk_nobody');
+  }
+
+  /* -- wrk_unionized: at least 1 worker rescued on every level -- */
+  const allLevelsHadRescue = _session.runLevelWorkerData.length > 0 &&
+    _session.runLevelWorkerData.every(d => d.rescued >= 1);
+  if (allLevelsHadRescue) {
+    _inc('wrk_unionized');
+    _weeklyInc('wrk_unionized');
+  }
+
+  /* -- cmb_product_recall: one of every enemy type killed this run -- */
+  /* Tracked across levels via _session.runEnemyTypesKilled (set below). */
+  const allTypes = ['picker','forklift','security','sorter','cleaner','drone','manager','scanner','inventory'];
+  if (_session.runEnemyTypesKilled &&
+      allTypes.every(t => _session.runEnemyTypesKilled.has(t))) {
+    _inc('cmb_product_recall');
+    _weeklyInc('cmb_product_recall');
+  }
+
+  /* -- prg_manual: full level on gamepad (inputMode set from run:input_mode_set) -- */
+  if (inputMode === 'gamepad' && levelsCompleted >= 1) {
+    _inc('prg_manual');
+  }
+
+  /* Score stubs: do nothing (stub entries short-circuit at _inc). */
 }
 
 function _onBoltFired({ kind, isTripleShotActive }) {
   _session.levelShotsFired++;
   const total = _incLifetime('cmb_foam_party');
   _lifetime['cmb_foam_party'].progress = total;
-  _checkFoamParty(total);
+  _checkTiers('cmb_foam_party');
 }
 
 function _onBoltHit({ targetType, bounceCount, uniqueWallCount }) {
-  // Phase 3/4 will implement bounce / blind shot achievements. Data captured here.
+  _session.levelBoltHits++;
+  // Bounce achievements handled in Phase 4.
 }
 
 function _onBoltMissed() {
-  // Phase 3+: accuracy achievements.
+  // Accuracy achievements handled in Phase 4.
 }
 
 function _onBoltExpired() {
-  // Phase 3+: accuracy achievements.
+  // Accuracy achievements handled in Phase 4.
 }
 
 function _onEnemyDied({ type, killerKind, bounceCount, uniqueWallCount, hadLOSAtFire, timeAliveMs, isBounceKill }) {
   _session.levelEnemiesKilled++;
-  _incLifetime('cmb_decommissioned'); // total enemy kill counter
+  _session.levelEnemyTypesKilled.add(type);
+  if (!_session.runEnemyTypesKilled) _session.runEnemyTypesKilled = new Set();
+  _session.runEnemyTypesKilled.add(type);
+
+  /* -- cmb_decommissioned: total kills -- */
+  _inc('cmb_decommissioned');
+
+  /* -- cmb_whistleblower: security kills -- */
+  if (type === 'security') _inc('cmb_whistleblower');
+
+  /* -- cmb_middle_mgmt: manager kills -- */
+  if (type === 'manager') {
+    _inc('cmb_middle_mgmt');
+
+    /* -- cmb_overtime_denied: manager killed within 10s of spawning -- */
+    if (_session.levelManagerSpawnTime > 0 && killerKind !== 'friendly') {
+      const elapsed = Date.now() - _session.levelManagerSpawnTime;
+      if (elapsed <= 10000) {
+        _inc('cmb_overtime_denied');
+        _weeklyInc('cmb_overtime_denied');
+      }
+    }
+
+    /* -- cmb_early_retirement: manager killed before summoning reinforcements --
+         "reinforcements" = firing a missile. Track via levelManagerKilledBeforeFired flag. */
+    if (_session.levelManagerKilledBeforeFired) {
+      _inc('cmb_early_retirement');
+      _weeklyInc('cmb_early_retirement');
+    }
+  }
+
+  /* -- cmb_pest_control: drone kills -- */
+  if (type === 'drone') {
+    const total = _inc('cmb_pest_control');
+
+    /* -- cmb_grounded: drone killed before it fires --
+         Tracked by _session.levelDroneFiredTypes: Set of drone-instance IDs that fired.
+         Since we don't have instance IDs, we track via a flag per spawned-drone.
+         Phase 2 decision: grounded = drone killed with timeAliveMs short AND killerKind not from enemy fire.
+         Simpler approximation: drone killed and no 'enemy:fired' for 'drone' type was emitted
+         since the last drone spawn. Track via _session.lastDroneFireTime. */
+    if (!_session.droneHasFired) {
+      _inc('cmb_grounded');
+      _weeklyInc('cmb_grounded');
+    }
+    _session.droneHasFired = false; // reset for next drone
+  }
+
+  /* -- cmb_blue_collar: picker kills -- */
+  if (type === 'picker') _inc('cmb_blue_collar');
+
+  /* -- cmb_deep_clean: 3 cleaner kills within 5 seconds -- */
+  if (type === 'cleaner') {
+    const now = Date.now();
+    _session.recentCleanerKills = (_session.recentCleanerKills ?? []).filter(t => now - t <= 5000);
+    _session.recentCleanerKills.push(now);
+    if (_session.recentCleanerKills.length >= 3) {
+      _inc('cmb_deep_clean');
+      _weeklyInc('cmb_deep_clean');
+    }
+  }
+
+  /* -- dust_env_hazard: manager killed by dustbin -- */
+  if (type === 'manager' && killerKind === 'dustbin') {
+    _inc('dust_env_hazard');
+    _weeklyInc('dust_env_hazard');
+  }
+
+  /* -- cmb_cleaning_spree / cmb_downsizing: 5 / 10 kills within 10 seconds -- */
+  {
+    const now = Date.now();
+    _session.recentKillTimes = _session.recentKillTimes.filter(t => now - t <= 10000);
+    _session.recentKillTimes.push(now);
+    if (_session.recentKillTimes.length >= 10) {
+      _inc('cmb_downsizing');
+      _weeklyInc('cmb_downsizing');
+    } else if (_session.recentKillTimes.length >= 5) {
+      _inc('cmb_cleaning_spree');
+      _weeklyInc('cmb_cleaning_spree');
+    }
+  }
+
+  /* -- wrk_tag_team: kill within 2 seconds of a rescue -- */
+  if (_session.lastRescueTime > 0 && Date.now() - _session.lastRescueTime <= 2000) {
+    _inc('wrk_tag_team');
+    _weeklyInc('wrk_tag_team');
+  }
 }
 
 function _onEnemySpawned({ type, timeInLevel }) {
-  // Phase 3+.
+  if (type === 'manager') {
+    _session.levelManagerSpawnTime = Date.now();
+    _session.levelManagerKilledBeforeFired = true; // optimistic; cleared if it fires
+  }
+  if (type === 'drone') {
+    _session.droneHasFired = false;
+  }
 }
 
 function _onEnemyFired({ type }) {
-  // Phase 3+.
+  if (type === 'manager') {
+    _session.levelManagerKilledBeforeFired = false;
+  }
+  if (type === 'drone') {
+    _session.droneHasFired = true;
+  }
 }
 
 function _onPlayerHit({ dmg, source }) {
-  _session.levelDamageTaken += dmg;
+  _session.levelDamageTaken += dmg ?? 1;
+  if (source === 'manager' || source === 'homing') {
+    _session.levelManagerHit = true;
+  }
 }
 
 function _onPlayerHpChanged({ hp, maxHp }) {
-  // Phase 3+: survival achievements.
+  _session.levelEndHp = hp; // updated every HP change; last value at level:end is current HP
 }
 
 function _onPlayerDied() {
-  // Phase 3+.
+  /* Reset consecutive survive streak on death. */
+  _session.consecutiveSurviveCount = 0;
 }
 
 function _onPlayerStoodStill({ durationMs }) {
-  // Phase 3+: surv_no_stopping.
+  _session.levelStoodStill = true;
 }
 
 function _onConveyorPushStart() {
-  // Phase 4+.
+  // Phase 4+: conv_wrong_aisle
 }
 
 function _onConveyorPushTick({ dx, dy }) {
-  // Phase 4+: conv_wrong_aisle.
+  // Phase 4+: conv_wrong_aisle
 }
 
 function _onWorkerRescued({ workerIndex, timeInLevelMs, playerHP, followingDurationMs }) {
   _session.levelWorkersRescued++;
   _session.runWorkersRescued++;
+  _session.runWorkersRescuedTotal++;
+  if (_session.levelWorkersRescuedSet) _session.levelWorkersRescuedSet.add(workerIndex);
+  _session.levelAnyWorkerRescued = true;
+  _session.lastRescueTime = Date.now();
+
+  /* -- wrk_union_rep: cumulative lifetime rescues -- */
+  _inc('wrk_union_rep');
+
+  /* -- wrk_total_rescued: legacy compat counter -- */
   _incLifetime('wrk_total_rescued');
+  _saveLifetime();
+
+  /* -- wrk_first_responder: rescued within 30 seconds of level start -- */
+  if (typeof timeInLevelMs === 'number' && timeInLevelMs <= 30000) {
+    _inc('wrk_first_responder');
+    _weeklyInc('wrk_first_responder');
+  }
+
+  /* -- wrk_nick: rescued at half health or less (≤ maxHp/2) --
+       We don't have maxHp in this payload; use a threshold of ≤ 10 (half of 20). */
+  if (typeof playerHP === 'number' && playerHP <= 10) {
+    _inc('wrk_nick');
+    _weeklyInc('wrk_nick');
+  }
+
+  /* -- wrk_danger_pay: rescued at exactly 1 HP -- */
+  if (typeof playerHP === 'number' && playerHP === 1) {
+    _inc('wrk_danger_pay');
+    _weeklyInc('wrk_danger_pay');
+  }
+
+  /* -- wrk_escort: worker was following for 5+ consecutive seconds -- */
+  if (typeof followingDurationMs === 'number' && followingDurationMs >= 5000) {
+    _inc('wrk_escort');
+    _weeklyInc('wrk_escort');
+  }
 }
 
 function _onWorkerDied({ workerIndex }) {
-  // Phase 3+.
+  // Worker deaths don't directly trigger any Phase 3 achievements;
+  // they affect per-level rescue counts (already tracked via levelWorkersAvailable).
 }
 
 function _onWorkerFollowingStart({ workerIndex }) {
-  // Phase 3+.
+  _session.workerFollowingMs[workerIndex] = 0;
 }
 
 function _onWorkerFollowingTick({ workerIndex, durationMs }) {
-  // Phase 3+.
+  _session.workerFollowingMs[workerIndex] = durationMs;
 }
 
 function _onPowerupCollected({ kind }) {
   _session.levelPowerupsCollected++;
   _session.runPowerupsCollected++;
   _incLifetime('pwr_stocked');
+  _saveLifetime();
 }
 
 function _onVendingUsed({ variant, hpGained }) {
   _session.levelVendingUsed++;
   _session.runVendingUsed++;
   _incLifetime('pwr_vending_total');
+  _saveLifetime();
 }
 
 function _onDustbinThrown() {
   _session.levelDustbinThrown = true;
-  _incLifetime('dust_heavy_hitter'); // cumulative throw counter
+  _inc('dust_heavy_hitter'); // cumulative throw counter
 }
 
 function _onDustbinBounced({ totalWallCount, uniqueWallCount }) {
-  // Phase 4+: bounce achievements.
+  /* -- dust_disgruntled: bounce dustbin off 3+ walls before detonation -- */
+  if (totalWallCount >= 3) {
+    _inc('dust_disgruntled');
+  }
 }
 
 function _onDustbinDetonated({ killCount }) {
-  // Phase 3+: mass-kill achievements.
+  /* -- dust_option: kill 3+ enemies with one detonation -- */
+  if (typeof killCount === 'number' && killCount >= 3) {
+    _inc('dust_option');
+    _weeklyInc('dust_option');
+  }
 }
 
 function _onLevelAllEnemiesDead() {
-  // Phase 3+: cmb_zero_waste.
+  _session.levelAllEnemiesDeadReached = true;
 }
 
 function _onRunInputModeSet({ mode }) {
-  // Phase 3+: prg_manual (gamepad achievement).
+  _session.runInputMode = mode;
 }
 
 /* ---- Named handler references for off() deduplication ------------------- */
@@ -319,34 +851,60 @@ const _handlers = {
 /* ---- Public API ---------------------------------------------------------- */
 
 export function initAchievements() {
-  // Reset session state.
+  /* Reset per-run and per-level session state. */
   _session.runStartTime = Date.now();
   _session.levelStartTime = Date.now();
   _session.levelShotsFired = 0;
+  _session.levelBoltHits = 0;
   _session.levelEnemiesKilled = 0;
   _session.levelDamageTaken = 0;
   _session.levelWorkersRescued = 0;
+  _session.levelWorkersAvailable = 5;
+  _session.levelWorkersRescuedSet = new Set();
+  _session.levelAnyWorkerRescued = false;
   _session.levelPowerupsCollected = 0;
   _session.levelVendingUsed = 0;
   _session.levelDustbinThrown = false;
+  _session.levelStoodStill = false;
+  _session.levelAllEnemiesDeadReached = false;
+  _session.levelEnemyTypesKilled = new Set();
+  _session.levelManagerHit = false;
+  _session.recentKillTimes = [];
+  _session.recentCleanerKills = [];
+  _session.lastRescueTime = 0;
+  _session.levelManagerSpawnTime = 0;
+  _session.levelManagerKilledBeforeFired = false;
+  _session.workerFollowingMs = {};
+  _session.droneHasFired = false;
+  _session.levelEndHp = null;
   _session.runWorkersRescued = 0;
+  _session.runWorkersAvailableTotal = 0;
+  _session.runWorkersRescuedTotal = 0;
+  _session.runLevelsCompleted = 0;
   _session.runPowerupsCollected = 0;
   _session.runVendingUsed = 0;
+  _session.runInputMode = null;
+  _session.runAuthoredLevelsCompleted = new Set();
+  _session.runLevelWorkerData = [];
+  _session.runEnemyTypesKilled = new Set();
+  _session.consecutiveDamageFreeCount = 0;
+  _session.consecutiveSurviveCount = 0;
+  _session.consecutiveNoRescueLevels = 0;
 
   _bannerQueue = [];
 
-  // Load and validate persistent state; detect week rollover.
+  /* Load and validate persistent state; detect week rollover. */
   _loadLifetime();
   _loadWeekly();
 
-  // Re-register handlers (off+on pattern prevents duplicates across newGame() calls).
+  /* Re-register handlers (off+on pattern prevents duplicates across newGame() calls). */
   for (const [event, handler] of Object.entries(_handlers)) {
     off(event, handler);
     on(event, handler);
   }
 }
 
-// Getters for render / UI modules (Phase 5+, stubs here).
+/* Getters for render / UI modules (Phase 5+, stubs here). */
 export function getWeeklyAchievements() { return []; }
 export function getLevelAchievementSummary() { return []; }
 export function getLifetimeAchievements() { return _lifetime; }
