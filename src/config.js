@@ -32,6 +32,15 @@ export const CFG = {
   CONVEYOR_TEST_LEVEL: 0,        // if G.level === this, buildLevel loads the hand-authored
                                  // conveyor demo (level.js) instead of generating. 0 = off.
 
+  // Iris wipe transition (wipe.js)
+  WIPE_ICON_SIZE: 80,    // px per icon at scale 1.0
+  WIPE_COLS: 14,         // columns — intentionally > VIEW_W / ICON_SIZE for edge bleed
+  WIPE_ROWS: 10,         // rows    — intentionally > VIEW_H / ICON_SIZE for edge bleed
+  WIPE_HOLD_OUT: 0.30,   // s: hold fully-covered at level start before opening
+  WIPE_HOLD_IN:  0.30,   // s: hold fully-covered at level end (safety; nextLevel fires first)
+  WIPE_CLOSE_DUR: 0.80,  // s: Iris In animation (world → covered)
+  WIPE_OPEN_DUR:  0.80,  // s: Iris Out animation (covered → world)
+
   DAN_RADIUS: 12,
   DAN_SPEED: 185,               // px/sec
   DAN_NET_SPEED_MAX: 320,       // clamp on Dan's move+belt net speed so a fast conveyor can't

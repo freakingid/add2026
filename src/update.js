@@ -22,8 +22,11 @@ import { nextLevel, spawnWave, spawnPickup, updatePickups } from "./level.js";
 import { getLevelAchievementSummary } from "./achievements.js";
 import { sfx } from "./audio.js";
 import { emit } from "./events.js";
+import { updateWipe, startWipeClose } from "./wipe.js";
 
 export function update(dt){
+  updateWipe(dt);    // runs in all states including levelclear
+
   // Poll the gamepad every frame, in every state — events are unreliable, and the
   // title/dead screens need it to start/restart a run (handled inside pollGamepad).
   pollGamepad();
@@ -104,7 +107,10 @@ export function update(dt){
   if (Math.hypot(G.exit.x - G.dan.x, G.exit.y - G.dan.y) <= G.exit.r + G.dan.r){
     G.high = Math.max(G.high, G.score);
     G.state = "levelclear";
-    G.transition = 1.6;
+    G.transition = CFG.WIPE_CLOSE_DUR + CFG.WIPE_HOLD_IN + 0.05;
+    const sx = G.dan.x - G.camera.x;
+    const sy = G.dan.y - G.camera.y;
+    startWipeClose(sx, sy);
     sfx.levelClear();
     return;
   }

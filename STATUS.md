@@ -33,6 +33,7 @@ All core systems are complete. The table below is the canonical build status; GD
 | Level Definition format + loader | ✅ Built | §8.1 | `level.js`, `world.js` |
 | Hand-authored levels (5 levels) | ✅ Built | §8.1 | `levels/authored-levels.js` |
 | Conveyor push mechanic + rendering + hum | ✅ Built | §8.1.2 | `world.js`, `render.js` |
+| Screen transition wipe | ✅ Built | — | `wipe.js`, `render.js`, `update.js`, `level.js` |
 | Audio — 18 SFX + looping conveyor bed | ✅ Built | §10 | `audio.js` |
 | Game states (title / playing / levelclear / dead) | ✅ Built | — | `state.js`, `screens.js` |
 | Achievement system | 🔧 In progress — Phase 5 complete | `ACHIEVEMENTS.md`, `ACHIEVEMENT-BLUEPRINT.md` | `events.js`, `achievements.js`, `screens.js`, `render.js`, `audio.js` |
@@ -321,6 +322,25 @@ All core systems are complete. The table below is the canonical build status; GD
   ground bodies + summed diagonally at an intersection, ignored by fliers; Dan's net
   speed clamped + with-belt faster than against; ground enemy carried via `updateEnemies`;
   bolt + settled dustbin unaffected; the demo level loads with belts/diagonal correct.
+
+---
+
+### Iris wipe transition
+
+- **Focal point is screen-space Dan position captured at trigger time, held fixed for
+  the animation duration.** Camera is at {0,0} during `loadLevel` so focal = world pos.
+- **Wipe state is module-local in `wipe.js` (not on G)** — ephemeral render state that
+  doesn't need to survive a reload or be inspectable by other systems.
+- **`G.transition` is set to `WIPE_CLOSE_DUR + WIPE_HOLD_IN + 0.05`** so `nextLevel()`
+  fires when the screen is fully covered. Achievement modal pauses `G.transition`
+  naturally, keeping the screen covered while the modal is displayed.
+- **Opening wipe starts in `hold_out` (not `opening`)** so the camera has one frame to
+  snap to Dan before the icon grid begins shrinking.
+- **`drawWipe()` is the last call in `render()`** — renders on top of HUD, achievement
+  banners, and all state screens.
+- **Tests.** `test-wipe.js` (`node test-wipe.js`, 13 checks): all phase transitions
+  (`closing→hold_in→none`, `hold_out→opening→none`), no-op when `phase=none`, no
+  throws during draw.
 
 ---
 

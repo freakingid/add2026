@@ -14,6 +14,7 @@ import { isWall, clamp, pushAt } from "./world.js";
 import { drawEnemies, drawEbolts } from "./render-entities.js";
 import { drawHUD, drawTitle, drawLevelClear, drawGameOver, drawLifetimeModal } from "./screens.js";
 import { popAchievementBanner } from "./achievements.js";
+import { drawWipe } from "./wipe.js";
 
 /* ---- Achievement banner (Phase 5: full spec) ----------------------------
    Bottom-center, semi-transparent dark rect. Top line = achievement name
@@ -90,6 +91,7 @@ export function render(){
   if (G.state === "levelclear") drawLevelClear();
   if (G.state === "dead") drawGameOver();
   if (G._showLifetimeModal) drawLifetimeModal();   // overlays the post-level modal too
+  drawWipe();    // always last; no-op when phase === 'none'
 }
 
 // Glowing EXIT door — the level-end goal (GDD 8.1/8.2).
