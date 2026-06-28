@@ -99,7 +99,7 @@ export function drawWipe() {
 
   octx.clearRect(0, 0, VIEW_W, VIEW_H);
   octx.globalCompositeOperation = 'source-over';
-  octx.fillStyle = 'rgba(28,31,38,0.80)';
+  octx.fillStyle = 'rgba(28,31,38,0.95)';
   octx.fillRect(0, 0, VIEW_W, VIEW_H);
 
   octx.globalCompositeOperation = 'destination-out';
