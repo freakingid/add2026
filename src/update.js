@@ -20,7 +20,7 @@ import { updateDustbin } from "./dustbin.js";
 import { updateEffects } from "./effects.js";
 import { nextLevel, spawnWave, spawnPickup, updatePickups } from "./level.js";
 import { getLevelAchievementSummary } from "./achievements.js";
-import { sfx } from "./audio.js";
+import { sfx, music } from "./audio.js";
 import { emit } from "./events.js";
 import { updateWipe, startWipeClose, startWipeOpen } from "./wipe.js";
 import { pollPause } from "./pause.js";
@@ -128,6 +128,7 @@ export function update(dt){
     const sy = G.dan.y - G.camera.y;
     startWipeClose(sx, sy);
     sfx.levelClear();
+    music.fadeOut(2.0);
     return;
   }
 
@@ -142,6 +143,7 @@ export function update(dt){
     G.high = Math.max(G.high, G.score);
     G.state = "dead";
     sfx.gameOver();
+    music.stop();
     emit('run:end', {
       runTime: performance.now() - G._runStartTime,
       levelsCompleted: G.level - 1,

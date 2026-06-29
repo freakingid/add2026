@@ -14,7 +14,7 @@
 import { ctx, VIEW_W, VIEW_H } from "./canvas.js";
 import { G } from "./state.js";
 import { COL } from "./palette.js";
-import { sfx, isMuted, setMasterVolume, getMasterVolume, toggleMute,
+import { sfx, music, isMuted, setMasterVolume, getMasterVolume, toggleMute,
          getMusicVolume, setMusicVolume, getSfxVolume, setSfxVolume } from "./audio.js";
 import { getWeeklyAchievements } from "./achievements.js";
 import { listSaves, saveGame, savePrefs } from "./savegame.js";
@@ -109,11 +109,13 @@ export function openPause(){
   subScreen = "menu";
   menuCursor = 0;
   sfx.conveyor(false);   // kill belt hum immediately
+  music.duck();
   G.state = "paused";
 }
 
 export function closePause(){
   G.state = "playing";
+  music.unduck();
   // Belt hum resumes naturally next update() frame if Dan is on a belt.
 }
 
@@ -292,6 +294,8 @@ function _doQuitToTitle(){
   G.state = "title";
   G._titlePhase = "input";
   sfx.conveyor(false);
+  music.stop();
+  music.playTitle();
   subScreen = "menu";
   menuCursor = 0;
 }

@@ -18,7 +18,7 @@ import { canvas, VIEW_W, VIEW_H } from "./canvas.js";
 import { G } from "./state.js";
 import { newGame, nextLevel, resumeFromSave } from "./level.js";
 import { loadSave } from "./savegame.js";
-import { unlock, toggleMute } from "./audio.js";
+import { unlock, toggleMute, music } from "./audio.js";
 import { emit } from "./events.js";
 import { openPause, handlePauseKeydown } from "./pause.js";
 
@@ -253,10 +253,17 @@ function startRun(inputDevice, gameMode = "levelPlan", playlist = null){
   G.gameMode = gameMode;
   G.playlist = playlist;
   G.playlistIndex = 0;
+  music.stop();
   newGame();
   G.inputMode = inputDevice;
   G._titlePhase = "input";    // reset for next visit to title
   emit('run:input_mode_set', { mode: inputDevice });
+  // Resolve track for level 1 (musicTrackIndex=0, playlistIndex=0 set by newGame).
+  const entry = G.gameMode === "handAuthored" && G.playlist
+    ? G.playlist.levels[0]
+    : null;
+  const startId = entry && entry.music ? entry.music : null;
+  music.playGameplay(startId, 0);
 }
 
 // Load a save from the title load screen. Empty slot = no-op.
@@ -264,10 +271,17 @@ function startRun(inputDevice, gameMode = "levelPlan", playlist = null){
 function _tryLoadFromTitle(slot){
   const data = loadSave(slot);
   if (!data) return;
+  music.stop();
   newGame();
   G.inputMode = "keyboard";
   resumeFromSave(data, G.availablePlaylists);
   G._titlePhase = "input";
+  // Resolve the track for the restored level (G.musicTrackIndex not in saves; default 0).
+  const restoredEntry = G.gameMode === "handAuthored" && G.playlist
+    ? G.playlist.levels[G.playlistIndex % G.playlist.levels.length]
+    : null;
+  const savedId = restoredEntry && restoredEntry.music ? restoredEntry.music : null;
+  music.playGameplay(savedId, G.musicTrackIndex ?? 0);
 }
 
 // Advance _titlePhase after the player has locked an input device.

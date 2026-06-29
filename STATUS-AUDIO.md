@@ -3,6 +3,27 @@ Open only when modifying: audio, SFX, or music. See STATUS.md for the build tabl
 
 ---
 
+### Music system (Phase 3 — scheduler + 6 tracks)
+
+- **Bar-by-bar look-ahead scheduler.** `_tickMusic()` fires every 100 ms via `setInterval`. It schedules all notes in any bar whose `_nextBarAt` falls within the next `LOOKAHEAD` (0.5 s) window, advancing `_nextBarAt` and `_barIndex` per bar. Bars loop via `_barIndex % bars.length`. This keeps scheduling decoupled from `requestAnimationFrame` and handles AudioContext suspension gracefully (the look-ahead buffer plays out on resume).
+- **Track data format.** Each track is `{ id, name, bpm, bars: [{ dur, notes: [{t, freq, dur, gain, type, freqEnd?, noise?, filtFreq?, Q?}] }] }`. `t` = beat offset in seconds within the bar; `noise:true` routes the note through `noise()` (bandpass percussion) instead of `tone()`. All note gains are 0.07–0.20 — modest, because they're multiplied by `musicBus.gain` (0.7) and `master.gain` (0.35) before reaching the speakers.
+- **Music routes through `musicBus`, not `sfxBus`.** `tone()` and `noise()` accept an optional `bus` parameter (default: `sfxBus`). `_scheduleBar` passes `musicBus` for every music note so SFX and music are independently volume-controlled and ducking is bus-wide.
+- **Six tracks.** One title track (`TRACK_TITLE`, not exported — internal to audio.js) and five gameplay tracks in `TRACKS` (exported as `music.TRACKS` for playlist validation). Track ids and tempos:
+  - `bouncy_warehouse` — 150 BPM, C major, zippy square arpeggios
+  - `robot_rampage` — 160 BPM, A minor, sawtooth urgency + triangle countermelody
+  - `soap_opera` — 120 BPM, F major, triangle melody + staccato bass, no percussion
+  - `conveyor_blues` — 140 BPM, G/blues (Bb appears), offbeat perc on beats 2 & 4
+  - `overtime_mania` — 175 BPM, D major, 16th-note sawtooth arpeggios, tightest density
+- **`music` export API.** `playTitle()`, `playGameplay(id, fallbackIndex)`, `stop()`, `fadeOut(secs)`, `duck()`, `unduck()`. `playGameplay` takes an explicit id (from playlist entry `music` field) and a fallback index (for auto-rotation); if id is null/not found, uses `TRACKS[fallbackIndex % 5]`. audio.js remains a leaf — it never imports game state.
+- **Duck/unduck for pause.** `duck()` ramps `musicBus.gain` to 40% of current level via `setTargetAtTime`; `unduck()` restores it. Both are no-ops if already in the target state. `pause.js` calls `duck()` on open and `unduck()` on close.
+- **Fade-out on level clear.** `fadeOut(2.0)` is called in `update.js` when the exit is reached. A `_musicFadeEnd` timestamp lets `_tickMusic` detect when the fade is complete and self-stop. If `nextLevel()` fires before the fade completes (player dismisses the achievement modal quickly), `music.stop()` calls `cancelScheduledValues()` to abort the ramp cleanly before starting the next track.
+- **Auto-rotation.** `G.musicTrackIndex` (in `state.js`, not persisted in saves) increments in `nextLevel()`. `resolveTrackId()` in `level.js` checks for a hand-authored playlist `music` field first; falling back to `null` causes `playGameplay` to auto-rotate via the index. Starts at 0 on `newGame`.
+- **Playlist `music` field.** Optional per-entry `"music": "<track_id>"` in JSON. `playlists.js` validates against `VALID_TRACKS` (built from `music.TRACKS`); unknown ids log a warning and are stripped from the cleaned entry. `warehouse-warmup.json` levels 1–2 demonstrate: `bouncy_warehouse` and `robot_rampage` respectively; level 3 has no field (auto-rotation).
+- **Title music at boot.** `atomic-dustbin-dan.html` calls `music.playTitle()` after `loadHighScore()`. This is a no-op until the first user gesture (autoplay policy): `ensure()` returns null before the AudioContext is created, and `playTitle()` guards on it. The title track starts playing on the first key/click/touch.
+- **State transitions.** `input.js: startRun()` calls `music.stop()` before `newGame()`, then `music.playGameplay(id, 0)` after. `_tryLoadFromTitle()` does the same with the restored level's track. `pause.js: _doQuitToTitle()` calls `music.stop(); music.playTitle()`. `update.js`: `sfx.gameOver()` is followed by `music.stop()`; exit-reached path calls `music.fadeOut(2.0)` after `sfx.levelClear()`.
+
+---
+
 ### Audio bus split (Phase 1 — volume system)
 
 - **Three-tier gain chain:** every voice routes `voice → sfxBus → master → destination`. A fourth node (`musicBus`) is wired (`musicBus → master`) and ready for Phase 3 music playback; no music voices connect to it yet. `master` is the mute gate (unchanged — toggling it to 0 silences all buses). `sfxBus` and `musicBus` are per-category volume independently adjustable via `setSfxVolume`/`setMusicVolume`.

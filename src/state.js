@@ -15,6 +15,7 @@ export const G = {
   score:0,
   high:0,
   level:1,
+  musicTrackIndex:0,   // cycles through TRACKS on each new level (not persisted in saves)
   transition:0,        // countdown timer for the level-clear splash
   inputMode:null,      // null (choose on title) | "keyboard" | "gamepad" (GDD §4.5)
 

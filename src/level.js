@@ -30,7 +30,19 @@ import { spawnEnemy } from "./enemies.js";
 import { spawnVendingMachine } from "./vending.js";
 import { spawnDustbinPickup } from "./dustbin.js";
 import { addFloat } from "./effects.js";
-import { sfx } from "./audio.js";
+import { sfx, music } from "./audio.js";
+
+// Resolve the music track id for the current level. Returns an id string if the
+// hand-authored playlist entry specifies one, or null to fall back to auto-rotation.
+// audio.js cannot call this directly (it's a leaf); callers pass the result to
+// music.playGameplay(id, G.musicTrackIndex).
+function resolveTrackId(){
+  if (G.gameMode === "handAuthored" && G.playlist){
+    const entry = G.playlist.levels[G.playlistIndex % G.playlist.levels.length];
+    if (entry && entry.music) return entry.music;
+  }
+  return null;
+}
 
 // Full reset — new run from level 1. HP, power-ups, score all cleared.
 export function newGame(){
@@ -48,6 +60,7 @@ export function newGame(){
   G.powerups = { rapid:0, triple:0, bounce:0 };
   G.score = 0;
   G.level = 1;
+  G.musicTrackIndex = 0;
   G._runStartTime = performance.now();
   initAchievements();
   emit('run:start');
@@ -61,10 +74,13 @@ export function nextLevel(){
   // post-level achievement modal can read getLevelAchievementSummary() during the
   // splash. By the time nextLevel runs, that emit has already happened.
   G.level++;
+  G.musicTrackIndex++;
   if (G.gameMode === "handAuthored" && G.playlist){
     G.playlistIndex = (G.playlistIndex + 1) % G.playlist.levels.length;
     // TODO: on wrap (playlistIndex === 0), apply difficulty escalation — not implemented yet
   }
+  music.stop();
+  music.playGameplay(resolveTrackId(), G.musicTrackIndex);
   buildLevel();
   G.state = "playing";
 }

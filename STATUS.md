@@ -36,6 +36,7 @@ All core systems are complete. The table below is the canonical build status; GD
 | Conveyor push mechanic + rendering + hum | ✅ Built | §8.1.2 | `world.js`, `render.js` |
 | Screen transition wipe | ✅ Built | — | `wipe.js`, `render.js`, `update.js`, `level.js` |
 | Audio — 18 SFX + looping conveyor bed | ✅ Built | §10 | `audio.js` |
+| Music — title track + 5 gameplay tracks, scheduler, duck/unduck | ✅ Built | §10 | `audio.js`, `level.js`, `update.js`, `input.js`, `pause.js`, `playlists.js` |
 | Game states (title / playing / levelclear / dead) | ✅ Built | — | `state.js`, `screens.js` |
 | Achievement system | 🔧 In progress — Phase 5 complete | `ACHIEVEMENTS.md`, `ACHIEVEMENT-BLUEPRINT.md` | `events.js`, `achievements.js`, `screens.js`, `render.js`, `audio.js` |
 | Pause menu + Save/Load system | ✅ Built | — | `savegame.js`, `pause.js`, `screens.js`, `input.js`, `level.js`, `audio.js`, `update.js`, `render.js` |

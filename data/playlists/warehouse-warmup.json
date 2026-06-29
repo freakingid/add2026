@@ -4,12 +4,14 @@
     {
       "map": "receiving_dock",
       "enemies": ["picker"],
-      "terminalCount": 3
+      "terminalCount": 3,
+      "music": "bouncy_warehouse"
     },
     {
       "map": "cold_storage_vault",
       "enemies": ["forklift", "security"],
-      "terminalCount": 4
+      "terminalCount": 4,
+      "music": "robot_rampage"
     },
     {
       "map": "mezzanine_ring",

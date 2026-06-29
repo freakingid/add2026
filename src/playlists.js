@@ -8,12 +8,14 @@
 import { G } from "./state.js";
 import { ENEMY } from "./config.js";
 import { AUTHORED_LEVELS } from "./levels/authored-levels.js";
+import { music } from "./audio.js";
 
 const VALID_MAPS = new Set(["procgen", ...Object.keys(AUTHORED_LEVELS)]);
 const VALID_ENEMIES = new Set(Object.keys(ENEMY));
+const VALID_TRACKS = new Set(music.TRACKS.map(t => t.id));
 
 // Validate one playlist entry; returns a warning string or null if valid.
-function validateEntry(entry, idx){
+function validateEntry(entry, idx, filename){
   if (!entry.map || !VALID_MAPS.has(entry.map))
     return `entry[${idx}] unknown map "${entry.map}"`;
   if (!Array.isArray(entry.enemies) || entry.enemies.length === 0)
@@ -22,6 +24,8 @@ function validateEntry(entry, idx){
     if (!VALID_ENEMIES.has(e)) return `entry[${idx}] unknown enemy "${e}"`;
   if (!Number.isInteger(entry.terminalCount) || entry.terminalCount < 1)
     return `entry[${idx}] terminalCount must be a positive integer`;
+  if (entry.music !== undefined && !VALID_TRACKS.has(entry.music))
+    console.warn(`[playlists] ${filename}: entry[${idx}] unknown music id "${entry.music}" — ignoring`);
   return null;
 }
 
@@ -33,9 +37,13 @@ function validatePlaylist(raw, filename){
   }
   const levels = [];
   for (let i = 0; i < raw.levels.length; i++){
-    const warn = validateEntry(raw.levels[i], i);
-    if (warn) console.warn(`[playlists] ${filename}: ${warn} — skipping`);
-    else levels.push(raw.levels[i]);
+    const warn = validateEntry(raw.levels[i], i, filename);
+    if (warn){ console.warn(`[playlists] ${filename}: ${warn} — skipping`); continue; }
+    const e = raw.levels[i];
+    const cleanEntry = { map: e.map, enemies: [...e.enemies], terminalCount: e.terminalCount };
+    if (e.mixed) cleanEntry.mixed = true;
+    if (e.music && VALID_TRACKS.has(e.music)) cleanEntry.music = e.music;
+    levels.push(cleanEntry);
   }
   if (levels.length === 0){
     console.warn(`[playlists] ${filename}: no valid entries — skipping playlist`);

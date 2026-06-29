@@ -65,12 +65,16 @@ import { render } from "./src/render.js";
 import { loadPlaylists } from "./src/playlists.js";
 import { loadHighScore } from "./src/savegame.js";
 import { G } from "./src/state.js";
+import { music } from "./src/audio.js";
 
 /* ---- Playlist boot-load (advisory — failure leaves Hand Authored unavailable) */
 loadPlaylists();    // async, non-blocking; populates G.availablePlaylists before first input
 
 /* ---- High score boot-load ------------------------------------------------ */
 G.high = loadHighScore();
+// music.playTitle() is a no-op until the first user gesture unlocks the AudioContext
+// (autoplay policy). The title music will start on the first key/mouse/touch event.
+music.playTitle();
 
 /* ---- Main loop (delta-timed) -------------------------------------------- */
 let last = performance.now();
