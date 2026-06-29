@@ -21,7 +21,7 @@ All core systems are complete. The table below is the canonical build status; GD
 | System | Status | GDD ref | Key file(s) |
 |---|---|---|---|
 | Dan — movement, melee, ranged, HP, i-frames | ✅ Built | §2 | `player.js`, `input.js` |
-| Power-ups (Rapid / Triple / Bounce) | ✅ Built | §3 | `player.js`, `config.js` |
+| Power-ups (Rapid / Triple / Bounce) | ✅ Built — pickups expire after `CFG.PICKUP_LIFETIME` (10 s) with strobe/shrink warning in the last `PICKUP_WARN_FRAC`/`PICKUP_WARN_MIN` window | §3 | `player.js`, `config.js`, `level.js`, `render.js` |
 | Controls — keyboard+mouse and gamepad | ✅ Built | §4 | `input.js` |
 | Atomic Dustbin special | ✅ Built | §5 | `dustbin.js` |
 | All 9 enemies + Dispatch Terminal | ✅ Built | `GDD-ENEMIES.md` | `enemies.js`, `projectiles.js` |
@@ -69,7 +69,7 @@ Decisions are split by concern — open only the file(s) relevant to your task:
 
 **Module layout** (leaf-first; arrows = imports):
 
-- **`config.js`** — `CFG` (incl. `CFG.KEYS` cardinal assignments + `CFG.GAMEPAD` deadzones/button indices, `CFG.TILES` per-type tile flags, `CFG.GEN_COLS/ROWS` procgen size, `CFG.CONVEYOR_SPEED`), `ENEMY` (per-type stat table + ranged stats), `POWERUPS`/`POWERUP_KEYS`, `LEVEL_PLAN`. Pure data. *No imports.*
+- **`config.js`** — `CFG` (incl. `CFG.KEYS` cardinal assignments + `CFG.GAMEPAD` deadzones/button indices, `CFG.TILES` per-type tile flags, `CFG.GEN_COLS/ROWS` procgen size, `CFG.CONVEYOR_SPEED`, `CFG.PICKUP_LIFETIME`/`PICKUP_WARN_FRAC`/`PICKUP_WARN_MIN` pickup expiry), `ENEMY` (per-type stat table + ranged stats), `POWERUPS`/`POWERUP_KEYS`, `LEVEL_PLAN`. Pure data. *No imports.*
 - **`palette.js`** — `COL`, `TERMINAL_TINT`. *No imports.*
 - **`canvas.js`** — `canvas`, `ctx`, `VIEW_W/H`. *No imports.*
 - **`audio.js`** — Web Audio SFX (GDD §10): the `sfx.*` sound library + `tone`/`noise`/`sequence` synth helpers, lazy AudioContext + `master` gain, `unlock`/`toggleMute`/`isMuted`, per-sound throttle. ← config (`CFG.AUDIO`) only. Called for its side-effects from player/combat/projectiles/enemies/dustbin/level/vending/workers/update; `unlock`+`toggleMute` from input.

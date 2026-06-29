@@ -122,6 +122,9 @@ export const CFG = {
   RAPID_MULT: 2,               // fire-rate multiplier while Rapid Fire active
   MAX_PICKUPS: 5,              // power-up pickups present in the level at once
   PICKUP_RESPAWN: 6,          // sec between topping the level back up to MAX
+  PICKUP_LIFETIME: 10,      // seconds a floor pickup lives before despawning
+  PICKUP_WARN_FRAC: 0.25,   // last 25% of life triggers warning animation
+  PICKUP_WARN_MIN: 3,       // minimum warning window in seconds (whichever is longer)
   MIXED_INTERVAL: 2.0,        // global spawn cadence on the "mixed" all-types level
 
   // Human workers (GDD 7) — wander slowly avoiding robots; Dan rescues by contact

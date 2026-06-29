@@ -517,24 +517,35 @@ function drawPickups(){
     const def = POWERUPS[p.type];
     const bob = Math.sin(p.bob) * 3;
     const x = p.x, y = p.y + bob;
+    const warnThresh = Math.max(CFG.PICKUP_WARN_FRAC * CFG.PICKUP_LIFETIME, CFG.PICKUP_WARN_MIN);
+    const inWarn = p.life <= warnThresh;
+    const urgency = inWarn ? 1 - (p.life / warnThresh) : 0;
+    const strobe = inWarn ? 0.5 + 0.5 * Math.sin(performance.now() * 0.001 * (8 + urgency * 20)) : 1;
+    const scale = inWarn ? 1 - urgency * 0.18 : 1;
     // glow ring
-    ctx.globalAlpha = 0.25 + 0.15 * (1 + Math.sin(p.bob*2));
+    ctx.globalAlpha = (0.25 + 0.15 * (1 + Math.sin(p.bob*2))) * (inWarn ? (1 - urgency * 0.6) : 1);
     ctx.fillStyle = def.color;
     ctx.beginPath();
     ctx.arc(x, y, p.r + 6, 0, Math.PI*2);
     ctx.fill();
     ctx.globalAlpha = 1;
-    // badge
+    // badge (with strobe + scale in warning mode)
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha = strobe;
     ctx.fillStyle = "#11141a";
-    ctx.fillRect(x - p.r, y - p.r, p.r*2, p.r*2);
+    ctx.fillRect(-p.r, -p.r, p.r*2, p.r*2);
     ctx.strokeStyle = def.color;
     ctx.lineWidth = 2;
-    ctx.strokeRect(x - p.r + 1, y - p.r + 1, p.r*2 - 2, p.r*2 - 2);
+    ctx.strokeRect(-p.r + 1, -p.r + 1, p.r*2 - 2, p.r*2 - 2);
     // glyph
     ctx.fillStyle = def.color;
     ctx.font = "bold 16px 'Arial Black', sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(def.glyph, x, y + 1);
+    ctx.fillText(def.glyph, 0, 1);
+    ctx.restore();
+    ctx.globalAlpha = 1;
   }
 }
 

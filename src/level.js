@@ -518,7 +518,7 @@ function runSpawnRule(rule, def){
       for (let i = 0; i < n; i++){
         const c = centerOf(pickTile(rule, def));
         const kind = rule.kind || POWERUP_KEYS[(Math.random()*POWERUP_KEYS.length)|0];
-        G.pickups.push({ type:kind, x:c.x, y:c.y, r:13, bob:Math.random()*Math.PI*2 });
+        G.pickups.push({ type:kind, x:c.x, y:c.y, r:13, bob:Math.random()*Math.PI*2, life:CFG.PICKUP_LIFETIME });
       }
       break;
     }
@@ -542,7 +542,7 @@ function runSpawnRule(rule, def){
 export function spawnPickup(type){
   if (!type) type = POWERUP_KEYS[(Math.random()*POWERUP_KEYS.length)|0];
   const p = randomFloorTile(3);
-  G.pickups.push({ type, x:p.x, y:p.y, r:13, bob:Math.random()*Math.PI*2 });
+  G.pickups.push({ type, x:p.x, y:p.y, r:13, bob:Math.random()*Math.PI*2, life:CFG.PICKUP_LIFETIME });
 }
 
 
@@ -569,6 +569,8 @@ export function updatePickups(dt){
   for (let i = G.pickups.length - 1; i >= 0; i--){
     const p = G.pickups[i];
     p.bob += dt * 3;
+    p.life -= dt;
+    if (p.life <= 0) { G.pickups.splice(i, 1); continue; }
     if (Math.hypot(p.x - G.dan.x, p.y - G.dan.y) <= p.r + G.dan.r){
       // Stack: add a fresh batch of enhanced shots to this counter.
       G.powerups[p.type] += CFG.POWERUP_SHOTS;
