@@ -10,7 +10,7 @@ Open only when modifying: audio, SFX, or music. See STATUS.md for the build tabl
 - **Bus gains are NOT zeroed on mute.** `toggleMute()` only touches `master.gain` (0 ↔ `CFG.AUDIO.master`) — the bus gains hold their configured values so unmute restores them immediately without extra logic.
 - **`setSfxVolume`/`setMusicVolume` clamp to [0,1], persist to `CFG.AUDIO.*`, and only write to the GainNode when the bus exists and audio is unmuted.** If called before the first user gesture (buses still null), only the CFG value is updated; the bus picks it up in `ensure()` via `CFG.AUDIO.sfxVolume`/`musicVolume`.
 - **Defaults:** `CFG.AUDIO.sfxVolume = 1.0`, `CFG.AUDIO.musicVolume = 0.7`. Mirrored in `savegame.js` (`DEFAULT_SFX_VOLUME`, `DEFAULT_MUSIC_VOLUME`) so `loadPrefs()` returns all three volumes with correct fallbacks.
-- **`pause.js` loads all three volume values when Options opens** (`optVolume`, `optMusicVolume`, `optSfxVolume`). Phase 2 will add slider UI for the new vars; Phase 3 will wire `savePrefs` to include them.
+- **`pause.js` Options modal has three independent volume sliders** (Master, Music, SFX) plus the existing Mute toggle. A `optCursor` (0–3) navigates rows via Up/Down; Left/Right adjust the focused slider. `savePrefs` now writes all three values (`masterVolume`, `musicVolume`, `sfxVolume`) on every slider adjustment so no value is ever erased from localStorage.
 
 ---
 
