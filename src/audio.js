@@ -40,9 +40,21 @@ function ensure(){
 }
 
 // Resume a suspended context from inside a user gesture (autoplay policy).
+let _unlocked = false;
 export function unlock(){
   const c = ensure();
-  if (c && c.state === "suspended") c.resume();
+  if (!c) return;
+  if (c.state === "suspended") c.resume();
+  if (!_unlocked){
+    _unlocked = true;
+    // Start title music on first gesture if nothing is already playing.
+    // 50ms delay lets the context resume() settle before scheduling notes.
+    if (!_currentBars){
+      setTimeout(() => {
+        if (!_currentBars) music.playTitle();
+      }, 50);
+    }
+  }
 }
 
 export function toggleMute(){
@@ -635,7 +647,8 @@ export const music = {
     _musicFadeEnd = 0;
     _isDucked = false;
     _interval = setInterval(_tickMusic, 100);
-    _tickMusic();
+    // No synchronous _tickMusic() here — context may still be suspended
+    // (currentTime=0), so let the interval handle the first tick 100ms later.
   },
 
   stop(){
