@@ -10,7 +10,7 @@
 import { CFG } from "./config.js";
 import { COL } from "./palette.js";
 import { G } from "./state.js";
-import { moveBody, hasLineOfSight } from "./world.js";
+import { moveBody, hasLineOfSight, applyBeltPush } from "./world.js";
 import { addFloat } from "./effects.js";
 import { sfx } from "./audio.js";
 import { emit } from "./events.js";
@@ -66,6 +66,7 @@ export function updateWorkers(dt){
     const ox = w.x, oy = w.y;
     moveBody(w, Math.cos(w.heading) * speed * dt, Math.sin(w.heading) * speed * dt);
     if (w.x === ox && w.y === oy) w.heading += Math.PI * 0.5 + Math.random();
+    applyBeltPush(w, dt);
 
     // Rescue on contact with Dan (GDD 7.3).
     if (Math.hypot(G.dan.x - w.x, G.dan.y - w.y) <= w.r + G.dan.r) rescueWorker(i);
