@@ -13,6 +13,8 @@ const PREFS_KEY = "add_prefs";
 const HIGH_KEY  = "add_high";
 
 const DEFAULT_MASTER_VOLUME = 0.35;
+const DEFAULT_MUSIC_VOLUME  = 0.7;
+const DEFAULT_SFX_VOLUME    = 1.0;
 
 // Returns array[5] of { slot:number, data: saveObject | null }.
 // Corrupt JSON → null (treated as empty).
@@ -58,16 +60,16 @@ export function deleteSave(slot){
 // Returns prefs object. masterVolume defaults to 0.35 if unset.
 export function loadPrefs(){
   const raw = localStorage.getItem(PREFS_KEY);
-  if (!raw) return { masterVolume: DEFAULT_MASTER_VOLUME };
+  if (!raw) return { masterVolume: DEFAULT_MASTER_VOLUME, musicVolume: DEFAULT_MUSIC_VOLUME, sfxVolume: DEFAULT_SFX_VOLUME };
   try {
     const p = JSON.parse(raw);
     return {
-      masterVolume: typeof p.masterVolume === "number"
-        ? p.masterVolume
-        : DEFAULT_MASTER_VOLUME,
+      masterVolume: typeof p.masterVolume === "number" ? p.masterVolume : DEFAULT_MASTER_VOLUME,
+      musicVolume:  typeof p.musicVolume  === "number" ? p.musicVolume  : DEFAULT_MUSIC_VOLUME,
+      sfxVolume:    typeof p.sfxVolume    === "number" ? p.sfxVolume    : DEFAULT_SFX_VOLUME,
     };
   } catch(e){
-    return { masterVolume: DEFAULT_MASTER_VOLUME };
+    return { masterVolume: DEFAULT_MASTER_VOLUME, musicVolume: DEFAULT_MUSIC_VOLUME, sfxVolume: DEFAULT_SFX_VOLUME };
   }
 }
 

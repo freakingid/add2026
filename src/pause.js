@@ -14,7 +14,8 @@
 import { ctx, VIEW_W, VIEW_H } from "./canvas.js";
 import { G } from "./state.js";
 import { COL } from "./palette.js";
-import { sfx, isMuted, setMasterVolume, getMasterVolume, toggleMute } from "./audio.js";
+import { sfx, isMuted, setMasterVolume, getMasterVolume, toggleMute,
+         getMusicVolume, setMusicVolume, getSfxVolume, setSfxVolume } from "./audio.js";
 import { getWeeklyAchievements } from "./achievements.js";
 import { listSaves, saveGame, savePrefs } from "./savegame.js";
 
@@ -33,6 +34,8 @@ const MENU_ITEMS = ["CONTINUE", "OPTIONS", "SAVE & QUIT", "QUIT"];
 
 // Options
 let optVolume = 0.35;
+let optMusicVolume = 0.7;
+let optSfxVolume   = 1.0;
 
 // Save screen state
 let saveCursor = 0;
@@ -139,6 +142,8 @@ function _pollMenu(){
       case 1:                                            // OPTIONS
         subScreen = "options";
         optVolume = getMasterVolume();
+        optMusicVolume = getMusicVolume();
+        optSfxVolume   = getSfxVolume();
         break;
       case 2:                                            // SAVE & QUIT
         subScreen = "save";

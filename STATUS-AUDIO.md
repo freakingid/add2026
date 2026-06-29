@@ -3,6 +3,17 @@ Open only when modifying: audio, SFX, or music. See STATUS.md for the build tabl
 
 ---
 
+### Audio bus split (Phase 1 — volume system)
+
+- **Three-tier gain chain:** every voice routes `voice → sfxBus → master → destination`. A fourth node (`musicBus`) is wired (`musicBus → master`) and ready for Phase 3 music playback; no music voices connect to it yet. `master` is the mute gate (unchanged — toggling it to 0 silences all buses). `sfxBus` and `musicBus` are per-category volume independently adjustable via `setSfxVolume`/`setMusicVolume`.
+- **All SFX (tone, noise, buildConveyor) route through sfxBus.** Helpers `tone()` and `noise()` chain to `sfxBus` instead of `master`; the conveyor sustained voice (`conv.g`) does likewise. No SFX node connects directly to `master`.
+- **Bus gains are NOT zeroed on mute.** `toggleMute()` only touches `master.gain` (0 ↔ `CFG.AUDIO.master`) — the bus gains hold their configured values so unmute restores them immediately without extra logic.
+- **`setSfxVolume`/`setMusicVolume` clamp to [0,1], persist to `CFG.AUDIO.*`, and only write to the GainNode when the bus exists and audio is unmuted.** If called before the first user gesture (buses still null), only the CFG value is updated; the bus picks it up in `ensure()` via `CFG.AUDIO.sfxVolume`/`musicVolume`.
+- **Defaults:** `CFG.AUDIO.sfxVolume = 1.0`, `CFG.AUDIO.musicVolume = 0.7`. Mirrored in `savegame.js` (`DEFAULT_SFX_VOLUME`, `DEFAULT_MUSIC_VOLUME`) so `loadPrefs()` returns all three volumes with correct fallbacks.
+- **`pause.js` loads all three volume values when Options opens** (`optVolume`, `optMusicVolume`, `optSfxVolume`). Phase 2 will add slider UI for the new vars; Phase 3 will wire `savePrefs` to include them.
+
+---
+
 ### Audio (GDD §10)
 
 - **Live synthesis, no assets.** Every SFX is built per call from oscillators + filtered noise + gain envelopes (`tone`/`noise`/`sequence` helpers in `audio.js`). No sample files — keeps the single-file/ES-module constraint and makes sounds tunable as code. Nodes are fire-and-forget (`stop()` + `onended` disconnect); no pooling.

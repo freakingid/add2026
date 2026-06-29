@@ -15,6 +15,8 @@ import { CFG } from "./config.js";
 
 let ctx = null;        // created lazily on first sound / first unlock gesture
 let master = null;     // global gain node -> destination (volume + mute)
+let sfxBus = null;     // SFX sub-bus -> master
+let musicBus = null;   // music sub-bus -> master (playback wired in Phase 3)
 let muted = !CFG.AUDIO.enabled;
 
 // Per-sound min interval (sec) so rapid events don't pile up into noise.
@@ -30,6 +32,10 @@ function ensure(){
   master = ctx.createGain();
   master.gain.value = muted ? 0 : CFG.AUDIO.master;
   master.connect(ctx.destination);
+  sfxBus = ctx.createGain();   sfxBus.gain.value  = CFG.AUDIO.sfxVolume;
+  musicBus = ctx.createGain(); musicBus.gain.value = CFG.AUDIO.musicVolume;
+  sfxBus.connect(master);
+  musicBus.connect(master);
   return ctx;
 }
 
@@ -58,6 +64,20 @@ export function getMasterVolume(){
   return CFG.AUDIO.master;
 }
 
+export function setMusicVolume(v){
+  v = Math.max(0, Math.min(1, v));
+  CFG.AUDIO.musicVolume = v;
+  if (musicBus && !muted) musicBus.gain.value = v;
+}
+export function getMusicVolume(){ return CFG.AUDIO.musicVolume; }
+
+export function setSfxVolume(v){
+  v = Math.max(0, Math.min(1, v));
+  CFG.AUDIO.sfxVolume = v;
+  if (sfxBus && !muted) sfxBus.gain.value = v;
+}
+export function getSfxVolume(){ return CFG.AUDIO.sfxVolume; }
+
 // Gate a named sound by its throttle window. Returns false if it fired too
 // recently. Sounds without a THROTTLE entry are never gated.
 function allow(name){
@@ -85,7 +105,7 @@ function tone({ type = "sine", freq, freqEnd, dur, gain = 0.5, attack = 0.005, d
   g.gain.setValueAtTime(0.0001, t0);
   g.gain.exponentialRampToValueAtTime(gain, t0 + attack);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  osc.connect(g).connect(master);
+  osc.connect(g).connect(sfxBus);
   osc.start(t0);
   osc.stop(t0 + dur + 0.02);
   osc.onended = () => { osc.disconnect(); g.disconnect(); };
@@ -111,7 +131,7 @@ function noise({ dur, gain = 0.5, filterType = "bandpass", filtFreq = 1200, filt
   const g = ctx.createGain();
   g.gain.setValueAtTime(gain, t0);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  src.connect(filt).connect(g).connect(master);
+  src.connect(filt).connect(g).connect(sfxBus);
   src.start(t0);
   src.stop(t0 + dur + 0.02);
   src.onended = () => { src.disconnect(); filt.disconnect(); g.disconnect(); };
@@ -156,7 +176,7 @@ function buildConveyor(){
   g.gain.value = 0;
   src.connect(filt).connect(g);
   hum.connect(humFilt).connect(g);
-  g.connect(master);
+  g.connect(sfxBus);
   src.start(); hum.start();
   conv = { g };
 }

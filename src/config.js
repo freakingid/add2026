@@ -144,6 +144,8 @@ export const CFG = {
   AUDIO: {
     enabled: true,
     master: 0.35,              // global output gain (keeps the layered synth tame)
+    musicVolume: 0.7,
+    sfxVolume:   1.0,
   },
 };
 
