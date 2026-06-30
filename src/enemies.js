@@ -22,6 +22,7 @@ import { updatePicker, updateForklift, updateSecurity, updateSorter, updateClean
 // Flips each drone spawn so successive drones orbit Dan in opposite directions
 // (they cross paths — harder to dodge several at once).
 let droneOrbitToggle = 1;
+let _nextEid = 1;
 
 /* ---- Cleaner patrol routing (uses world.js tile helpers) ---------------- */
 function nearestWaypoint(e){
@@ -172,6 +173,7 @@ export function spawnEnemy(type, pos){
     e.huntCd = Math.random() * d.huntPeriod;   // stagger the first hunt check
   }
   e._spawnTime = performance.now();
+  e.eid = _nextEid++;
   G.enemies.push(e);
   emit('enemy:spawned', {
     type: e.type,

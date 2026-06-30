@@ -41,6 +41,7 @@ export function fireEnemyHoming(e, d){
     range: d.missileRange,
     spin: Math.random() * Math.PI * 2,
     targetedDan: true,   // homing missiles always acquire Dan (for cmb_recall_notice)
+    firedBy: e.eid,
   });
 }
 
@@ -60,6 +61,7 @@ export function fireEnemyBolt(e, angle, d){
     traveled: 0,
     range: d.boltRange,
     spin: Math.random() * Math.PI * 2,
+    firedBy: e.eid,
   });
 }
 
@@ -78,6 +80,7 @@ export function fireEnemyArc(e, tx, ty, d){
     height: 0, k: 0,
     dmg: d.arcDmg, blast: d.arcBlast,
     r: 9, spin: Math.random() * Math.PI * 2,
+    firedBy: e.eid,
   });
 }
 
@@ -97,6 +100,7 @@ export function fireEnemyDrop(e, tx, ty, d){
     dmg: d.dropDmg, blast: d.dropBlast,
     stopsOnWall: false,
     r: d.baseR, spin: Math.random() * Math.PI * 2,
+    firedBy: e.eid,
   });
 }
 
@@ -137,6 +141,7 @@ export function updateEbolts(dt){
     let consumed = false;
     for (const e of G.enemies){
       if (e.flying || e.spawn > 0) continue;
+      if (e.eid === b.firedBy) continue;
       if (Math.hypot(b.x - e.x, b.y - e.y) <= b.r + e.r){
         damageEnemy(e, b.dmg);
         G.ebolts.splice(i, 1);
@@ -163,6 +168,7 @@ function detonateHoming(b){
   for (let j = G.enemies.length - 1; j >= 0; j--){
     const e = G.enemies[j];
     if (e.flying || e.spawn > 0) continue;
+    if (e.eid === b.firedBy) continue;
     if (Math.hypot(e.x - b.x, e.y - b.y) <= b.blast + e.r) damageEnemy(e, b.dmg);
   }
   if (G.dan.iframe <= 0 && Math.hypot(G.dan.x - b.x, G.dan.y - b.y) <= b.blast + G.dan.r)
@@ -253,6 +259,7 @@ function updateHoming(b, dt){
   // Skip fliers (drones) and still-spawning bots; terminals aren't enemies.
   for (const e of G.enemies){
     if (e.flying || e.spawn > 0) continue;
+    if (e.eid === b.firedBy) continue;
     if (Math.hypot(b.x - e.x, b.y - e.y) <= b.r + e.r){
       // A Dan-targeting missile redirected into a robot instead of Dan.
       if (b.targetedDan) emit('bolt:homing_redirected', { hit: 'enemy' });
