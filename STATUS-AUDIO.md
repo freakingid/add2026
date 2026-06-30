@@ -3,12 +3,13 @@ Open only when modifying: audio, SFX, or music. See STATUS.md for the build tabl
 
 ---
 
-### Music system (Phase 3 — scheduler + 6 tracks)
+### Music system (audio.js + music.js split — title track + 5 gameplay tracks)
 
 - **Bar-by-bar look-ahead scheduler.** `_tickMusic()` fires every 100 ms via `setInterval`. It schedules all notes in any bar whose `_nextBarAt` falls within the next `LOOKAHEAD` (0.5 s) window, advancing `_nextBarAt` and `_barIndex` per bar. Bars loop via `_barIndex % bars.length`. This keeps scheduling decoupled from `requestAnimationFrame` and handles AudioContext suspension gracefully (the look-ahead buffer plays out on resume).
 - **Track data format.** Each track is `{ id, name, bpm, bars: [{ dur, notes: [{t, freq, dur, gain, type, freqEnd?, noise?, filtFreq?, Q?}] }] }`. `t` = beat offset in seconds within the bar; `noise:true` routes the note through `noise()` (bandpass percussion) instead of `tone()`. All note gains are 0.07–0.20 — modest, because they're multiplied by `musicBus.gain` (0.7) and `master.gain` (0.35) before reaching the speakers.
 - **Music routes through `musicBus`, not `sfxBus`.** `tone()` and `noise()` accept an optional `bus` parameter (default: `sfxBus`). `_scheduleBar` passes `musicBus` for every music note so SFX and music are independently volume-controlled and ducking is bus-wide.
-- **Six tracks.** One title track (`TRACK_TITLE`, not exported — internal to audio.js) and five gameplay tracks in `TRACKS` (exported as `music.TRACKS` for playlist validation). Track ids and tempos:
+- **File split.** Music was extracted from `audio.js` (816 lines / ~40 KB) into `src/music.js` (~27 KB). `audio.js` now exports `tone`/`noise` (synthesis helpers), `getCtx()`/`getMusicBus()` (accessor functions for the lazily-created nodes), and re-exports `music` from `music.js` — so all existing `import { music } from "./audio.js"` call sites are unchanged. `audio.js` keeps a private `import { music as _music }` for `unlock()`'s title-music trigger.
+- **Five gameplay tracks + title.** One title track (`TRACK_TITLE`, not exported — internal to music.js) and five gameplay tracks in `TRACKS` (exported as `music.TRACKS` for playlist validation). Track ids and tempos:
   - `bouncy_warehouse` — 150 BPM, C major, zippy square arpeggios
   - `robot_rampage` — 160 BPM, A minor, sawtooth urgency + triangle countermelody
   - `soap_opera` — 120 BPM, F major, triangle melody + staccato bass, no percussion
