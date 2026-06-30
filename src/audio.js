@@ -49,6 +49,16 @@ function ensure(){
 export function getCtx(){ return ctx; }
 export function getMusicBus(){ return musicBus; }
 
+let _bassoonWave = null;
+// Reedy/woody PeriodicWave: weak fundamental, strong 2nd–4th harmonics.
+function bassoonWave(){
+  if (_bassoonWave) return _bassoonWave;
+  const imag = new Float32Array([0,0.30,1.00,0.85,0.62,0.45,0.30,0.20,0.13,0.09,0.06]);
+  const real = new Float32Array(imag.length);
+  _bassoonWave = ctx.createPeriodicWave(real, imag, { disableNormalization:false });
+  return _bassoonWave;
+}
+
 // Resume a suspended context from inside a user gesture (autoplay policy).
 let _unlocked = false;
 export function unlock(){
@@ -116,22 +126,37 @@ function allow(name){
 // One oscillator voice with an attack/decay gain envelope and an optional pitch
 // sweep (freq -> freqEnd). All times are seconds; gain is the peak level.
 // bus defaults to sfxBus; music scheduler passes musicBus.
-export function tone({ type = "sine", freq, freqEnd, dur, gain = 0.5, attack = 0.005, delay = 0, bus }){
+export function tone({ type = "sine", freq, freqEnd, dur, gain = 0.5,
+                       attack = 0.005, delay = 0, bus, filt, hold }){
   const t0 = ctx.currentTime + delay;
   const osc = ctx.createOscillator();
   const g = ctx.createGain();
-  osc.type = type;
+  if (type === "bassoon") osc.setPeriodicWave(bassoonWave());
+  else osc.type = type;
   osc.frequency.setValueAtTime(freq, t0);
   if (freqEnd !== undefined && freqEnd !== freq){
     osc.frequency.exponentialRampToValueAtTime(Math.max(1, freqEnd), t0 + dur);
   }
   g.gain.setValueAtTime(0.0001, t0);
   g.gain.exponentialRampToValueAtTime(gain, t0 + attack);
+  if (hold !== undefined){
+    g.gain.setValueAtTime(gain, t0 + Math.max(attack, dur * hold));
+  }
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  osc.connect(g).connect(bus || sfxBus);
+  const fspec = filt || (type === "bassoon" ? { type:"lowpass", freq:2600, Q:0.6 } : null);
+  let bq = null;
+  if (fspec){
+    bq = ctx.createBiquadFilter();
+    bq.type = fspec.type; bq.frequency.value = fspec.freq;
+    if (fspec.Q != null) bq.Q.value = fspec.Q;
+    osc.connect(bq).connect(g);
+  } else {
+    osc.connect(g);
+  }
+  g.connect(bus || sfxBus);
   osc.start(t0);
   osc.stop(t0 + dur + 0.02);
-  osc.onended = () => { osc.disconnect(); g.disconnect(); };
+  osc.onended = () => { osc.disconnect(); if (bq) bq.disconnect(); g.disconnect(); };
 }
 
 // A burst of white noise through a biquad filter, with a decay envelope and an
