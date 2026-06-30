@@ -136,3 +136,11 @@ See **`ACHIEVEMENTS.md`** for the full specification and **`ACHIEVEMENT-BLUEPRIN
 - **New REGISTRY categories: `meta` (Weekly Meta) and `sec` (Secret).** Added to `CATEGORIES` in `achievements.js`; the lifetime modal now shows them in two new groups after Progression. Hidden achievements in both categories (`sec_*`, `meta_consecutive`) follow the standard masking rule (masked as `???` until Bronze earned). `meta_eotw` and `meta_model` are not hidden. `sec_pink_slip` and `meta_consecutive` have tiers `[1]` (one-time only; no further tiers).
 
 - **263/263 headless tests pass** (`node test-achievements.js`). Sections 39–45 add 30 checks: time-based fire/no-fire at window boundaries (graveyard, clock_watcher, monday including weekday gate), sec_phantom 10s threshold vs 5s, sec_pink_slip one-time-only + not-after-prior-progress, sec_wrongful fires-with-achievement / does-not-fire-without, EOTW structural (panel shape + initial lock), EOTW functional (all 5 accuracy weeklies complete → meta_eotw lifetime progress increments), meta_consecutive consecutive vs non-consecutive week detection, _prevISOWeekKey format and adjacency, XP starts at 0 + increments on tier unlock + increments on weekly completion.
+
+**Phase 8 decisions (description strings):**
+
+- **All REGISTRY entries now have `desc:` fields.** Previously only `acc_*`, `meta_*`, and `sec_*` entries had descriptions; all remaining ~60 entries now carry them. No new exports or UI code was changed — descriptions flow through the existing `reg.desc ?? ''` path in `getWeeklyAchievements()`, `getLifetimeAchievements()`, and `getLevelAchievementSummary()`.
+
+- **`test-achievements.js` split into four files** to stay within safe working size: `test-achievements-p1p2.js` (Sections 1–22, Phases 1–2), `test-achievements-p3.js` (Sections 23–30, Phase 3), `test-achievements-p4.js` (Sections 31–36, Phase 4), `test-achievements-p5p6p7.js` (Sections 37–45, Phases 5–7). Runner: `bash run-tests-achievements.sh`. Original `test-achievements.js` retained unchanged for reference until confirmed passing.
+
+- **263/263 tests pass** across all four split files.
