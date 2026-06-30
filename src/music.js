@@ -212,6 +212,40 @@ const TRACK_TITLE = { id:"title", name:"Atomic Dustbin Dan (Theme)", bpm:140, ba
 // Gameplay track 1: "Bouncy Warehouse" — 150 BPM, C major, zippy
 const BW = 60/150;
 const T_BOUNCY = { id:"bouncy_warehouse", name:"Bouncy Warehouse", bpm:150, bars:[
+  // Verse bar 1
+  { dur:4*BW, notes:[
+    {t:0*BW,   freq:261.6, dur:BW*0.85, gain:0.13, type:"triangle"},
+    {t:1*BW,   freq:329.6, dur:BW*0.85, gain:0.12, type:"triangle"},
+    {t:2*BW,   freq:392.0, dur:BW*0.85, gain:0.12, type:"triangle"},
+    {t:3*BW,   freq:329.6, dur:BW*0.85, gain:0.11, type:"triangle"},
+    {t:0*BW,   freq:130.8, dur:BW*0.82, gain:0.10, type:"square"},
+    {t:2*BW,   freq:130.8, dur:BW*0.82, gain:0.10, type:"square"},
+  ]},
+  // Verse bar 2 — answers verse bar 1, resolves toward G
+  { dur:4*BW, notes:[
+    {t:0*BW,   freq:392.0, dur:BW*0.85, gain:0.13, type:"triangle"},
+    {t:1*BW,   freq:329.6, dur:BW*0.85, gain:0.12, type:"triangle"},
+    {t:2*BW,   freq:261.6, dur:BW*0.85, gain:0.12, type:"triangle"},
+    {t:3*BW,   freq:392.0, dur:BW*0.85, gain:0.13, type:"triangle"},
+    {t:0*BW,   freq:196.0, dur:BW*0.82, gain:0.10, type:"square"},
+    {t:2*BW,   freq:130.8, dur:BW*0.82, gain:0.10, type:"square"},
+  ]},
+  // Fill — ascending square run back into the chorus
+  { dur:4*BW, notes:[
+    {t:0*BW,    freq:261.6, dur:BW*0.40, gain:0.16, type:"square"},
+    {t:0.5*BW,  freq:329.6, dur:BW*0.40, gain:0.16, type:"square"},
+    {t:1*BW,    freq:392.0, dur:BW*0.40, gain:0.16, type:"square"},
+    {t:1.5*BW,  freq:523.3, dur:BW*0.40, gain:0.17, type:"square"},
+    {t:2*BW,    freq:659.3, dur:BW*0.40, gain:0.17, type:"square"},
+    {t:2.5*BW,  freq:523.3, dur:BW*0.40, gain:0.16, type:"square"},
+    {t:3*BW,    freq:659.3, dur:BW*0.40, gain:0.17, type:"square"},
+    {t:3.5*BW,  freq:783.9, dur:BW*0.40, gain:0.18, type:"square"},
+    {t:0*BW,    freq:130.8, dur:BW*1.8,  gain:0.12, type:"triangle"},
+    {t:2*BW,    freq:196.0, dur:BW*1.8,  gain:0.12, type:"triangle"},
+    {t:0*BW,    noise:true, dur:0.05, gain:0.07, filtFreq:1200, Q:2},
+    {t:2*BW,    noise:true, dur:0.05, gain:0.07, filtFreq:1200, Q:2},
+  ]},
+  // Chorus bar 1
   { dur:4*BW, notes:[
     {t:0*BW,    freq:261.6, dur:BW*0.42, gain:0.18, type:"square"},
     {t:0.5*BW,  freq:329.6, dur:BW*0.42, gain:0.15, type:"square"},
@@ -227,6 +261,7 @@ const T_BOUNCY = { id:"bouncy_warehouse", name:"Bouncy Warehouse", bpm:150, bars
     {t:3*BW,    freq:196.0, dur:BW*0.82, gain:0.12, type:"triangle"},
     {t:0*BW,    noise:true, dur:0.05, gain:0.07, filtFreq:1200, Q:2},
   ]},
+  // Chorus bar 2
   { dur:4*BW, notes:[
     {t:0*BW,    freq:523.3, dur:BW*0.42, gain:0.18, type:"square"},
     {t:0.5*BW,  freq:392.0, dur:BW*0.42, gain:0.15, type:"square"},
@@ -247,6 +282,31 @@ const T_BOUNCY = { id:"bouncy_warehouse", name:"Bouncy Warehouse", bpm:150, bars
 // Gameplay track 2: "Robot Rampage" — 160 BPM, A minor, urgent
 const RR = 60/160;
 const T_RAMPAGE = { id:"robot_rampage", name:"Robot Rampage", bpm:160, bars:[
+  // Verse bar 1
+  { dur:4*RR, notes:[
+    {t:0*RR,   freq:329.6, dur:RR*1.9, gain:0.14, type:"triangle"},
+    {t:2*RR,   freq:392.0, dur:RR*1.9, gain:0.13, type:"triangle"},
+    {t:0*RR,   freq:110.0, dur:RR*0.9, gain:0.09, type:"square"},
+    {t:2*RR,   freq:110.0, dur:RR*0.9, gain:0.09, type:"square"},
+  ]},
+  // Verse bar 2 — countermelody rises, bass adds a passing tone
+  { dur:4*RR, notes:[
+    {t:0*RR,   freq:440.0, dur:RR*1.9, gain:0.14, type:"triangle"},
+    {t:2*RR,   freq:329.6, dur:RR*1.9, gain:0.13, type:"triangle"},
+    {t:0*RR,   freq:98.0,  dur:RR*0.9, gain:0.09, type:"square"},
+    {t:2*RR,   freq:110.0, dur:RR*0.9, gain:0.09, type:"square"},
+  ]},
+  // Fill — rising sawtooth glissando into the chorus
+  { dur:4*RR, notes:[
+    {t:0*RR,    freq:220.0, dur:RR*0.95, freqEnd:330.0, gain:0.15, type:"sawtooth"},
+    {t:1*RR,    freq:330.0, dur:RR*0.95, freqEnd:440.0, gain:0.16, type:"sawtooth"},
+    {t:2*RR,    freq:440.0, dur:RR*0.95, freqEnd:587.3, gain:0.17, type:"sawtooth"},
+    {t:3*RR,    freq:587.3, dur:RR*0.95, freqEnd:880.0, gain:0.19, type:"sawtooth"},
+    {t:0*RR,    freq:110.0, dur:RR*1.9, gain:0.12, type:"square"},
+    {t:2*RR,    freq:110.0, dur:RR*1.9, gain:0.13, type:"square"},
+    {t:3.5*RR,  noise:true, dur:0.06, gain:0.08, filtFreq:1400, Q:2},
+  ]},
+  // Chorus bar 1
   { dur:4*RR, notes:[
     // Lead sawtooth A4 C5 E5 arpeggio, beat 1 has accent
     {t:0*RR,    freq:440.0, dur:RR*0.44, gain:0.20, type:"sawtooth"},
@@ -269,6 +329,7 @@ const T_RAMPAGE = { id:"robot_rampage", name:"Robot Rampage", bpm:160, bars:[
     {t:0*RR,    noise:true, dur:0.06, gain:0.08, filtFreq:1200, Q:2},
     {t:2*RR,    noise:true, dur:0.06, gain:0.08, filtFreq:1200, Q:2},
   ]},
+  // Chorus bar 2
   { dur:4*RR, notes:[
     {t:0*RR,    freq:659.3, dur:RR*0.44, gain:0.20, type:"sawtooth"},
     {t:0.5*RR,  freq:523.3, dur:RR*0.40, gain:0.14, type:"sawtooth"},
@@ -292,6 +353,31 @@ const T_RAMPAGE = { id:"robot_rampage", name:"Robot Rampage", bpm:160, bars:[
 // Gameplay track 3: "Soap Opera" — 120 BPM, F major, slower & melodic
 const SO = 60/120;
 const T_SOAP = { id:"soap_opera", name:"Soap Opera", bpm:120, bars:[
+  // Verse bar 1 — long sustained F-A-C arc, no bass on beats 1-2
+  { dur:4*SO, notes:[
+    {t:0*SO,   freq:349.2, dur:SO*1.8, gain:0.14, type:"triangle"},
+    {t:2*SO,   freq:440.0, dur:SO*1.8, gain:0.13, type:"triangle"},
+    {t:2*SO,   freq:87.3,  dur:SO*0.9, gain:0.10, type:"square"},
+    {t:3*SO,   freq:130.8, dur:SO*0.9, gain:0.09, type:"square"},
+  ]},
+  // Verse bar 2 — answers with descending phrase
+  { dur:4*SO, notes:[
+    {t:0*SO,   freq:523.3, dur:SO*1.8, gain:0.14, type:"triangle"},
+    {t:2*SO,   freq:349.2, dur:SO*1.8, gain:0.15, type:"triangle"},
+    {t:0*SO,   freq:174.6, dur:SO*0.9, gain:0.10, type:"square"},
+    {t:1*SO,   freq:130.8, dur:SO*0.9, gain:0.09, type:"square"},
+  ]},
+  // Connecting bar — gentle bass walk-up, no abrupt fill needed for this track
+  { dur:4*SO, notes:[
+    {t:0*SO,   freq:392.0, dur:SO*0.9,  gain:0.14, type:"triangle"},
+    {t:1*SO,   freq:349.2, dur:SO*0.9,  gain:0.13, type:"triangle"},
+    {t:0*SO,   freq:87.3,  dur:SO*0.38, gain:0.13, type:"square"},
+    {t:0.5*SO, freq:98.0,  dur:SO*0.38, gain:0.12, type:"square"},
+    {t:1*SO,   freq:110.0, dur:SO*0.38, gain:0.13, type:"square"},
+    {t:1.5*SO, freq:130.8, dur:SO*0.38, gain:0.12, type:"square"},
+    {t:2*SO,   freq:349.2, dur:SO*1.8,  gain:0.15, type:"triangle"},
+  ]},
+  // Chorus bar 1
   { dur:4*SO, notes:[
     // Lead triangle longer notes F4 A4 C5
     {t:0*SO,    freq:349.2, dur:SO*0.88, gain:0.16, type:"triangle"},
@@ -308,6 +394,7 @@ const T_SOAP = { id:"soap_opera", name:"Soap Opera", bpm:120, bars:[
     {t:3*SO,    freq:87.3,  dur:SO*0.38, gain:0.15, type:"square"},
     {t:3.5*SO,  freq:130.8, dur:SO*0.38, gain:0.13, type:"square"},
   ]},
+  // Chorus bar 2
   { dur:4*SO, notes:[
     {t:0*SO,    freq:523.3, dur:SO*0.88, gain:0.16, type:"triangle"},
     {t:1*SO,    freq:440.0, dur:SO*0.88, gain:0.14, type:"triangle"},
@@ -326,6 +413,32 @@ const T_SOAP = { id:"soap_opera", name:"Soap Opera", bpm:120, bars:[
 // Gameplay track 4: "Conveyor Blues" — 140 BPM, G major/blues, offbeat perc
 const CB = 60/140;
 const T_BLUES = { id:"conveyor_blues", name:"Conveyor Blues", bpm:140, bars:[
+  // Verse bar 1
+  { dur:4*CB, notes:[
+    {t:0*CB,   freq:98.0,  dur:CB*0.82, gain:0.14, type:"triangle"},
+    {t:1*CB,   freq:116.5, dur:CB*0.82, gain:0.12, type:"triangle"},
+    {t:2*CB,   freq:130.8, dur:CB*0.82, gain:0.14, type:"triangle"},
+    {t:3*CB,   freq:116.5, dur:CB*0.82, gain:0.12, type:"triangle"},
+  ]},
+  // Verse bar 2 — bass climbs, lead enters quietly on the last beat (pickup into fill)
+  { dur:4*CB, notes:[
+    {t:0*CB,   freq:147.0, dur:CB*0.82, gain:0.14, type:"triangle"},
+    {t:1*CB,   freq:174.6, dur:CB*0.82, gain:0.13, type:"triangle"},
+    {t:2*CB,   freq:130.8, dur:CB*0.82, gain:0.13, type:"triangle"},
+    {t:3*CB,   freq:392.0, dur:CB*0.9,  gain:0.10, type:"square"},
+  ]},
+  // Fill — blues bend on the lead via freqEnd
+  { dur:4*CB, notes:[
+    {t:0*CB,    freq:392.0, dur:CB*0.9, freqEnd:466.2, gain:0.16, type:"square"},
+    {t:1*CB,    freq:523.3, dur:CB*0.44, gain:0.15, type:"square"},
+    {t:1.5*CB,  freq:587.3, dur:CB*0.44, gain:0.15, type:"square"},
+    {t:2*CB,    freq:523.3, dur:CB*0.9, freqEnd:392.0, gain:0.16, type:"square"},
+    {t:3*CB,    freq:466.2, dur:CB*0.44, gain:0.14, type:"square"},
+    {t:0*CB,    freq:98.0,  dur:CB*1.8, gain:0.12, type:"triangle"},
+    {t:2*CB,    freq:98.0,  dur:CB*1.8, gain:0.12, type:"triangle"},
+    {t:3*CB,    noise:true, dur:0.06, gain:0.07, filtFreq:1200, Q:2},
+  ]},
+  // Chorus bar 1
   { dur:4*CB, notes:[
     // Lead: G4 Bb4 C5 D5 bluesy figure
     {t:0*CB,    freq:392.0, dur:CB*0.44, gain:0.17, type:"square"},
@@ -345,6 +458,7 @@ const T_BLUES = { id:"conveyor_blues", name:"Conveyor Blues", bpm:140, bars:[
     {t:1*CB,    noise:true, dur:0.06, gain:0.07, filtFreq:1200, Q:2},
     {t:3*CB,    noise:true, dur:0.06, gain:0.07, filtFreq:1200, Q:2},
   ]},
+  // Chorus bar 2
   { dur:4*CB, notes:[
     {t:0*CB,    freq:587.3, dur:CB*0.44, gain:0.17, type:"square"},
     {t:0.5*CB,  freq:523.3, dur:CB*0.44, gain:0.15, type:"square"},
@@ -365,6 +479,56 @@ const T_BLUES = { id:"conveyor_blues", name:"Conveyor Blues", bpm:140, bars:[
 // Gameplay track 5: "Overtime Mania" — 175 BPM, D major, densest
 const OM = 60/175;
 const T_MANIA = { id:"overtime_mania", name:"Overtime Mania", bpm:175, bars:[
+  // Verse bar 1 — 8th notes, half the density of the chorus
+  { dur:4*OM, notes:[
+    {t:0*OM,   freq:293.7, dur:OM*0.42, gain:0.14, type:"square"},
+    {t:0.5*OM, freq:370.0, dur:OM*0.42, gain:0.13, type:"square"},
+    {t:1*OM,   freq:440.0, dur:OM*0.42, gain:0.13, type:"square"},
+    {t:1.5*OM, freq:370.0, dur:OM*0.42, gain:0.12, type:"square"},
+    {t:2*OM,   freq:293.7, dur:OM*0.42, gain:0.14, type:"square"},
+    {t:2.5*OM, freq:440.0, dur:OM*0.42, gain:0.13, type:"square"},
+    {t:3*OM,   freq:370.0, dur:OM*0.42, gain:0.12, type:"square"},
+    {t:3.5*OM, freq:293.7, dur:OM*0.42, gain:0.12, type:"square"},
+    {t:0*OM,   freq:73.4,  dur:OM*1.8, gain:0.12, type:"sawtooth"},
+    {t:2*OM,   freq:73.4,  dur:OM*1.8, gain:0.12, type:"sawtooth"},
+    {t:0*OM,   noise:true, dur:0.04, gain:0.07, filtFreq:1400, Q:2},
+  ]},
+  // Verse bar 2 — shifts to A, still half-time
+  { dur:4*OM, notes:[
+    {t:0*OM,   freq:440.0, dur:OM*0.42, gain:0.14, type:"square"},
+    {t:0.5*OM, freq:370.0, dur:OM*0.42, gain:0.13, type:"square"},
+    {t:1*OM,   freq:293.7, dur:OM*0.42, gain:0.13, type:"square"},
+    {t:1.5*OM, freq:370.0, dur:OM*0.42, gain:0.12, type:"square"},
+    {t:2*OM,   freq:440.0, dur:OM*0.42, gain:0.15, type:"square"},
+    {t:2.5*OM, freq:587.3, dur:OM*0.42, gain:0.14, type:"square"},
+    {t:3*OM,   freq:440.0, dur:OM*0.42, gain:0.13, type:"square"},
+    {t:3.5*OM, freq:370.0, dur:OM*0.42, gain:0.12, type:"square"},
+    {t:0*OM,   freq:110.0, dur:OM*1.8, gain:0.12, type:"sawtooth"},
+    {t:2*OM,   freq:110.0, dur:OM*1.8, gain:0.13, type:"sawtooth"},
+    {t:0*OM,   noise:true, dur:0.04, gain:0.07, filtFreq:1400, Q:2},
+  ]},
+  // Fill — 16th-note buildup ramping perc back to every-beat, leading into chorus
+  { dur:4*OM, notes:[
+    {t:0*OM,     freq:293.7, dur:OM*0.22, gain:0.15, type:"square"},
+    {t:0.25*OM,  freq:370.0, dur:OM*0.22, gain:0.14, type:"square"},
+    {t:0.5*OM,   freq:440.0, dur:OM*0.22, gain:0.14, type:"square"},
+    {t:0.75*OM,  freq:587.3, dur:OM*0.22, gain:0.15, type:"square"},
+    {t:1*OM,     freq:440.0, dur:OM*0.22, gain:0.15, type:"square"},
+    {t:1.25*OM,  freq:587.3, dur:OM*0.22, gain:0.15, type:"square"},
+    {t:1.5*OM,   freq:659.3, dur:OM*0.22, gain:0.16, type:"square"},
+    {t:1.75*OM,  freq:587.3, dur:OM*0.22, gain:0.15, type:"square"},
+    {t:2*OM,     freq:880.0, dur:OM*0.40, gain:0.18, type:"square"},
+    {t:2.5*OM,   freq:880.0, dur:OM*0.40, gain:0.18, type:"square"},
+    {t:3*OM,     freq:880.0, dur:OM*0.40, gain:0.19, type:"square"},
+    {t:3.5*OM,   freq:880.0, dur:OM*0.40, gain:0.20, type:"square"},
+    {t:0*OM,     freq:73.4,  dur:OM*1.8, gain:0.13, type:"sawtooth"},
+    {t:2*OM,     freq:110.0, dur:OM*1.8, gain:0.14, type:"sawtooth"},
+    {t:0*OM,     noise:true, dur:0.04, gain:0.08, filtFreq:1400, Q:2},
+    {t:1*OM,     noise:true, dur:0.04, gain:0.08, filtFreq:1400, Q:2},
+    {t:2*OM,     noise:true, dur:0.04, gain:0.08, filtFreq:1400, Q:2},
+    {t:3*OM,     noise:true, dur:0.04, gain:0.08, filtFreq:1400, Q:2},
+  ]},
+  // Chorus bar 1
   { dur:4*OM, notes:[
     // 16th-note D4 F#4 A4 D5 arpeggios (4 per beat)
     {t:0*OM,     freq:293.7, dur:OM*0.22, gain:0.17, type:"square"},
@@ -394,6 +558,7 @@ const T_MANIA = { id:"overtime_mania", name:"Overtime Mania", bpm:175, bars:[
     {t:2*OM,     noise:true, dur:0.04, gain:0.08, filtFreq:1400, Q:2},
     {t:3*OM,     noise:true, dur:0.04, gain:0.08, filtFreq:1400, Q:2},
   ]},
+  // Chorus bar 2
   { dur:4*OM, notes:[
     {t:0*OM,     freq:587.3, dur:OM*0.22, gain:0.17, type:"square"},
     {t:0.25*OM,  freq:440.0, dur:OM*0.22, gain:0.14, type:"square"},
