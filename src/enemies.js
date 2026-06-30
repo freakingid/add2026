@@ -15,6 +15,7 @@ import {
 } from "./world.js";
 import { meleeContact } from "./combat.js";
 import { vortexHold } from "./dustbin.js";
+import { emit } from "./events.js";
 import { updatePicker, updateForklift, updateSecurity, updateSorter, updateCleaner,
          updateDrone, updateManager, updateScanner, updateInventory } from "./enemies-ai.js";
 
