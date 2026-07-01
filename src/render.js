@@ -16,6 +16,7 @@ import { drawEbolts } from "./render-ebolts.js";
 import { drawHUD, drawTitle, drawLevelClear, drawGameOver, drawLifetimeModal } from "./screens.js";
 import { popAchievementBanner } from "./achievements.js";
 import { drawWipe } from "./wipe.js";
+import { drawFlash } from "./flash.js";
 import { drawPause } from "./pause.js";
 
 /* ---- Achievement banner (Phase 5: full spec) ----------------------------
@@ -94,6 +95,7 @@ export function render(){
   if (G.state === "dead") drawGameOver();
   if (G.state === "paused") drawPause();
   if (G._showLifetimeModal) drawLifetimeModal();   // overlays the post-level modal too
+  drawFlash();   // tint (not cover) — must come before drawWipe so wipe stays truly last
   drawWipe();    // always last; no-op when phase === 'none'
 }
 

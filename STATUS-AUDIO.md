@@ -55,7 +55,16 @@ Open only when modifying: audio, SFX, or music. See STATUS.md for the build tabl
   - **`lastWorkerDeath`** — last worker killed by a robot. Mournful bassoon descent + tritone dyad, not a klaxon. Replaces `workerLost` for the final kill only (non-last kills still play `workerLost`).
   - **`allWorkersSaved`** — last worker rescued AND no worker was killed this level. Big 3-chord rising fanfare (square+triangle, ~0.36 + 0.75 s sustained chord).
   - **`lastWorkerSaved`** — last worker rescued but one or more workers were killed this level. Quieter 2-chord nod, same square+triangle family as `allWorkersSaved` but narrower voicing.
-- **`lastEnemyCleared`** — fires via `on('level:all_enemies_dead', …)` registered at module scope in `update.js`. Three rising sawtooth power-chord stomps (~0.38 s total), no held chord. Fires exactly once per level (guarded by the existing `_allEnemiesDeadEmitted` flag on the `emit` side), regardless of what killed the last enemy.
+- **`lastEnemyCleared`** — fires via `on('level:all_enemies_dead', …)` registered at module scope in `update.js`. Three rising sawtooth power-chord stomps (~0.38 s total) preceded by a sub-bass sine thump (65 Hz / 0.25 s) and followed by a high triangle ringing tail (1568 Hz / 0.5 s, delayed 0.4 s). The sub-bass is the lowest note in the entire SFX palette; the tail gives the ear a delayed catch-point after combat noise clears. Fires exactly once per level (guarded by the existing `_allEnemiesDeadEmitted` flag on the `emit` side), regardless of what killed the last enemy. Also triggers `startFlash()` from `flash.js` (see VFX section below).
 - **`events.js` now has two subscribers:** `achievements.js` (via the `HANDLERS` map) and `update.js` (via `on()` at module scope for `level:all_enemies_dead`).
 - **New per-level state field `G._levelWorkerKilled`** (boolean, `state.js`): set `true` in `killWorker`, reset to `false` in `loadLevel` alongside `_allEnemiesDeadEmitted`.
 - **Divergence from GDD §10:** the GDD specifies only the 3 SFX above; the other SFX are additions for game feel (approved). Nothing in §10 was contradicted — only extended. A sustained vortex-hum during the Dustbin attract phase was considered and **deferred** (needs a managed looping voice tied to the state machine); the one-shot `deploy` whoosh ships instead.
+
+---
+
+### VFX — Screen flash (`flash.js`)
+
+- **Purpose.** A brief full-screen tint that fires alongside `lastEnemyCleared()` so the "last enemy down" moment registers even when the player isn't watching the screen closely.
+- **Module-local state, wipe.js convention.** `intensity` (float 0..peak) decays at `DECAY = 5.5` units/sec (roughly 40 ms to reach 0 from the default `peak = 0.22`). Nothing goes on `G`. Exports: `startFlash(peak?)`, `updateFlash(dt)`, `drawFlash()`.
+- **Color: warm off-white `rgba(255,247,230,α)`.** Not pure white — pure white is already used for the player's i-frame flash and terminal/vend hit-flashes, which signal damage. This warm tint reads as a "good event."
+- **Wiring.** `update.js` imports `updateFlash` + `startFlash`: `updateFlash(dt)` runs every frame (same reasoning as `updateWipe` — runs in all states); `startFlash()` is called inside the `level:all_enemies_dead` handler alongside `sfx.lastEnemyCleared()`. `render.js` imports `drawFlash` and calls it immediately before `drawWipe()` — it's a tint overlay, not a cover, so `drawWipe()` still renders last.

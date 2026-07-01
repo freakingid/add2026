@@ -352,14 +352,24 @@ export const sfx = {
   // The last enemy in the level is destroyed AND no spawn terminals remain —
   // triumphant, not polite: three rising sawtooth power-chord stomps, no final held
   // chord. Fires regardless of what destroyed the last enemy (mop, friendly fire,
-  // Atomic Dustbin, etc) via the `level:all_enemies_dead` event.
+  // Atomic Dustbin, etc) via the `level:all_enemies_dead` event. A sub-bass sine
+  // anchors the phrase at 65 Hz (nothing else in the SFX palette reaches this low)
+  // and a high triangle tail rings in 0.4 s after the stomps to give the ear a
+  // delayed catch point.
   lastEnemyCleared(){ if (!ensure()) return;
+    // Sub-bass thump anchors the phrase — nothing else in the SFX palette
+    // reaches this low, so it cuts through music + combat noise even when
+    // the player isn't looking at the screen.
+    tone({ type:"sine", freq:65, dur:0.25, gain:0.30, attack:0.008 });
     tone({ type:"sawtooth", freq:196, dur:0.1, gain:0.22 });
     tone({ type:"sawtooth", freq:294, dur:0.1, gain:0.16 });
     tone({ type:"sawtooth", freq:233, dur:0.1, gain:0.24, delay:0.11 });
     tone({ type:"sawtooth", freq:349, dur:0.1, gain:0.18, delay:0.11 });
     tone({ type:"sawtooth", freq:294, dur:0.16, gain:0.27, delay:0.22 });
-    tone({ type:"sawtooth", freq:440, dur:0.16, gain:0.20, delay:0.22 }); },
+    tone({ type:"sawtooth", freq:440, dur:0.16, gain:0.20, delay:0.22 });
+    // Ringing tail after the stomps finish — gives the ear something to
+    // catch a beat later, unlike the combat one-shots which just stop.
+    tone({ type:"triangle", freq:1568, dur:0.5, gain:0.15, attack:0.02, delay:0.4 }); },
 
   // Temporary alias — removed in Phase 2 once workers.js no longer calls it.
   noWorkers(){ this.lastWorkerSaved(); },

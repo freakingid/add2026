@@ -23,12 +23,14 @@ import { getLevelAchievementSummary } from "./achievements.js";
 import { sfx, music } from "./audio.js";
 import { emit, on } from "./events.js";
 import { updateWipe, startWipeClose, startWipeOpen } from "./wipe.js";
+import { updateFlash, startFlash } from "./flash.js";
 import { pollPause } from "./pause.js";
 
-on('level:all_enemies_dead', () => sfx.lastEnemyCleared());
+on('level:all_enemies_dead', () => { sfx.lastEnemyCleared(); startFlash(); });
 
 export function update(dt){
   updateWipe(dt);    // runs in all states including levelclear
+  updateFlash(dt);   // runs in all states, same reasoning as updateWipe
 
   // Poll the gamepad every frame, in every state — events are unreliable, and the
   // title/dead screens need it to start/restart a run (handled inside pollGamepad).

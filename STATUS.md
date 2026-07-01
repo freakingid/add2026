@@ -35,6 +35,7 @@ All core systems are complete. The table below is the canonical build status; GD
 | Level progression overhaul (MAP_POOL, playlists, mode select) | ✅ Built | — | `level.js`, `state.js`, `input.js`, `screens.js`, `src/playlists.js` |
 | Conveyor push mechanic + rendering + hum | ✅ Built | §8.1.2 | `world.js`, `render.js` |
 | Screen transition wipe | ✅ Built | — | `wipe.js`, `render.js`, `update.js`, `level.js` |
+| Screen flash (last-enemy-cleared VFX) | ✅ Built | — | `flash.js`, `render.js`, `update.js` |
 | Audio — 21 SFX + looping conveyor bed | ✅ Built | §10 | `audio.js` |
 | Music — title track + 5 gameplay tracks (9 bars each), scheduler, duck/unduck, bassoon voice, chorus arrival treatments | ✅ Built | §10 | `audio.js` (SFX/buses/re-export; `tone()` + bassoon wave), `music.js` (scheduler + all track data), `level.js`, `update.js`, `input.js`, `pause.js`, `playlists.js` |
 | Game states (title / playing / levelclear / dead) | ✅ Built | — | `state.js`, `screens.js` |
@@ -87,6 +88,7 @@ Decisions are split by concern — open only the file(s) relevant to your task:
 - **`workers.js`** — `updateWorkers` (wander/avoid + rescue-on-contact), `rescueWorker` (escalating points + counter + callout), and `killWorker` (exported; Inventory Bot's no-points worker kill). ← config, palette, state, world, effects.
 - **`input.js`** — device-agnostic input layer. Exports `getMoveVec()`/`getFireAngle()`/`isDeploySpecial()` (route by `G.inputMode`), `pollGamepad()` (called from `update.js`), and the raw `keys`/`mouse` (mouse aim, `M` mute, debug). Registers key/mouse/touch listeners on import (side-effect), unlocks audio on the first gesture, binds `M` = mute, and starts/restarts runs via `startRun(mode)`. ← config, canvas, state, level (`newGame`), audio (`unlock`/`toggleMute`).
 - **`player.js`** — `updateDan` (slow move-scaling, decays `slow`/`sprayTick`), `fireVolley`/`fireBubble`, `updateShots` (bubble↔enemy↔terminal). ← config, state, input, world, combat.
+- **`flash.js`** — `startFlash(peak?)` / `updateFlash(dt)` / `drawFlash()`. Brief full-screen warm-tint for the last-enemy-cleared moment. Module-local `intensity` decays at 5.5/s; nothing on `G`. Imported by `update.js` (update+trigger) and `render.js` (draw). ← canvas only (mirrors wipe.js's safe import shape).
 - **`update.js`** — `update(dt)` orchestrator: `pollGamepad()` first (every state), then (when playing) Dan → shots → **dustbin** → spawn → enemies → ebolts → pickups → vending → workers → effects → camera + `updateCamera` + spawn/terminal/exit/death bookkeeping. ← state, config, input (`pollGamepad`), player, enemies, projectiles, workers, vending, dustbin, level, effects, world, canvas.
 - **`render-entities.js`** — enemy sprites only: `drawEnemies` (per-type sprites + berserk aura). ← canvas, state, config, palette, enemies (`coneRayDist`).
 - **`render-ebolts.js`** (NEW split from render-entities.js) — `drawEbolts` (all projectile kinds: bolt/arc/drop/homing). ← canvas, state, config, palette. Imported by `render.js`.
