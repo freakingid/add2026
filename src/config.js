@@ -141,7 +141,7 @@ export const CFG = {
     powerupPunchZoom: 1.0225, powerupPunchDur: 0.14,
 
     // player:hp_changed — sustained, recomputed live from G.dan each frame (NOT a timer)
-    lowHpFraction: 0.30,          // HP/maxHp at/below this = vignette active
+    lowHpFraction: 0.25,          // HP/maxHp at/below this = vignette active
     lowHpVignetteColor: '#ff5b4d',
     lowHpVignetteMaxAlpha: 0.55,
     lowHpPulseHz: 1.6,

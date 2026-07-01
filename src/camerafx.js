@@ -85,8 +85,7 @@ export function lowHpAlpha(){
   const C = CFG.CAMERAFX;
   if (frac > C.lowHpFraction) return 0;
   const pulse = 0.5 + 0.5 * Math.sin(performance.now()/1000 * Math.PI*2 * C.lowHpPulseHz);
-  const closeness = 1 - frac / C.lowHpFraction;   // 0 at threshold, 1 at 0 HP
-  return C.lowHpVignetteMaxAlpha * pulse * closeness;
+  return C.lowHpVignetteMaxAlpha * pulse;
 }
 export function getLowHpAlpha(){ return lowHpAlpha(); }
 
