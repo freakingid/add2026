@@ -36,7 +36,7 @@ All core systems are complete. The table below is the canonical build status; GD
 | Conveyor push mechanic + rendering + hum | ✅ Built | §8.1.2 | `world.js`, `render.js` |
 | Screen transition wipe | ✅ Built | — | `wipe.js`, `render.js`, `update.js`, `level.js` |
 | Screen flash (last-enemy-cleared VFX) | 🔲 Removed — built then manually reverted; not in current camera-effects scope | — | — |
-| Camera effects (shake/zoom/vignettes/flash/desat) | 🔧 In progress — Phase 2 complete: wired into `render.js` (zoom+shake camera transform, world-space desaturation, screen-space vignettes/flashes). Phase 2 wiring also needed `updateCameraFx(dt)` called from the frame loop — it was exported from `camerafx.js` but never called, so `_elapsed` never advanced and every one-shot effect (shake/flash/desat) fired and then stayed at full intensity forever; fixed by calling it unconditionally at the top of `update(dt)` in `update.js`, before the paused/state branches (same treatment as `updateWipe`), so effects triggered right before a state flip (e.g. death shake) still decay instead of freezing. Tuning pass: `lowHpAlpha()` had a bug re-wrapping `pulse` (already 0..1) into `0.5+0.5*pulse`, which halved and floored its dynamic range — fixed to use `pulse` directly, and `lowHpVignetteMaxAlpha` raised 0.30→0.55 so low-HP now visibly breathes from near-invisible to a strong red pulse instead of a dim near-static glow. `powerupPunchZoom` halved (1.045→1.0225, i.e. half the zoom-in delta) so pickup punch reads as a light snap, not a lurch. Cleaner-sick reworked from a **screen-space** vignette+wobble to a **local glow around Dan** (`drawCleanerGlow` in `render-camerafx.js`, called from `render.js` just before `drawDan()`, same "aura drawn behind sprite" convention as enemy berserk/alarm auras in `render-entities.js`) — `cleanerWobbleOffset`/`cleanerWobbleMag`/`cleanerWobbleHz` deleted from `camerafx.js`/`config.js`, `getShakeOffset()` now returns just `impactShakeOffset()`. `cleanerSickMaxAlpha` raised 0.16→0.24 to match the 0.12–0.22 aura range elsewhere. `getCleanerSickAlpha()`/`tickCleanerSick` fade-envelope logic unchanged, only its draw site moved. Enemy-visual tint/shimmy (Phase 3) and vending rings (Phase 4) still pending. Verified via math check (pulse now sweeps ~0→max at 0 HP; zoom delta confirmed exactly halved) — no browser automation available in this environment to visually confirm the Cleaner glow or in-game feel, so that's spot-check-in-browser territory for whoever picks this up next. Follow-up tuning: `lowHpFraction` corrected 0.30→0.25 to actually match `CFG.DAN_HP: 20` (5/20 HP = 25%, not 6/20 = 30% — the threshold and the stated intent had drifted apart). `lowHpAlpha()`'s `closeness` scale-by-proximity-to-0-HP term removed entirely — it made the vignette ramp up gradually as HP kept falling below the threshold instead of hitting full `lowHpVignetteMaxAlpha` pulse immediately on crossing it, which was the likely real reason it still read as "not visible enough" even after the alpha ceiling was raised. Low-HP vignette is now a binary threshold trigger at full intensity, no ramp. | `SPEC-camera-effects.md` | `camerafx.js`, `render-camerafx.js`, `render.js`, `combat.js`, `update.js`, `config.js` |
+| Camera effects (shake/zoom/vignettes/flash/desat) | 🔧 In progress — Phases 0–2 complete and confirmed working in-browser. Phase 3 (Manager berserk enemy visual) and Phase 4 (vending healing rings) not started. See "Camera effects — subsystem decisions" below for the full history. | `SPEC-camera-effects.md` | `camerafx.js`, `render-camerafx.js`, `render.js`, `combat.js`, `update.js`, `config.js` |
 | Audio — 21 SFX + looping conveyor bed | ✅ Built | §10 | `audio.js` |
 | Music — title track + 5 gameplay tracks (9 bars each), scheduler, duck/unduck, bassoon voice, chorus arrival treatments | ✅ Built | §10 | `audio.js` (SFX/buses/re-export; `tone()` + bassoon wave), `music.js` (scheduler + all track data), `level.js`, `update.js`, `input.js`, `pause.js`, `playlists.js` |
 | Game states (title / playing / levelclear / dead) | ✅ Built | — | `state.js`, `screens.js` |
@@ -60,6 +60,69 @@ Decisions are split by concern — open only the file(s) relevant to your task:
 
 ---
 
+## Camera effects — subsystem decisions
+
+Phases 0–2 of `SPEC-camera-effects.md` are complete and confirmed working
+in-browser (Phases 3–4 — Manager berserk enemy visual, vending healing rings
+— not started).
+
+**Phase 2 decay bug.** `updateCameraFx(dt)` was exported from `camerafx.js`
+but never called anywhere, so `_elapsed` never advanced and every one-shot
+effect (shake/flash/desat) fired once and then stayed at full intensity
+forever — including through state transitions (e.g. the death shake
+continued behind the "DAN IS DOWN" screen and into the next run). Fixed by
+calling `updateCameraFx(dt)` unconditionally at the top of `update(dt)` in
+`update.js`, before the paused/state branches — same treatment as
+`updateWipe`, and for the same reason: an effect triggered right before a
+state flip needs to keep decaying regardless of what state comes next.
+
+**Low-HP vignette.** Two rounds of fixes. First, `lowHpAlpha()` had a bug
+re-wrapping `pulse` (already 0..1) into `0.5+0.5*pulse`, which halved and
+floored its dynamic range; fixed to use `pulse` directly, and
+`lowHpVignetteMaxAlpha` raised 0.30→0.55. That still wasn't visible enough in
+practice, because the formula also scaled alpha by `closeness` (proximity to
+0 HP) — meaning the vignette was near-invisible right at the moment it first
+crossed the threshold and only grew as HP kept falling, which is where most
+hits actually land. `closeness` was removed entirely: the vignette is now a
+binary threshold trigger at full `lowHpVignetteMaxAlpha` pulse, no ramp.
+Threshold itself was also corrected, `lowHpFraction` 0.30→0.25, to actually
+match `CFG.DAN_HP: 20` (5/20 HP = 25%, not 6/20 = 30% — the configured
+threshold and the stated design intent had drifted apart).
+
+**Powerup punch-zoom.** `powerupPunchZoom` halved (1.045→1.0225, i.e. half
+the zoom-in delta above 1.0) — the original read as too strong, making
+pickups feel like the main point of the moment rather than a light accent.
+The powerup flash (tinted to the pickup's own color, peak alpha 0.18) was
+left unchanged — confirmed fine as originally spec'd.
+
+**Cleaner-sick status effect.** Reworked from a screen-space vignette+wobble
+(spec'd originally, but never actually visible in-game — worth noting for
+anyone reading `SPEC-camera-effects.md`, which still describes the original
+design) to a local glow around Dan: `drawCleanerGlow` in
+`render-camerafx.js`, called from `render.js` immediately before `drawDan()`
+— same "aura drawn behind the sprite" convention as the existing
+berserk/alarm auras in `render-entities.js`. `cleanerWobbleOffset`/
+`cleanerWobbleMag`/`cleanerWobbleHz` were deleted from `camerafx.js`/
+`config.js` entirely; `getShakeOffset()` now returns just
+`impactShakeOffset()`. `cleanerSickMaxAlpha` raised 0.16→0.24 to sit in the
+same 0.12–0.22 range as the existing auras, for a consistent visual language.
+`getCleanerSickAlpha()`/`tickCleanerSick`'s fade-envelope logic is
+unchanged — only where it gets drawn moved.
+
+**Manager berserk pulse.** New event `manager:berserk_pulse` (`{ count, x,
+y }`) added to `combat.js`, emitted next to the existing berserk-buff loop
+that sets `other.berserk` on nearby robots — `camerafx.js` subscribes to
+trigger the shake+flash. (The enemy-visual side of berserk — color tint +
+shimmy on buffed robots — is Phase 3, not yet built.)
+
+All of the above is confirmed working in-browser, not just math-checked: the
+low-HP vignette, powerup punch/flash, Cleaner glow, dustbin
+detonate/bounce/throw shake+flash, worker-died desaturation, and death
+shake/flash all decay correctly and don't bleed across state transitions or
+level changes.
+
+---
+
 ## Architecture map (where things live)
 
 > The game is now **ES modules** under `src/`, loaded by `atomic-dustbin-dan.html`
@@ -71,7 +134,7 @@ Decisions are split by concern — open only the file(s) relevant to your task:
 
 **Module layout** (leaf-first; arrows = imports):
 
-- **`config.js`** — `CFG` (incl. `CFG.KEYS` cardinal assignments + `CFG.GAMEPAD` deadzones/button indices, `CFG.TILES` per-type tile flags, `CFG.GEN_COLS/ROWS` procgen size, `CFG.CONVEYOR_SPEED`, `CFG.PICKUP_LIFETIME`/`PICKUP_WARN_FRAC`/`PICKUP_WARN_MIN` pickup expiry), `ENEMY` (per-type stat table + ranged stats), `POWERUPS`/`POWERUP_KEYS`, `LEVEL_PLAN`. Pure data. *No imports.*
+- **`config.js`** — `CFG` (incl. `CFG.KEYS` cardinal assignments + `CFG.GAMEPAD` deadzones/button indices, `CFG.TILES` per-type tile flags, `CFG.GEN_COLS/ROWS` procgen size, `CFG.CONVEYOR_SPEED`, `CFG.PICKUP_LIFETIME`/`PICKUP_WARN_FRAC`/`PICKUP_WARN_MIN` pickup expiry, `CFG.CAMERAFX` — all shake/flash/vignette/desat tuning values, Camera-effects Phase 0), `ENEMY` (per-type stat table + ranged stats), `POWERUPS`/`POWERUP_KEYS`, `LEVEL_PLAN`. `CFG.DUSTBIN.throwSpeed`/`friction` retuned (300→460 / 2.2→1.5, Camera-effects Phase 0) so a thrown dustbin travels ~2.3× farther before settling. Pure data. *No imports.*
 - **`palette.js`** — `COL`, `TERMINAL_TINT`. *No imports.*
 - **`canvas.js`** — `canvas`, `ctx`, `VIEW_W/H`. *No imports.*
 - **`audio.js`** — Web Audio SFX (GDD §10): the `sfx.*` sound library + `tone`/`noise`/`sequence` synth helpers (exported; used by `music.js`), lazy AudioContext + `master`/`sfxBus`/`musicBus` gains (`getCtx()`/`getMusicBus()` accessors for `music.js`), `unlock`/`toggleMute`/`isMuted`, per-sound throttle, re-exports `music` from `music.js`. ← config (`CFG.AUDIO`) only. Called for its side-effects from player/combat/projectiles/enemies/dustbin/level/vending/workers/update; `unlock`+`toggleMute` from input.
@@ -80,7 +143,7 @@ Decisions are split by concern — open only the file(s) relevant to your task:
 - **`world.js`** — `map[][]` (exported `let`, char grid, reassigned only by `loadTileGrid`) + the §8.1 loader primitives: **`loadTileGrid`** (grid→`map`, sets `CFG.COLS/ROWS`), **`bakeConveyors`**/**`pushField`**/**`pushAt`** (per-cell push field) + the consume-side helpers **`pushAtWorld`** (push at a body's cell), **`applyBeltPush`** (additive belt move for a ground body; skips fliers), **`clampNet`** (Dan's move+belt net-speed clamp), and `CFG.TILES`-driven `isWall`/`blocksLOS`/`isDestructible`. Plus `randomFloorTile`/`randomFloorTileTC`/`randomFloorTileNearWall` (wall-adjacent tile for flush placement)/`hasLineOfSight`/`destroyShelf` (destructible-only), collision `bodyHitsWall`/`moveBody`, tile helpers `tileFloor`/`tileCenter`/`tileClearRun`/`rectPerimeterClear`, `clamp`, `isBorderTile`. ← config, state. (No longer imports canvas — decoupled from the DOM.)
 - **`effects.js`** — `addFloat`, `updateEffects` (marks + floats lifetimes). ← state.
 - **`menuedge.js`** — shared menu edge-detection for title + pause Options/Controls navigation: `menuHeld(action, pad, inputMode)` (up/down/left/right/confirm/back; kb+gamepad, routes by `inputMode`) and `makeEdgeTracker()` (returns an instance-scoped `{edge, refresh}` so title and pause each get their own `_prev{}`). Pure leaf — registers its own `_keys{}` via its own listeners (same pattern as `pause.js`'s circular-import workaround) rather than importing from `input.js`/`pause.js`. *No imports.* Not yet wired into title or pause.
-- **`combat.js`** — shared damage/death: `hitDanRanged`/`hitDanArea` (i-frame + knockback), `meleeContact` (0-dmg-safe; `berserDmgBonus` when berserk), `damageEnemy` (friendly-fire damage → no-score kill), `killEnemy(index, {score})` (points + score float unless `score:false`; Manager berserk pulse either way), `destroyTerminal`. ← config, palette, state, effects.
+- **`combat.js`** — shared damage/death: `hitDanRanged`/`hitDanArea` (i-frame + knockback), `meleeContact` (0-dmg-safe; `berserDmgBonus` when berserk), `damageEnemy` (friendly-fire damage → no-score kill), `killEnemy(index, {score})` (points + score float unless `score:false`; Manager berserk pulse either way — emits `manager:berserk_pulse` with `{count, x, y}` next to the existing berserk-buff loop, Camera-effects Phase 1, for `camerafx.js` to trigger shake+flash), `destroyTerminal`. ← config, palette, state, effects, events.
 - **`projectiles.js`** — the `G.ebolts` pool: `fireEnemyBolt/Arc/Drop/Homing` + `updateEbolts` dispatching by `kind` (`bolt`/`arc`/`drop`/`homing`; `updateArc/Drop/Homing` helpers, `detonateHoming` blast). `bolt`/`homing` also friendly-fire ground robots (skip fliers/terminals) via `damageEnemy`. ← config, state, world, combat.
 - **`enemies.js`** — `spawnEnemy` (per-type init; assigns unique `e.eid` counter), `updateEnemies` (dispatch + melee contact via `combat`), `buffSpd` (combined Manager-berserk + Scanner-alarm speed mult), Cleaner/Scanner patrol routing (`nearestWaypoint`/`buildCleanerPatrol`/`advancePatrol`) + Cleaner spray helpers (`danInSprayCone`/`coneRayDist`(exported, also clips the rendered cone)/`applySpray`). ← config, state, world, combat, projectiles, **workers** (`killWorker`, for the Inventory Bot), **dustbin** (`vortexHold`, for the attract phase), **enemies-ai**.
 - **`enemies-ai.js`** (NEW split from enemies.js) — per-type AI updaters: `updatePicker`/`updateForklift`/`updateSecurity`/`updateSorter`/`updateCleaner`/`updateDrone`/`updateManager`/`updateScanner`/`updateInventory`. ← config, state, world, combat, projectiles, workers, effects, enemies (patrol helpers + `buffSpd` + `danInSprayCone`/`applySpray`).
@@ -90,15 +153,15 @@ Decisions are split by concern — open only the file(s) relevant to your task:
 - **`workers.js`** — `updateWorkers` (wander/avoid + rescue-on-contact), `rescueWorker` (escalating points + counter + callout), and `killWorker` (exported; Inventory Bot's no-points worker kill). ← config, palette, state, world, effects.
 - **`input.js`** — device-agnostic input layer. Exports `getMoveVec()`/`getFireAngle()`/`isDeploySpecial()` (route by `G.inputMode`), `pollGamepad()` (called from `update.js`; also drives the title's Options screen via `pollTitleOptions()` + `optionsmenu.js`'s `handleOptionsEdge`), and the raw `keys`/`mouse` (mouse aim, `M` mute, debug). Registers key/mouse/touch listeners on import (side-effect), unlocks audio on the first gesture, binds `M` = mute, "o" opens title Options, and starts/restarts runs via `startRun(mode)`. ← config, canvas, state, level (`newGame`), audio (`unlock`/`toggleMute`), optionsmenu (`openOptions`/`handleOptionsEdge`/`optionsScreen`).
 - **`player.js`** — `updateDan` (slow move-scaling, decays `slow`/`sprayTick`), `fireVolley`/`fireBubble`, `updateShots` (bubble↔enemy↔terminal). ← config, state, input, world, combat.
-- **`flash.js`** — `startFlash(peak?, delay?)` / `updateFlash(dt)` / `drawFlash()`. Brief full-screen warm-tint for the last-enemy-cleared moment. `delay` (seconds) defers the flash via a dt-driven countdown (so it pauses correctly, unlike `setTimeout`) — used to land the flash right as `sfx.lastEnemyCleared()` finishes its stomps. Module-local `intensity` decays at 3.5/s (was 5.5/s — slower fade after playtesting, ~130ms); nothing on `G`. Called from `update.js` as `startFlash(0.45, 0.76)`. Imported by `update.js` (update+trigger) and `render.js` (draw). ← canvas only (mirrors wipe.js's safe import shape).
-- **`update.js`** — `update(dt)` orchestrator: `pollGamepad()` first (every state), then (when playing) Dan → shots → **dustbin** → spawn → enemies → ebolts → pickups → vending → workers → effects → camera + `updateCamera` + spawn/terminal/exit/death bookkeeping. ← state, config, input (`pollGamepad`), player, enemies, projectiles, workers, vending, dustbin, level, effects, world, canvas.
+- **`camerafx.js`** (NEW, Camera-effects Phase 1) — pure math/state leaf for camera & screen feedback effects (`SPEC-camera-effects.md`): shake (`shake`/`tickShake`/`currentShakeMag`/`impactShakeOffset`, "take the stronger, don't stack" semantics), zoom-punch (`punchZoom`/`tickZoom`/`currentZoom`), the sustained low-HP vignette (`lowHpAlpha`/`getLowHpAlpha` — polled live from `G.dan` each frame, not a timer; binary threshold trigger, see "Camera effects — subsystem decisions"), the Cleaner-sick fade envelope (`tickCleanerSick`/`getCleanerSickAlpha` — now drives a local glow drawn in `render-camerafx.js`, not a screen effect here), the one-shot flash queue (`flash`/`tickFlashes`/`getFlashLayers`), and the worker-died desaturation pulse (`pulseDesat`/`tickDesat`/`getDesatAlpha`). `updateCameraFx(dt)` ticks all of the above and is called unconditionally from `update.js` (every state, mirrors `updateWipe`). Subscribes to `events.js` at module-load time (side effect on import) for `player:died`, `dustbin:detonated`, `dustbin:bounced`, `dustbin:thrown`, `manager:berserk_pulse`, `worker:died`, `powerup:collected`. Zero canvas involvement by design — `render-camerafx.js` reads these getters to draw. ← config (`CFG.CAMERAFX`, `POWERUPS`), state, events.
+- **`update.js`** — `update(dt)` orchestrator: `updateWipe(dt)` + `updateCameraFx(dt)` first, unconditionally in every state (camera effects must keep decaying through state transitions — see "Camera effects — subsystem decisions"), then `pollGamepad()`, then (when playing) Dan → shots → **dustbin** → spawn → enemies → ebolts → pickups → vending → workers → effects → camera + `updateCamera` + spawn/terminal/exit/death bookkeeping. ← state, config, input (`pollGamepad`), player, enemies, projectiles, workers, vending, dustbin, level, effects, world, canvas, wipe (`updateWipe`), camerafx (`updateCameraFx`).
 - **`render-entities.js`** — enemy sprites only: `drawEnemies` (per-type sprites + berserk aura). ← canvas, state, config, palette, enemies (`coneRayDist`).
 - **`render-ebolts.js`** (NEW split from render-entities.js) — `drawEbolts` (all projectile kinds: bolt/arc/drop/homing). ← canvas, state, config, palette. Imported by `render.js`.
 - **`render-marks.js`** (NEW split from render.js, Camera-effects Phase 0) — `drawMarks` (the `"berserk"`/`"blast"`/`"debris"`/default-soap mark kinds), moved out verbatim to give `render.js` headroom for the upcoming camera-effects wiring. ← canvas, state, config. Imported by `render.js`.
 - **`screens.js`** — `drawHUD` + `drawTitle` (device-select screen offers "SPACE — KEYBOARD" / "A / START — GAMEPAD" plus muted "O — OPTIONS" / "X — OPTIONS (GAMEPAD)" hints; `_titlePhase === "options"` delegates to `optionsmenu.js`'s `drawOptions`; the O/;/L/K `drawFireLegend` is exported for reuse by `optionsmenu.js` and no longer drawn directly on the title) / `drawLevelClear` / `drawGameOver` (continue prompt keyed to `G.inputMode`). ← canvas, state, config, palette, optionsmenu (`drawOptions`; cyclic with optionsmenu importing `drawFireLegend` back — safe, both uses are inside function bodies).
 - **`optionsmenu.js`** — shared Options + Controls screens: `openOptions`/`openControls`/`optionsScreen`/`defaultPane`/`handleOptionsEdge`/`drawOptions`. Owns the volume sliders + mute row (moved from `pause.js`) plus a 5th "CONTROLS ▸" row, and a Controls sub-screen (keyboard/gamepad pane toggle). Keyboard pane (Phase 5): FIRE grid (via imported `drawFireLegend`) + a matching MOVE 3×3 grid (WASD + arrow glyphs, same cell/stroke style), OTHER (E/F Dustbin, ESC Pause, M Mute, SPACE Start) and MOUSE (aim/fire) label columns below; panel sized 460×460 to fit. Gamepad pane (Phase 6, DONE): static flat-palette controller schematic (body/sticks/d-pad/face buttons/bumpers+triggers/Start pill) with leader lines to MOVE / AIM·FIRE / ATOMIC DUSTBIN / START·PAUSE / BACK labels. `pause.js` delegates nav/draw here instead of owning options state directly; reachable from the title too (see STATUS-WORLD "Pause menu + Save/Load system"). ← canvas, palette, state, audio (volume/mute getters+setters), savegame (`savePrefs`), screens (`drawFireLegend`). Must NOT import `input.js`/`pause.js` (they import it).
-- **`render.js`** — `render()` compositor + world/entity draws (`drawFloor`/`drawWalls`/`drawExit`/`drawExitPointer`/`drawVending`/`drawDustbins`(floor pickups + sliding canister + attract vortex, via `drawDustbinCan`)/`drawTerminals`/`drawShots`/`drawPickups`/`drawWorkers`/`drawFloats`/`drawDan` incl. carried-dustbin cue). `drawMarks` moved to `render-marks.js` (Camera-effects Phase 0, freeing headroom under the 24KB module-split convention). Camera-effects Phase 2 wired in zoom/shake (camera-translate line) + `drawDesaturation()`/`drawVignettes()`/`drawFlashes()` calls (from `render-camerafx.js`) — **now 23,350 bytes, within ~1.2KB of the 24KB ceiling; watch this file on the next edit.** ← canvas, state, config, palette, world, render-entities, render-ebolts (`drawEbolts`), render-marks (`drawMarks`), render-camerafx (`drawVignettes`/`drawFlashes`/`drawDesaturation`), camerafx (`getZoomScale`/`getShakeOffset`), screens.
-- **`render-camerafx.js`** (NEW, Camera-effects Phase 2) — the `ctx` drawing calls for `camerafx.js`'s getters: `drawVignettes()` (low-HP + Cleaner-sick radial gradients), `drawFlashes()` (one-shot flash-layer queue), `drawDesaturation()` (worker:died world-space saturation wash), plus a local `hexA(hex, alpha)` helper. Mirrors the `render-entities.js`/`render-ebolts.js` split-from-`render.js` pattern; no state of its own. ← canvas, camerafx, config.
+- **`render.js`** — `render()` compositor + world/entity draws (`drawFloor`/`drawWalls`/`drawExit`/`drawExitPointer`/`drawVending`/`drawDustbins`(floor pickups + sliding canister + attract vortex, via `drawDustbinCan`)/`drawTerminals`/`drawShots`/`drawPickups`/`drawWorkers`/`drawFloats`/`drawDan` incl. carried-dustbin cue). `drawMarks` moved to `render-marks.js` (Camera-effects Phase 0, freeing headroom under the 24KB module-split convention). Camera-effects Phase 2 wired in zoom/shake (camera-translate line) + `drawDesaturation()`/`drawVignettes()`/`drawFlashes()` calls (from `render-camerafx.js`), plus `drawCleanerGlow(G.dan.x, G.dan.y)` immediately before `drawDan()` — **now 23,350 bytes, within ~1.2KB of the 24KB ceiling; watch this file on the next edit.** ← canvas, state, config, palette, world, render-entities, render-ebolts (`drawEbolts`), render-marks (`drawMarks`), render-camerafx (`drawVignettes`/`drawFlashes`/`drawDesaturation`/`drawCleanerGlow`), camerafx (`getZoomScale`/`getShakeOffset`), screens.
+- **`render-camerafx.js`** (NEW, Camera-effects Phase 2) — the `ctx` drawing calls for `camerafx.js`'s getters: `drawVignettes()` (low-HP radial gradient only — Cleaner-sick was reworked to a local Dan-glow, see "Camera effects — subsystem decisions"), `drawFlashes()` (one-shot flash-layer queue), `drawDesaturation()` (worker:died world-space saturation wash), `drawCleanerGlow(x, y)` (Cleaner-sick's replacement: a soft aura around Dan, drawn behind his sprite same as enemy berserk/alarm auras), plus a local `hexA(hex, alpha)` helper. Mirrors the `render-entities.js`/`render-ebolts.js` split-from-`render.js` pattern; no state of its own. ← canvas, camerafx, config.
 - **`atomic-dustbin-dan.html`** — entry: imports `update` + `render` (+ `input` for its listeners) and runs the delta-timed `loop`. Nothing else.
 
 ---
