@@ -14,6 +14,8 @@ import { isWall, clamp, pushAt } from "./world.js";
 import { drawEnemies } from "./render-entities.js";
 import { drawEbolts } from "./render-ebolts.js";
 import { drawMarks } from "./render-marks.js";
+import { getZoomScale, getShakeOffset } from "./camerafx.js";
+import { drawVignettes, drawFlashes, drawDesaturation } from "./render-camerafx.js";
 import { drawHUD, drawTitle, drawLevelClear, drawGameOver, drawLifetimeModal } from "./screens.js";
 import { popAchievementBanner } from "./achievements.js";
 import { drawWipe } from "./wipe.js";
@@ -68,7 +70,14 @@ export function render(){
   }
 
   ctx.save();
-  ctx.translate(-Math.round(G.camera.x), -Math.round(G.camera.y));
+  const z = getZoomScale();
+  if (z !== 1){
+    ctx.translate(VIEW_W/2, VIEW_H/2);
+    ctx.scale(z, z);
+    ctx.translate(-VIEW_W/2, -VIEW_H/2);
+  }
+  const shake = getShakeOffset();
+  ctx.translate(-Math.round(G.camera.x - shake.x), -Math.round(G.camera.y - shake.y));
 
   drawFloor();
   drawConveyors();
@@ -85,10 +94,13 @@ export function render(){
   drawEbolts();
   drawDan();
   drawFloats();
+  drawDesaturation();
 
   ctx.restore();
 
   if (G.state === "playing") drawExitPointer();
+  drawVignettes();
+  drawFlashes();
   drawHUD();
   drawAchievementBanner();
   if (G.state === "levelclear") drawLevelClear();

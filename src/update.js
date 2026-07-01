@@ -24,10 +24,12 @@ import { sfx, music } from "./audio.js";
 import { emit, on } from "./events.js";
 import { updateWipe, startWipeClose, startWipeOpen } from "./wipe.js";
 import { pollPause } from "./pause.js";
+import { updateCameraFx } from "./camerafx.js";
 
 on('level:all_enemies_dead', () => sfx.lastEnemyCleared());
 
 export function update(dt){
+  updateCameraFx(dt); // runs in all states so one-shot effects always finish decaying
   updateWipe(dt);    // runs in all states including levelclear
 
   // Poll the gamepad every frame, in every state — events are unreliable, and the
