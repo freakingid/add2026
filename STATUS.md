@@ -36,7 +36,7 @@ All core systems are complete. The table below is the canonical build status; GD
 | Conveyor push mechanic + rendering + hum | ✅ Built | §8.1.2 | `world.js`, `render.js` |
 | Screen transition wipe | ✅ Built | — | `wipe.js`, `render.js`, `update.js`, `level.js` |
 | Screen flash (last-enemy-cleared VFX) | 🔲 Removed — built then manually reverted; not in current camera-effects scope | — | — |
-| Camera effects (shake/zoom/vignettes/flash/desat) | 🔧 In progress — Phases 0–3 complete and confirmed working in-browser. Phase 4 (vending healing rings) not started. See "Camera effects — subsystem decisions" below for the full history. | `SPEC-camera-effects.md` | `camerafx.js`, `render-camerafx.js`, `render.js`, `combat.js`, `update.js`, `config.js`, `render-entities.js`, `palette.js` |
+| Camera effects (shake/zoom/vignettes/flash/desat) | ✅ Built — Phases 0–4 complete and confirmed working in-browser. See "Camera effects — subsystem decisions" below for the full history. | `SPEC-camera-effects.md` | `camerafx.js`, `render-camerafx.js`, `render.js`, `combat.js`, `update.js`, `config.js`, `render-entities.js`, `palette.js`, `effects.js`, `vending.js`, `render-marks.js` |
 | Audio — 21 SFX + looping conveyor bed | ✅ Built | §10 | `audio.js` |
 | Music — title track + 5 gameplay tracks (9 bars each), scheduler, duck/unduck, bassoon voice, chorus arrival treatments | ✅ Built | §10 | `audio.js` (SFX/buses/re-export; `tone()` + bassoon wave), `music.js` (scheduler + all track data), `level.js`, `update.js`, `input.js`, `pause.js`, `playlists.js` |
 | Game states (title / playing / levelclear / dead) | ✅ Built | — | `state.js`, `screens.js` |
@@ -62,9 +62,8 @@ Decisions are split by concern — open only the file(s) relevant to your task:
 
 ## Camera effects — subsystem decisions
 
-Phases 0–2 of `SPEC-camera-effects.md` are complete and confirmed working
-in-browser (Phases 3–4 — Manager berserk enemy visual, vending healing rings
-— not started).
+All of `SPEC-camera-effects.md` (Phases 0–4) is complete and confirmed
+working in-browser.
 
 **Phase 2 decay bug.** `updateCameraFx(dt)` was exported from `camerafx.js`
 but never called anywhere, so `_elapsed` never advanced and every one-shot
@@ -135,11 +134,59 @@ manager itself (unbuffed in the test) staying visually unchanged.
 `render-entities.js` is now **23,067 bytes** — up from 21,564, and within
 ~930 bytes of the 24KB soft ceiling; flag before the next edit to this file.
 
+**Vending healing rings (Phase 4, DONE).** `addHealRing(x, y, color)`
+(`effects.js`) pushes three `G.marks` entries at staggered starting `life`
+(1.00/0.85/0.70, all decaying at the existing 1.6/s rate) so they cascade
+rather than pop in sync; each carries a `vy:-22` field, and `updateEffects`
+picks that up with one generic `if (m.vy) m.y += m.vy * dt;` line — not
+special-cased to `"healRing"`, so any future mark with a `vy` rises the same
+way for free. `vending.js`'s `updateVending` calls it right next to the
+existing `addFloat`, reusing the same `color` (`COL.vendSmall`/`vendLarge`)
+already computed there for the float text — so the ring, the float, and the
+machine's own variant all agree visually with no new color logic. Drawn in
+`render-marks.js`'s `drawMarks()` as a stroked circle whose radius grows
+4→20px and alpha fades with `life`, importing `hexA` from
+`render-camerafx.js` rather than duplicating it (both files exist post-Phase
+2, so sharing was the cleaner call). This is a pure world-space mark — no
+`camerafx.js` involvement, unlike the screen-space effects above.
+
+Confirmed in-browser via a scripted Playwright session (teleporting Dan onto
+a vending machine's exact coordinates and reading `G.marks` each frame,
+since normal walking would also work but is slower to reproduce
+deterministically): three rings visibly cascade outward from Dan's feet and
+fully decay within ~500-600ms of contact, tinted green (`#5dff8f`) at the
+small machine and cyan (`#5fd2ff`) at the large one, matching the existing
+`+N` float color exactly in both cases. Because the ring starts at radius 4
+(smaller than Dan's `DAN_RADIUS` 12) and `drawMarks()` runs before `drawDan()`
+in the compositor, the ring is initially hidden behind Dan's sprite and only
+becomes visible once its growing radius exceeds his — expected layering, not
+a bug, and confirmed to read fine once it passes that point; a
+Dan-not-glued-to-the-machine screenshot showed a clearly visible cascading
+ring.
+
+**Interaction with Cleaner-sick, and a pre-existing duplicate found while
+checking it.** Tested rings firing while `G.dan.slow > 0` (Cleaner-sick
+active) at the small (also-green) machine — the intended worry per the phase
+prompt was two similarly-colored green effects (`cleanerSickColor`
+`#9bff7a` vs `COL.vendSmall` `#5dff8f`) overlapping confusingly near Dan.
+In practice they're visually distinct enough (glow vs. ring silhouette) not
+to read as broken. Separately, and not part of this phase's scope: `drawDan()`
+(`render.js` ~line 587) still contains an **older, pre-camera-effects
+Cleaner-slow ring** (`COL.spray`/`COL.sprayDark`, a stroked ring + orbiting
+droplets) that was apparently never removed when Phase 3's `drawCleanerGlow`
+replacement shipped. So a Cleaner-sick Dan currently renders *two*
+independent green auras (the old ring in `drawDan` and the new
+`drawCleanerGlow` aura), both keyed off the same `G.dan.slow > 0` condition.
+Flagging per the "if you break/spot a convention issue, say so" rule rather
+than fixing it here — it's in `render.js`, outside this phase's file list,
+and predates this session's work.
+
 All of the above is confirmed working in-browser, not just math-checked: the
 low-HP vignette, powerup punch/flash, Cleaner glow, dustbin
-detonate/bounce/throw shake+flash, worker-died desaturation, and death
-shake/flash all decay correctly and don't bleed across state transitions or
-level changes.
+detonate/bounce/throw shake+flash, worker-died desaturation, death
+shake/flash, the Manager berserk tint+shimmy, and the vending healing rings
+all decay correctly and don't bleed across state transitions or level
+changes.
 
 ---
 
@@ -161,14 +208,14 @@ level changes.
 - **`music.js`** — Music scheduler + all track data: bar-by-bar look-ahead scheduler (`_tickMusic`/`_scheduleBar`; passes `filt`/`hold` through to `tone()`), `TRACK_TITLE` (8-bar title loop), 5 gameplay tracks (`T_BOUNCY`/`T_RAMPAGE`/`T_SOAP`/`T_BLUES`/`T_MANIA`) each with **9 bars** (3 verse → 1 fill → 4 chorus → 1 return; Phase 3), `TRACKS` array, and the exported `music` object (`playTitle`/`playGameplay`/`stop`/`fadeOut`/`duck`/`unduck`/`isPlaying`). ← audio (`tone`/`noise`/`getCtx`/`getMusicBus`), config. Re-exported by `audio.js` so all call-sites import from `"./audio.js"` unchanged.
 - **`state.js`** — `G` (the mutable container: run meta + entities `dan/shots/enemies/terminals/pickups/marks/floats/ebolts/vending/dustbin/dustbinPickups/workers/camera/exit` + `spawnTimer`/`pickupTimer` + `inputMode`) and `levelType()`. ← config.
 - **`world.js`** — `map[][]` (exported `let`, char grid, reassigned only by `loadTileGrid`) + the §8.1 loader primitives: **`loadTileGrid`** (grid→`map`, sets `CFG.COLS/ROWS`), **`bakeConveyors`**/**`pushField`**/**`pushAt`** (per-cell push field) + the consume-side helpers **`pushAtWorld`** (push at a body's cell), **`applyBeltPush`** (additive belt move for a ground body; skips fliers), **`clampNet`** (Dan's move+belt net-speed clamp), and `CFG.TILES`-driven `isWall`/`blocksLOS`/`isDestructible`. Plus `randomFloorTile`/`randomFloorTileTC`/`randomFloorTileNearWall` (wall-adjacent tile for flush placement)/`hasLineOfSight`/`destroyShelf` (destructible-only), collision `bodyHitsWall`/`moveBody`, tile helpers `tileFloor`/`tileCenter`/`tileClearRun`/`rectPerimeterClear`, `clamp`, `isBorderTile`. ← config, state. (No longer imports canvas — decoupled from the DOM.)
-- **`effects.js`** — `addFloat`, `updateEffects` (marks + floats lifetimes). ← state.
+- **`effects.js`** — `addFloat`, `addHealRing(x, y, color)` (Camera-effects Phase 4: pushes 3 staggered-life `"healRing"` marks for the vending heal cascade), `updateEffects` (marks + floats lifetimes; the marks loop moves any mark with a `vy` field — generic, not `"healRing"`-specific). ← state.
 - **`menuedge.js`** — shared menu edge-detection for title + pause Options/Controls navigation: `menuHeld(action, pad, inputMode)` (up/down/left/right/confirm/back; kb+gamepad, routes by `inputMode`) and `makeEdgeTracker()` (returns an instance-scoped `{edge, refresh}` so title and pause each get their own `_prev{}`). Pure leaf — registers its own `_keys{}` via its own listeners (same pattern as `pause.js`'s circular-import workaround) rather than importing from `input.js`/`pause.js`. *No imports.* Not yet wired into title or pause.
 - **`combat.js`** — shared damage/death: `hitDanRanged`/`hitDanArea` (i-frame + knockback), `meleeContact` (0-dmg-safe; `berserDmgBonus` when berserk), `damageEnemy` (friendly-fire damage → no-score kill), `killEnemy(index, {score})` (points + score float unless `score:false`; Manager berserk pulse either way — emits `manager:berserk_pulse` with `{count, x, y}` next to the existing berserk-buff loop, Camera-effects Phase 1, for `camerafx.js` to trigger shake+flash), `destroyTerminal`. ← config, palette, state, effects, events.
 - **`projectiles.js`** — the `G.ebolts` pool: `fireEnemyBolt/Arc/Drop/Homing` + `updateEbolts` dispatching by `kind` (`bolt`/`arc`/`drop`/`homing`; `updateArc/Drop/Homing` helpers, `detonateHoming` blast). `bolt`/`homing` also friendly-fire ground robots (skip fliers/terminals) via `damageEnemy`. ← config, state, world, combat.
 - **`enemies.js`** — `spawnEnemy` (per-type init; assigns unique `e.eid` counter), `updateEnemies` (dispatch + melee contact via `combat`), `buffSpd` (combined Manager-berserk + Scanner-alarm speed mult), Cleaner/Scanner patrol routing (`nearestWaypoint`/`buildCleanerPatrol`/`advancePatrol`) + Cleaner spray helpers (`danInSprayCone`/`coneRayDist`(exported, also clips the rendered cone)/`applySpray`). ← config, state, world, combat, projectiles, **workers** (`killWorker`, for the Inventory Bot), **dustbin** (`vortexHold`, for the attract phase), **enemies-ai**.
 - **`enemies-ai.js`** (NEW split from enemies.js) — per-type AI updaters: `updatePicker`/`updateForklift`/`updateSecurity`/`updateSorter`/`updateCleaner`/`updateDrone`/`updateManager`/`updateScanner`/`updateInventory`. ← config, state, world, combat, projectiles, workers, effects, enemies (patrol helpers + `buffSpd` + `danInSprayCone`/`applySpray`).
 - **`level.js`** — run lifecycle + the §8.1 **generator** and **loader**. `newGame` (full reset) → `buildLevel` = `loadLevel(generateLevelDef())` → `nextLevel`. `generateLevelDef` emits a Level Definition (tile grid + zones + fixed player/exit + spawn rules; single-type, Manager/Scanner +Picker cluster, or the `"mixed"` all-types branch). `loadLevel` (exported, the ONLY level entry point) validates (`validateLevelDef`), parses tiles, bakes conveyors, resolves placements, and runs spawn rules (`runSpawnRule` + `pickTile`/`pickWallTile` zone placement honoring `avoid`/non-solid). Keeps HP/powerups/score/carried-dustbin. Also spawner-terminal emission `spawnFromTerminal`/`spawnWave`; pickups `spawnPickup`/`updatePickups`. ← config, state, world, enemies, vending, dustbin, effects.
-- **`vending.js`** — `spawnVendingMachine(variant, spot)` (builds one flush-against-wall cabinet at a wall-adjacent spot the loader picks) + `updateVending` (contact trigger, maxHp-capped heal, single-use depletion). ← config, state, world (`tileCenter`), effects, palette. Called from `level.js` (loader's vending spawn rules) and `update.js` (update); drawn by `render.js`.
+- **`vending.js`** — `spawnVendingMachine(variant, spot)` (builds one flush-against-wall cabinet at a wall-adjacent spot the loader picks) + `updateVending` (contact trigger, maxHp-capped heal, single-use depletion; calls `addHealRing(G.dan.x, G.dan.y + 10, color)` next to the existing `addFloat`, Camera-effects Phase 4). ← config, state, world (`tileCenter`), effects, palette. Called from `level.js` (loader's vending spawn rules) and `update.js` (update); drawn by `render.js`.
 - **`dustbin.js`** — the Atomic Dustbin special (GDD §5): `spawnDustbinPickup(pos)` (one floor pickup; the loader's atomicDustbin rule drives count/rarity), `updateDustbin` (collect + deploy E/F + slide→attract→detonate state machine), `vortexHold` (the attract-phase pull, called from `enemies.js`). ← config, state, **input** (`isDeploySpecial`/`getMoveVec`), world (`moveBody`/`isWall`), combat (`killEnemy`), effects, palette. Called from `level.js` (loader) and `update.js` (update); drawn by `render.js`. NB: `dustbin → input → level → dustbin` is an import cycle, but every cross-module use is inside a function (runtime), so module evaluation is safe.
 - **`workers.js`** — `updateWorkers` (wander/avoid + rescue-on-contact), `rescueWorker` (escalating points + counter + callout), and `killWorker` (exported; Inventory Bot's no-points worker kill). ← config, palette, state, world, effects.
 - **`input.js`** — device-agnostic input layer. Exports `getMoveVec()`/`getFireAngle()`/`isDeploySpecial()` (route by `G.inputMode`), `pollGamepad()` (called from `update.js`; also drives the title's Options screen via `pollTitleOptions()` + `optionsmenu.js`'s `handleOptionsEdge`), and the raw `keys`/`mouse` (mouse aim, `M` mute, debug). Registers key/mouse/touch listeners on import (side-effect), unlocks audio on the first gesture, binds `M` = mute, "o" opens title Options, and starts/restarts runs via `startRun(mode)`. ← config, canvas, state, level (`newGame`), audio (`unlock`/`toggleMute`), optionsmenu (`openOptions`/`handleOptionsEdge`/`optionsScreen`).
@@ -177,7 +224,7 @@ level changes.
 - **`update.js`** — `update(dt)` orchestrator: `updateWipe(dt)` + `updateCameraFx(dt)` first, unconditionally in every state (camera effects must keep decaying through state transitions — see "Camera effects — subsystem decisions"), then `pollGamepad()`, then (when playing) Dan → shots → **dustbin** → spawn → enemies → ebolts → pickups → vending → workers → effects → camera + `updateCamera` + spawn/terminal/exit/death bookkeeping. ← state, config, input (`pollGamepad`), player, enemies, projectiles, workers, vending, dustbin, level, effects, world, canvas, wipe (`updateWipe`), camerafx (`updateCameraFx`).
 - **`render-entities.js`** — enemy sprites only: `drawEnemies` (per-type sprites + berserk aura). ← canvas, state, config, palette, enemies (`coneRayDist`).
 - **`render-ebolts.js`** (NEW split from render-entities.js) — `drawEbolts` (all projectile kinds: bolt/arc/drop/homing). ← canvas, state, config, palette. Imported by `render.js`.
-- **`render-marks.js`** (NEW split from render.js, Camera-effects Phase 0) — `drawMarks` (the `"berserk"`/`"blast"`/`"debris"`/default-soap mark kinds), moved out verbatim to give `render.js` headroom for the upcoming camera-effects wiring. ← canvas, state, config. Imported by `render.js`.
+- **`render-marks.js`** (NEW split from render.js, Camera-effects Phase 0) — `drawMarks` (the `"berserk"`/`"blast"`/`"debris"`/default-soap/`"healRing"` mark kinds; `"healRing"`, Camera-effects Phase 4, added last for the vending heal cascade — a stroked circle growing 4→20px radius, alpha faded via the imported `hexA`). ← canvas, state, config, render-camerafx (`hexA`). Imported by `render.js`.
 - **`screens.js`** — `drawHUD` + `drawTitle` (device-select screen offers "SPACE — KEYBOARD" / "A / START — GAMEPAD" plus muted "O — OPTIONS" / "X — OPTIONS (GAMEPAD)" hints; `_titlePhase === "options"` delegates to `optionsmenu.js`'s `drawOptions`; the O/;/L/K `drawFireLegend` is exported for reuse by `optionsmenu.js` and no longer drawn directly on the title) / `drawLevelClear` / `drawGameOver` (continue prompt keyed to `G.inputMode`). ← canvas, state, config, palette, optionsmenu (`drawOptions`; cyclic with optionsmenu importing `drawFireLegend` back — safe, both uses are inside function bodies).
 - **`optionsmenu.js`** — shared Options + Controls screens: `openOptions`/`openControls`/`optionsScreen`/`defaultPane`/`handleOptionsEdge`/`drawOptions`. Owns the volume sliders + mute row (moved from `pause.js`) plus a 5th "CONTROLS ▸" row, and a Controls sub-screen (keyboard/gamepad pane toggle). Keyboard pane (Phase 5): FIRE grid (via imported `drawFireLegend`) + a matching MOVE 3×3 grid (WASD + arrow glyphs, same cell/stroke style), OTHER (E/F Dustbin, ESC Pause, M Mute, SPACE Start) and MOUSE (aim/fire) label columns below; panel sized 460×460 to fit. Gamepad pane (Phase 6, DONE): static flat-palette controller schematic (body/sticks/d-pad/face buttons/bumpers+triggers/Start pill) with leader lines to MOVE / AIM·FIRE / ATOMIC DUSTBIN / START·PAUSE / BACK labels. `pause.js` delegates nav/draw here instead of owning options state directly; reachable from the title too (see STATUS-WORLD "Pause menu + Save/Load system"). ← canvas, palette, state, audio (volume/mute getters+setters), savegame (`savePrefs`), screens (`drawFireLegend`). Must NOT import `input.js`/`pause.js` (they import it).
 - **`render.js`** — `render()` compositor + world/entity draws (`drawFloor`/`drawWalls`/`drawExit`/`drawExitPointer`/`drawVending`/`drawDustbins`(floor pickups + sliding canister + attract vortex, via `drawDustbinCan`)/`drawTerminals`/`drawShots`/`drawPickups`/`drawWorkers`/`drawFloats`/`drawDan` incl. carried-dustbin cue). `drawMarks` moved to `render-marks.js` (Camera-effects Phase 0, freeing headroom under the 24KB module-split convention). Camera-effects Phase 2 wired in zoom/shake (camera-translate line) + `drawDesaturation()`/`drawVignettes()`/`drawFlashes()` calls (from `render-camerafx.js`), plus `drawCleanerGlow(G.dan.x, G.dan.y)` immediately before `drawDan()` — **now 23,350 bytes, within ~1.2KB of the 24KB ceiling; watch this file on the next edit.** ← canvas, state, config, palette, world, render-entities, render-ebolts (`drawEbolts`), render-marks (`drawMarks`), render-camerafx (`drawVignettes`/`drawFlashes`/`drawDesaturation`/`drawCleanerGlow`), camerafx (`getZoomScale`/`getShakeOffset`), screens.

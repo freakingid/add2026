@@ -14,7 +14,7 @@
 import { CFG } from "./config.js";
 import { G } from "./state.js";
 import { tileCenter } from "./world.js";
-import { addFloat } from "./effects.js";
+import { addFloat, addHealRing } from "./effects.js";
 import { COL } from "./palette.js";
 import { sfx } from "./audio.js";
 import { emit } from "./events.js";
@@ -60,6 +60,7 @@ export function updateVending(dt){
       m.flash = 0.25;
       const color = m.variant === "large" ? COL.vendLarge : COL.vendSmall;
       addFloat(m.x, m.y - 20, "+" + gained, color);
+      addHealRing(G.dan.x, G.dan.y + 10, color);
       sfx.heal();
       emit('vending:used', { variant: m.variant, hpGained: gained });
     }

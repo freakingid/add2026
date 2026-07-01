@@ -5,6 +5,7 @@
 import { ctx } from "./canvas.js";
 import { G } from "./state.js";
 import { CFG } from "./config.js";
+import { hexA } from "./render-camerafx.js";
 
 export function drawMarks(){
   for (const m of G.marks){
@@ -37,6 +38,14 @@ export function drawMarks(){
       ctx.beginPath();
       ctx.arc(m.x, m.y, (m.size || 6) * (1.3 - m.life * 0.5), 0, Math.PI*2);
       ctx.fill();
+    } else if (m.kind === "healRing"){
+      const progress = 1 - m.life;                       // life starts at 1.0/0.85/0.70, all decay at the same 1.6/s rate
+      const rad = 4 + progress * 16;
+      ctx.strokeStyle = m.color.startsWith('#') ? hexA(m.color, Math.max(0, m.life) * 0.85) : m.color;
+      ctx.lineWidth = 2.5 - progress * 1.5;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, Math.max(1, rad), 0, Math.PI*2);
+      ctx.stroke();
     } else {
       ctx.fillStyle = "rgba(150,220,255," + (0.35 * m.life).toFixed(3) + ")";
       ctx.beginPath();
