@@ -14,30 +14,33 @@ export function hexA(hex, alpha){
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-// Sustained radial vignettes (low HP + Cleaner-sick), screen-space, drawn
-// after the world block restores so they stay fixed to the viewport.
+// Sustained low-HP radial vignette, screen-space, drawn after the world
+// block restores so it stays fixed to the viewport.
 export function drawVignettes(){
-  const hpA = getLowHpAlpha(), sickA = getCleanerSickAlpha();
-  if (hpA <= 0.001 && sickA <= 0.001) return;
+  const hpA = getLowHpAlpha();
+  if (hpA <= 0.001) return;
   const cx = VIEW_W/2, cy = VIEW_H/2, outerR = Math.hypot(cx, cy);
 
-  if (hpA > 0.001){
-    const C = CFG.CAMERAFX;
-    const g = ctx.createRadialGradient(cx, cy, outerR*0.55, cx, cy, outerR);
-    g.addColorStop(0, hexA(C.lowHpVignetteColor, 0));
-    g.addColorStop(1, hexA(C.lowHpVignetteColor, hpA));
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-  }
+  const C = CFG.CAMERAFX;
+  const g = ctx.createRadialGradient(cx, cy, outerR*0.55, cx, cy, outerR);
+  g.addColorStop(0, hexA(C.lowHpVignetteColor, 0));
+  g.addColorStop(1, hexA(C.lowHpVignetteColor, hpA));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+}
 
-  if (sickA > 0.001){
-    const C = CFG.CAMERAFX;
-    const g = ctx.createRadialGradient(cx, cy, outerR*0.55, cx, cy, outerR);
-    g.addColorStop(0, hexA(C.cleanerSickColor, 0));
-    g.addColorStop(1, hexA(C.cleanerSickColor, sickA));
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-  }
+// Cleaner-sick: faint glow around Dan, world-space, drawn behind his sprite
+// (same convention as enemy berserk/alarm auras in render-entities.js).
+export function drawCleanerGlow(x, y){
+  const a = getCleanerSickAlpha();
+  if (a < 0.01) return;
+  const t = performance.now()/1000;
+  const pulse = 0.5 + 0.5 * Math.sin(t * 5);
+  const alpha = a * (0.6 + 0.4*pulse);
+  ctx.fillStyle = hexA(CFG.CAMERAFX.cleanerSickColor, alpha);
+  ctx.beginPath();
+  ctx.arc(x, y, CFG.DAN_RADIUS + 6 + pulse*3, 0, Math.PI*2);
+  ctx.fill();
 }
 
 // One-shot flash layers (player died / dustbin detonate/bounce/throw /

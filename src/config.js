@@ -138,19 +138,18 @@ export const CFG = {
     managerPulseFlashColor: '#ff6414', managerPulseFlashPeak: 0.28, managerPulseFlashDur: 0.4,
 
     // powerup:collected — punch-zoom, no shake
-    powerupPunchZoom: 1.045, powerupPunchDur: 0.14,
+    powerupPunchZoom: 1.0225, powerupPunchDur: 0.14,
 
     // player:hp_changed — sustained, recomputed live from G.dan each frame (NOT a timer)
     lowHpFraction: 0.30,          // HP/maxHp at/below this = vignette active
     lowHpVignetteColor: '#ff5b4d',
-    lowHpVignetteMaxAlpha: 0.30,
+    lowHpVignetteMaxAlpha: 0.55,
     lowHpPulseHz: 1.6,
 
     // Cleaner spray slow status — sustained, polls G.dan.slow > 0, smooth fade
     cleanerSickColor: '#9bff7a',   // reuses the Cleaner's own spray color (thematic tie)
-    cleanerSickMaxAlpha: 0.16,
+    cleanerSickMaxAlpha: 0.24,
     cleanerFadeRate: 4.0,          // per-second lerp rate toward target alpha (~250ms crossfade)
-    cleanerWobbleMag: 1.4, cleanerWobbleHz: 2.2,   // continuous low-amplitude camera wobble
 
     // worker:died — one-shot desaturation, distinct visual language from combat (loss, not hit)
     workerDiedDesatPeak: 0.6, workerDiedDesatDur: 0.5,

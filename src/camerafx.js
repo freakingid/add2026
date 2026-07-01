@@ -38,17 +38,10 @@ export function tickCleanerSick(dt){
   const target = (G.dan && G.dan.slow > 0) ? C.cleanerSickMaxAlpha : 0;
   _cleanerAlpha += (target - _cleanerAlpha) * Math.min(1, dt * C.cleanerFadeRate);
 }
-export function cleanerWobbleOffset(){
-  if (_cleanerAlpha < 0.01) return { x:0, y:0 };
-  const C = CFG.CAMERAFX, t = performance.now()/1000;
-  const m = C.cleanerWobbleMag * _cleanerAlpha;
-  return { x: Math.sin(t*C.cleanerWobbleHz)*m, y: Math.cos(t*C.cleanerWobbleHz*0.8)*m };
-}
 export function getCleanerSickAlpha(){ return _cleanerAlpha; }
 
 export function getShakeOffset(){
-  const a = impactShakeOffset(), b = cleanerWobbleOffset();
-  return { x: a.x + b.x, y: a.y + b.y };
+  return impactShakeOffset();
 }
 
 // --- Zoom punch ---
@@ -93,7 +86,7 @@ export function lowHpAlpha(){
   if (frac > C.lowHpFraction) return 0;
   const pulse = 0.5 + 0.5 * Math.sin(performance.now()/1000 * Math.PI*2 * C.lowHpPulseHz);
   const closeness = 1 - frac / C.lowHpFraction;   // 0 at threshold, 1 at 0 HP
-  return C.lowHpVignetteMaxAlpha * (0.5 + 0.5*pulse) * closeness;
+  return C.lowHpVignetteMaxAlpha * pulse * closeness;
 }
 export function getLowHpAlpha(){ return lowHpAlpha(); }
 

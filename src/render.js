@@ -15,7 +15,7 @@ import { drawEnemies } from "./render-entities.js";
 import { drawEbolts } from "./render-ebolts.js";
 import { drawMarks } from "./render-marks.js";
 import { getZoomScale, getShakeOffset } from "./camerafx.js";
-import { drawVignettes, drawFlashes, drawDesaturation } from "./render-camerafx.js";
+import { drawVignettes, drawFlashes, drawDesaturation, drawCleanerGlow } from "./render-camerafx.js";
 import { drawHUD, drawTitle, drawLevelClear, drawGameOver, drawLifetimeModal } from "./screens.js";
 import { popAchievementBanner } from "./achievements.js";
 import { drawWipe } from "./wipe.js";
@@ -92,6 +92,7 @@ export function render(){
   drawShots();
   drawEnemies();
   drawEbolts();
+  drawCleanerGlow(G.dan.x, G.dan.y);
   drawDan();
   drawFloats();
   drawDesaturation();
