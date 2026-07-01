@@ -36,7 +36,7 @@ All core systems are complete. The table below is the canonical build status; GD
 | Conveyor push mechanic + rendering + hum | ✅ Built | §8.1.2 | `world.js`, `render.js` |
 | Screen transition wipe | ✅ Built | — | `wipe.js`, `render.js`, `update.js`, `level.js` |
 | Screen flash (last-enemy-cleared VFX) | 🔲 Removed — built then manually reverted; not in current camera-effects scope | — | — |
-| Camera effects (shake/zoom/vignettes/flash/desat) | 🔧 In progress — Phases 0–2 complete and confirmed working in-browser. Phase 3 (Manager berserk enemy visual) and Phase 4 (vending healing rings) not started. See "Camera effects — subsystem decisions" below for the full history. | `SPEC-camera-effects.md` | `camerafx.js`, `render-camerafx.js`, `render.js`, `combat.js`, `update.js`, `config.js` |
+| Camera effects (shake/zoom/vignettes/flash/desat) | 🔧 In progress — Phases 0–3 complete and confirmed working in-browser. Phase 4 (vending healing rings) not started. See "Camera effects — subsystem decisions" below for the full history. | `SPEC-camera-effects.md` | `camerafx.js`, `render-camerafx.js`, `render.js`, `combat.js`, `update.js`, `config.js`, `render-entities.js`, `palette.js` |
 | Audio — 21 SFX + looping conveyor bed | ✅ Built | §10 | `audio.js` |
 | Music — title track + 5 gameplay tracks (9 bars each), scheduler, duck/unduck, bassoon voice, chorus arrival treatments | ✅ Built | §10 | `audio.js` (SFX/buses/re-export; `tone()` + bassoon wave), `music.js` (scheduler + all track data), `level.js`, `update.js`, `input.js`, `pause.js`, `playlists.js` |
 | Game states (title / playing / levelclear / dead) | ✅ Built | — | `state.js`, `screens.js` |
@@ -112,8 +112,28 @@ unchanged — only where it gets drawn moved.
 **Manager berserk pulse.** New event `manager:berserk_pulse` (`{ count, x,
 y }`) added to `combat.js`, emitted next to the existing berserk-buff loop
 that sets `other.berserk` on nearby robots — `camerafx.js` subscribes to
-trigger the shake+flash. (The enemy-visual side of berserk — color tint +
-shimmy on buffed robots — is Phase 3, not yet built.)
+trigger the shake+flash.
+
+**Manager berserk enemy visual (Phase 3, DONE).** Buffed robots (`e.berserk >
+0`) now get a body-color tint + a subtle shimmy, on top of the existing
+orange aura ring (unchanged, still drawn before the per-type dispatch and NOT
+wrapped in the shimmy transform — it's already centered on `e.x/e.y` and
+shouldn't jitter independently of the sprite). `palette.js` gained
+`lerpColor(hexA, hexB, t)`; each of the 9 per-type draw functions in
+`render-entities.js` swaps its single dominant chassis `fillStyle` for
+`lerpColor(COL.xBody, CFG.CAMERAFX.berserkTintColor, CFG.CAMERAFX.berserkTintAmount)`
+when `e.berserk > 0` (only the largest/most visually dominant body fill per
+type — accent/trim/panel fills are untouched). The shimmy wraps the existing
+per-type dispatch chain in `drawEnemies()` with a `ctx.save()`/
+`ctx.translate(jx,jy)`/…`ctx.restore()` using a per-enemy phase offset
+(`e.eid * 0.7`) so a mob doesn't shimmy in lockstep; `jx`/`jy` are
+render-only and never touch `e.x`/`e.y` — confirmed in-browser (entity
+position stays fixed across frames while berserking; only the paint jitters).
+Verified in-browser with a spawned 9-type cluster: toggling `e.berserk`
+visibly shifts each type's body color toward orange-red and back, with the
+manager itself (unbuffed in the test) staying visually unchanged.
+`render-entities.js` is now **23,067 bytes** — up from 21,564, and within
+~930 bytes of the 24KB soft ceiling; flag before the next edit to this file.
 
 All of the above is confirmed working in-browser, not just math-checked: the
 low-HP vignette, powerup punch/flash, Cleaner glow, dustbin

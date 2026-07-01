@@ -49,6 +49,7 @@ of these specifically. Active system decisions are in STATUS.md.
 - **L7 is a mixed-type level.** Manager terminals + 2 hardcoded Picker terminals + 3 preplaced Pickers. The spawn loop iterates all terminal types present (multi-type support generalized — any future mixed level works without further changes). Picker `max` (22) and Manager `interval` (8 s) govern their cadences.
 - **Score float on most enemy kills, but friendly-fire kills are silent on score.** `killEnemy(index, {score=true})` awards points + the amber float by default; callers that omit the option (Dan's mop/shots, the Dustbin blast) keep scoring. The no-score path `killEnemy(i, {score:false})` (used by `damageEnemy` for bolt/missile robot-on-robot kills) **skips points + float** but still plays `enemyDie` and runs a caught Manager's berserk pulse — so robots killing each other gives Dan FX/chaos but no free points (GDD §9).
 - **Manager contact damage = 0.** Pure ranged unit. Even berserk, no melee. The berserk dmg bonus only applies to enemies with `dmg > 0` (Pickers, Forklifts, Security).
+- **Berserk visual treatment (Camera-effects Phase 3, DONE).** Any robot with `e.berserk > 0` gets a body-color tint (`lerpColor` toward `CFG.CAMERAFX.berserkTintColor`, all in `render-entities.js`/`palette.js`) and a small render-only shimmy, on top of the pre-existing orange aura ring. See STATUS.md "Camera effects — subsystem decisions" for the full writeup.
 
 ### Scanner (L8)
 

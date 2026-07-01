@@ -8,8 +8,8 @@
    ========================================================================= */
 import { ctx } from "./canvas.js";
 import { G } from "./state.js";
-import { ENEMY } from "./config.js";
-import { COL } from "./palette.js";
+import { ENEMY, CFG } from "./config.js";
+import { COL, lerpColor } from "./palette.js";
 import { coneRayDist } from "./enemies.js";
 
 export function drawEnemies(){
@@ -30,6 +30,17 @@ export function drawEnemies(){
       ctx.arc(e.x, e.y, e.r + 6 + pulse * 3, 0, Math.PI*2);
       ctx.fill();
     }
+    // Berserk shimmy: visual-only jitter, never touches e.x/e.y (collision/AI/auras
+    // above all read e.x/e.y directly and stay put).
+    let jx = 0, jy = 0;
+    if (e.berserk > 0 && e.spawn <= 0){
+      const C = CFG.CAMERAFX, t = performance.now()/1000, ph = e.eid * 0.7;
+      jx = Math.sin(t*C.berserkShimmyHzA + ph) * C.berserkShimmyMag;
+      jy = Math.cos(t*C.berserkShimmyHzB + ph) * C.berserkShimmyMag;
+    }
+    ctx.save();
+    if (jx || jy) ctx.translate(jx, jy);
+
     if (e.type === "forklift") drawForklift(e);
     else if (e.type === "security") drawSecurity(e);
     else if (e.type === "sorter") drawSorter(e);
@@ -39,6 +50,8 @@ export function drawEnemies(){
     else if (e.type === "scanner") drawScanner(e);
     else if (e.type === "inventory") drawInventory(e);
     else drawPicker(e);
+
+    ctx.restore();
   }
 }
 
@@ -53,7 +66,7 @@ function drawPicker(e){
   ctx.fillStyle = "#3a1f1c";
   ctx.fillRect(x - r, y + r*0.4, r*2, r*0.7);
   // body
-  ctx.fillStyle = flash ? "#ffffff" : COL.picker;
+  ctx.fillStyle = flash ? "#ffffff" : (e.berserk > 0 ? lerpColor(COL.picker, CFG.CAMERAFX.berserkTintColor, CFG.CAMERAFX.berserkTintAmount) : COL.picker);
   ctx.fillRect(x - r, y - r, r*2, r*1.6);
   // top panel
   ctx.fillStyle = COL.pickerPanel;
@@ -105,7 +118,7 @@ function drawForklift(e){
   ctx.fillRect(r*0.55, -r*0.72, r*0.9, r*0.24);
   ctx.fillRect(r*0.55,  r*0.48, r*0.9, r*0.24);
   // chassis
-  ctx.fillStyle = flash ? "#ffffff" : (charging ? COL.chargeWarn : COL.forkliftBody);
+  ctx.fillStyle = flash ? "#ffffff" : (charging ? COL.chargeWarn : (e.berserk > 0 ? lerpColor(COL.forkliftBody, CFG.CAMERAFX.berserkTintColor, CFG.CAMERAFX.berserkTintAmount) : COL.forkliftBody));
   ctx.fillRect(-r, -r*0.82, r*1.7, r*1.64);
   // hazard stripe
   ctx.fillStyle = flash ? "#ffffff" : COL.forkliftDark;
@@ -163,7 +176,7 @@ function drawSecurity(e){
   }
 
   // chassis
-  ctx.fillStyle = flash ? "#ffffff" : COL.securityBody;
+  ctx.fillStyle = flash ? "#ffffff" : (e.berserk > 0 ? lerpColor(COL.securityBody, CFG.CAMERAFX.berserkTintColor, CFG.CAMERAFX.berserkTintAmount) : COL.securityBody);
   ctx.fillRect(-r*0.9, -r*0.85, r*1.7, r*1.7);
   // armored shoulders
   ctx.fillStyle = flash ? "#ffffff" : COL.securityDark;
@@ -201,7 +214,7 @@ function drawSorter(e){
   ctx.translate(x, y);
 
   // squat rounded chassis
-  ctx.fillStyle = flash ? "#ffffff" : COL.sorterBody;
+  ctx.fillStyle = flash ? "#ffffff" : (e.berserk > 0 ? lerpColor(COL.sorterBody, CFG.CAMERAFX.berserkTintColor, CFG.CAMERAFX.berserkTintAmount) : COL.sorterBody);
   ctx.fillRect(-r*0.95, -r*0.7, r*1.9, r*1.5);
   ctx.fillStyle = flash ? "#ffffff" : COL.sorterDark;
   ctx.fillRect(-r*0.95, r*0.2, r*1.9, r*0.6);    // lower tray/lip
@@ -305,7 +318,7 @@ function drawCleaner(e){
   ctx.save();
   ctx.translate(x, y);
   // round tank chassis
-  ctx.fillStyle = flash ? "#ffffff" : COL.cleanerBody;
+  ctx.fillStyle = flash ? "#ffffff" : (e.berserk > 0 ? lerpColor(COL.cleanerBody, CFG.CAMERAFX.berserkTintColor, CFG.CAMERAFX.berserkTintAmount) : COL.cleanerBody);
   ctx.beginPath();
   ctx.arc(0, 0, r, 0, Math.PI*2);
   ctx.fill();
@@ -373,7 +386,7 @@ function drawDrone(e){
   }
 
   // --- central chassis ---
-  ctx.fillStyle = flash ? "#ffffff" : COL.droneBody;
+  ctx.fillStyle = flash ? "#ffffff" : (e.berserk > 0 ? lerpColor(COL.droneBody, CFG.CAMERAFX.berserkTintColor, CFG.CAMERAFX.berserkTintAmount) : COL.droneBody);
   ctx.beginPath();
   ctx.arc(x, y, r*0.7, 0, Math.PI*2);
   ctx.fill();
@@ -452,7 +465,7 @@ function drawManager(e){
   }
 
   // Body: boxy executive chassis (wider than tall = imposing silhouette)
-  ctx.fillStyle = flash ? "#ffffff" : COL.managerBody;
+  ctx.fillStyle = flash ? "#ffffff" : (e.berserk > 0 ? lerpColor(COL.managerBody, CFG.CAMERAFX.berserkTintColor, CFG.CAMERAFX.berserkTintAmount) : COL.managerBody);
   ctx.fillRect(-r, -r*0.88, r*1.82, r*1.78);
   // Left shoulder plate (darker armour panel)
   ctx.fillStyle = flash ? "#ffffff" : COL.managerDark;
@@ -513,7 +526,7 @@ function drawScanner(e){
   ctx.translate(x, y);
 
   // round chassis (flushes red while alarming)
-  ctx.fillStyle = flash ? "#ffffff" : (alarming ? COL.scannerAlarm : COL.scannerBody);
+  ctx.fillStyle = flash ? "#ffffff" : (alarming ? COL.scannerAlarm : (e.berserk > 0 ? lerpColor(COL.scannerBody, CFG.CAMERAFX.berserkTintColor, CFG.CAMERAFX.berserkTintAmount) : COL.scannerBody));
   ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = flash ? "#ffffff" : COL.scannerDark;
   ctx.fillRect(-r*0.85, r*0.1, r*1.7, r*0.7);          // lower band
@@ -583,7 +596,7 @@ function drawInventory(e){
   ctx.fillRect(r*0.7,  r*0.28 + snap, r*0.5, r*0.22);
 
   // low carapace body
-  ctx.fillStyle = flash ? "#ffffff" : COL.inventoryBody;
+  ctx.fillStyle = flash ? "#ffffff" : (e.berserk > 0 ? lerpColor(COL.inventoryBody, CFG.CAMERAFX.berserkTintColor, CFG.CAMERAFX.berserkTintAmount) : COL.inventoryBody);
   ctx.fillRect(-r*0.9, -r*0.6, r*1.7, r*1.2);
   ctx.fillStyle = flash ? "#ffffff" : COL.inventoryDark;
   ctx.fillRect(-r*0.9, -r*0.6, r*0.5, r*1.2);     // dark rear plate

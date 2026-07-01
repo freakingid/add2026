@@ -33,6 +33,17 @@ export const COL = {
   beltBase:"#22272f", beltRail:"#363d48", beltArrow:"#f0a83a", beltArrowDim:"#7a5e2a",
 };
 
+// Lerp between two "#rrggbb" hex colors, t in 0..1. Used for the Manager
+// berserk body tint (render-entities.js) so buffed robots read as "hotter"
+// without needing a second color per type.
+export function lerpColor(hexA, hexB, t){
+  const a = parseInt(hexA.slice(1), 16), b = parseInt(hexB.slice(1), 16);
+  const ar=(a>>16)&255, ag=(a>>8)&255, ab=a&255;
+  const br=(b>>16)&255, bg=(b>>8)&255, bb=b&255;
+  const r = Math.round(ar + (br-ar)*t), g = Math.round(ag + (bg-ag)*t), bl = Math.round(ab + (bb-ab)*t);
+  return `rgb(${r},${g},${bl})`;
+}
+
 // Spawner-terminal emitter tint by the enemy type it produces (readability for
 // when levels eventually mix types). Falls back to the generic green.
 export const TERMINAL_TINT = {
