@@ -197,10 +197,10 @@ function _drawOptionsPanel(){
   ctx.fillText(backHint, VIEW_W / 2, y + h - 20);
 }
 
-/* ---- _drawControlsPane (Phase 4 placeholder; real art in Phases 5-6) ------- */
+/* ---- _drawControlsPane (keyboard pane DONE Phase 5; gamepad pane Phase 6) -- */
 
 function _drawControlsPane(){
-  const { x, y, w, h } = _panel(420, 380);
+  const { x, y, w, h } = _panel(460, 460);
 
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -224,14 +224,90 @@ function _drawControlsPane(){
   const tabLabel = _pane === "keyboard" ? "▸ GAMEPAD CONTROLS" : "▸ KEYBOARD CONTROLS";
   ctx.font = "12px 'Courier New', monospace";
   ctx.fillStyle = "#9aa3ae";
-  ctx.fillText(tabLabel, VIEW_W / 2, y + 116);
+  ctx.fillText(tabLabel, VIEW_W / 2, y + 112);
 
-  ctx.font = "italic 12px 'Courier New', monospace";
-  ctx.fillStyle = "#3a4250";
-  ctx.fillText("(full control reference coming soon)", VIEW_W / 2, y + h / 2);
+  if (_pane === "keyboard") _drawKeyboardPane(x, y, w, h);
+  else {
+    ctx.font = "italic 12px 'Courier New', monospace";
+    ctx.fillStyle = "#3a4250";
+    ctx.fillText("(full control reference coming soon)", VIEW_W / 2, y + h / 2);
+  }
 
   ctx.font = "bold 11px 'Courier New', monospace";
   ctx.fillStyle = "#6f7884";
   const backHint = G.inputMode === "gamepad" ? "B — BACK" : "ESC / B — BACK";
   ctx.fillText(backHint, VIEW_W / 2, y + h - 20);
+}
+
+/* ---- _drawKeyboardPane — FIRE/MOVE grids + other keys + mouse (Phase 5) ---- */
+
+function _drawGrid(ox, oy, header, labels){
+  const cell = 36, gap = 4;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = "#9aa3ae";
+  ctx.font = "bold 10px 'Courier New', monospace";
+  ctx.fillText(header, ox + (cell*3 + gap*2)/2, oy - 12);
+
+  for (let i = 0; i < 9; i++){
+    const r = (i/3)|0, c = i%3;
+    const gx = ox + c*(cell+gap), gy = oy + r*(cell+gap);
+    const center = (i === 4);
+    ctx.fillStyle = center ? "#15181f" : "#232a34";
+    ctx.fillRect(gx, gy, cell, cell);
+    ctx.strokeStyle = center ? "#3a4250" : COL.soap;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(gx + 0.5, gy + 0.5, cell - 1, cell - 1);
+    ctx.fillStyle = center ? "#5a636f" : "#dfe6ee";
+    ctx.font = "bold 11px 'Courier New', monospace";
+    ctx.fillText(labels[i][0], gx + cell/2, gy + cell/2 - 6);
+    ctx.fillStyle = center ? "#5a636f" : COL.amber;
+    ctx.font = "bold 12px 'Arial', sans-serif";
+    ctx.fillText(labels[i][1], gx + cell/2, gy + cell/2 + 8);
+  }
+}
+
+function _drawKeyboardPane(x, y, w, h){
+  const gridY = y + 156;
+  const gridW = 36*3 + 4*2;
+  const gapBetween = 40;
+  const totalW = gridW * 2 + gapBetween;
+  const fireX = x + (w - totalW) / 2;
+  const moveX = fireX + gridW + gapBetween;
+
+  drawFireLegend(fireX, gridY);
+  _drawGrid(moveX, gridY, "MOVE", [
+    ["W+A","↖"], ["W","↑"],   ["W+D","↗"],
+    ["A","←"],   ["·","·"],   ["D","→"],
+    ["S+A","↙"], ["S","↓"],   ["S+D","↘"],
+  ]);
+
+  const rowsY = gridY + gridW + 26;
+  const colGap = w / 2;
+
+  function _labelCol(colX, header, rows){
+    ctx.textAlign = "left";
+    ctx.font = "bold 10px 'Courier New', monospace";
+    ctx.fillStyle = "#9aa3ae";
+    ctx.fillText(header, colX, rowsY);
+    let ry = rowsY + 18;
+    for (const [key, desc] of rows){
+      ctx.font = "bold 12px 'Courier New', monospace";
+      ctx.fillStyle = COL.amber;
+      ctx.fillText(key, colX, ry);
+      ctx.fillStyle = "#dfe6ee";
+      ctx.fillText(desc, colX, ry + 14);
+      ry += 34;
+    }
+  }
+
+  _labelCol(x + 32, "OTHER", [
+    ["E / F", "ATOMIC DUSTBIN"],
+    ["ESC",   "PAUSE"],
+    ["M",     "MUTE"],
+    ["SPACE", "START"],
+  ]);
+  _labelCol(x + colGap, "MOUSE", [
+    ["MOUSE",      "AIM"],
+    ["LEFT-CLICK", "FIRE"],
+  ]);
 }
