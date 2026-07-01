@@ -11,6 +11,7 @@ import { POWERUPS, POWERUP_KEYS } from "./config.js";
 import { COL } from "./palette.js";
 import { getWeeklyAchievements, getLevelAchievementSummary, getLifetimeAchievements, getXP } from "./achievements.js";
 import { listSaves } from "./savegame.js";
+import { drawOptions } from "./optionsmenu.js";
 
 /* ---- HUD + screens ------------------------------------------------------ */
 export function drawHUD(){
@@ -228,6 +229,7 @@ function drawTitleLogo(yOffset){
 }
 
 export function drawTitle(){
+  if (G._titlePhase === "options")  { drawOptions(); return; }
   if (G._titlePhase === "load")     { _drawTitleLoadScreen(); return; }
   if (G._titlePhase === "mode")     { drawTitleModeSelect(); return; }
   if (G._titlePhase === "playlist") { drawTitlePlaylistPicker(); return; }
@@ -255,6 +257,11 @@ export function drawTitle(){
   ctx.fillStyle = "#6f7884";
   ctx.fillText("L — LOAD GAME", VIEW_W/2, VIEW_H/2 + 198);
 
+  // Options hints — keyboard opens with O, gamepad with X (CFG.GAMEPAD.BTN_VIEW).
+  ctx.font = "bold 11px 'Courier New', monospace";
+  ctx.fillStyle = "#4a5260";
+  ctx.fillText("O — OPTIONS      X — OPTIONS (GAMEPAD)", VIEW_W/2, VIEW_H/2 + 216);
+
   if (G.high > 0){
     ctx.fillStyle = "#6f7884";
     ctx.font = "bold 11px 'Courier New', monospace";
@@ -272,7 +279,6 @@ export function drawTitle(){
     }
   }
 
-  drawFireLegend(28, VIEW_H - 150);
   drawWeeklyPanel(VIEW_W - 300, 64);
 }
 

@@ -227,11 +227,7 @@ function _drawControlsPane(){
   ctx.fillText(tabLabel, VIEW_W / 2, y + 112);
 
   if (_pane === "keyboard") _drawKeyboardPane(x, y, w, h);
-  else {
-    ctx.font = "italic 12px 'Courier New', monospace";
-    ctx.fillStyle = "#3a4250";
-    ctx.fillText("(full control reference coming soon)", VIEW_W / 2, y + h / 2);
-  }
+  else _drawGamepadPane(x, y, w, h);
 
   ctx.font = "bold 11px 'Courier New', monospace";
   ctx.fillStyle = "#6f7884";
@@ -310,4 +306,124 @@ function _drawKeyboardPane(x, y, w, h){
     ["MOUSE",      "AIM"],
     ["LEFT-CLICK", "FIRE"],
   ]);
+}
+
+/* ---- _drawGamepadPane — static schematic + leader-line labels (Part A) ----- */
+
+// One leader line from a control point to a label anchored on the left or right
+// edge of the panel, with the text drawn at the far end.
+function _leader(px, py, lx, ly, text, align){
+  ctx.strokeStyle = "#4a5260";
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.7;
+  ctx.beginPath();
+  ctx.moveTo(px, py);
+  ctx.lineTo(lx, ly);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  ctx.beginPath();
+  ctx.arc(px, py, 2, 0, Math.PI * 2);
+  ctx.fillStyle = COL.amber;
+  ctx.fill();
+
+  ctx.textAlign = align;
+  ctx.textBaseline = "middle";
+  ctx.font = "bold 11px 'Courier New', monospace";
+  ctx.fillStyle = "#dfe6ee";
+  ctx.fillText(text, lx + (align === "left" ? 6 : -6), ly);
+}
+
+function _drawGamepadPane(x, y, w, h){
+  const cx = x + w / 2, cy = y + 250;
+
+  // Body — rounded rect.
+  const bodyW = 300, bodyH = 130;
+  const bx = cx - bodyW / 2, by = cy - bodyH / 2;
+  ctx.fillStyle = "#232a34";
+  ctx.strokeStyle = COL.soap;
+  ctx.lineWidth = 1.5;
+  const r = 28;
+  ctx.beginPath();
+  ctx.moveTo(bx + r, by);
+  ctx.arcTo(bx + bodyW, by, bx + bodyW, by + bodyH, r);
+  ctx.arcTo(bx + bodyW, by + bodyH, bx, by + bodyH, r);
+  ctx.arcTo(bx, by + bodyH, bx, by, r);
+  ctx.arcTo(bx, by, bx + bodyW, by, r);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Left stick.
+  const lsX = bx + 66, lsY = by + 78;
+  ctx.beginPath(); ctx.arc(lsX, lsY, 20, 0, Math.PI * 2);
+  ctx.fillStyle = "#15181f"; ctx.fill();
+  ctx.strokeStyle = COL.amber; ctx.lineWidth = 1.5; ctx.stroke();
+
+  // D-pad — plus of rects.
+  const dpX = bx + 130, dpY = by + 78, dpArm = 12, dpLen = 30;
+  ctx.fillStyle = "#15181f";
+  ctx.fillRect(dpX - dpArm/2, dpY - dpLen/2, dpArm, dpLen);
+  ctx.fillRect(dpX - dpLen/2, dpY - dpArm/2, dpLen, dpArm);
+  ctx.strokeStyle = COL.soap; ctx.lineWidth = 1;
+  ctx.strokeRect(dpX - dpArm/2 + 0.5, dpY - dpLen/2 + 0.5, dpArm - 1, dpLen - 1);
+  ctx.strokeRect(dpX - dpLen/2 + 0.5, dpY - dpArm/2 + 0.5, dpLen - 1, dpArm - 1);
+
+  // Right stick.
+  const rsX = bx + 234, rsY = by + 90;
+  ctx.beginPath(); ctx.arc(rsX, rsY, 20, 0, Math.PI * 2);
+  ctx.fillStyle = "#15181f"; ctx.fill();
+  ctx.strokeStyle = COL.amber; ctx.lineWidth = 1.5; ctx.stroke();
+
+  // Face buttons — 4 small circles labeled A/B/X/Y (diamond layout).
+  const fbX = bx + 234, fbY = by + 40, fbR = 7, fbSpread = 15;
+  const faceLabels = [
+    { dx: 0,        dy: -fbSpread, t: "Y" },
+    { dx: fbSpread, dy: 0,         t: "B" },
+    { dx: 0,        dy: fbSpread,  t: "A" },
+    { dx: -fbSpread,dy: 0,         t: "X" },
+  ];
+  for (const f of faceLabels){
+    const px = fbX + f.dx, py = fbY + f.dy;
+    ctx.beginPath(); ctx.arc(px, py, fbR, 0, Math.PI * 2);
+    ctx.fillStyle = "#15181f"; ctx.fill();
+    ctx.strokeStyle = COL.soap; ctx.lineWidth = 1; ctx.stroke();
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = "bold 9px 'Courier New', monospace";
+    ctx.fillStyle = "#dfe6ee";
+    ctx.fillText(f.t, px, py);
+  }
+
+  // Bumpers (top rects) + triggers (small top rects above them).
+  const lbX = bx + 40, rbX = bx + bodyW - 40 - 44, bumpW = 44, bumpH = 12;
+  const bumpY = by - 16;
+  ctx.fillStyle = "#15181f"; ctx.strokeStyle = COL.soap; ctx.lineWidth = 1;
+  ctx.fillRect(lbX, bumpY, bumpW, bumpH); ctx.strokeRect(lbX + 0.5, bumpY + 0.5, bumpW - 1, bumpH - 1);
+  ctx.fillRect(rbX, bumpY, bumpW, bumpH); ctx.strokeRect(rbX + 0.5, bumpY + 0.5, bumpW - 1, bumpH - 1);
+
+  const trigW = 30, trigH = 9, trigY = bumpY - trigH - 3;
+  const ltX = lbX + (bumpW - trigW) / 2, rtX = rbX + (bumpW - trigW) / 2;
+  ctx.fillRect(ltX, trigY, trigW, trigH); ctx.strokeRect(ltX + 0.5, trigY + 0.5, trigW - 1, trigH - 1);
+  ctx.fillRect(rtX, trigY, trigW, trigH); ctx.strokeRect(rtX + 0.5, trigY + 0.5, trigW - 1, trigH - 1);
+
+  // Start — center pill.
+  const stW = 26, stH = 10, stX = cx - stW / 2, stY = by + 8;
+  ctx.beginPath();
+  ctx.moveTo(stX + stH/2, stY);
+  ctx.arcTo(stX + stW, stY, stX + stW, stY + stH, stH/2);
+  ctx.arcTo(stX + stW, stY + stH, stX, stY + stH, stH/2);
+  ctx.arcTo(stX, stY + stH, stX, stY, stH/2);
+  ctx.arcTo(stX, stY, stX + stW, stY, stH/2);
+  ctx.closePath();
+  ctx.fillStyle = "#15181f"; ctx.fill();
+  ctx.strokeStyle = COL.amber; ctx.lineWidth = 1; ctx.stroke();
+
+  // Leader lines to labels, anchored at the panel edges.
+  _leader(lsX, lsY, x + 30, y + 296, "MOVE", "left");
+  _leader(rsX, rsY, x + w - 30, y + 296, "AIM / FIRE", "right");
+  // Bumpers/triggers share one label — lead from the midpoint of both pairs.
+  _leader((ltX + rtX + trigW) / 2, trigY + trigH / 2, cx, y + h - 74, "BUMPERS / TRIGGERS — ATOMIC DUSTBIN", "center");
+  _leader(stX + stW / 2, stY + stH / 2, x + 30, y + 340, "START / A — START · PAUSE", "left");
+  const bFace = faceLabels[1]; // B
+  _leader(fbX + bFace.dx, fbY + bFace.dy, x + w - 30, y + 340, "B — BACK", "right");
 }

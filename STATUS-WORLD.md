@@ -296,9 +296,32 @@ wipe transitions, pause menu, or save/load. See STATUS.md for the build table an
   `optionsmenu.js` now, not on `G` or in `pause.js`.
 - **CONTROLS row + Controls screen scaffold added (Phase 4).** Options row 4 is
   "CONTROLS ▸"; confirming it opens a Controls sub-screen with a keyboard/gamepad
-  pane toggle. This phase is a placeholder (header + tab button + back hint only,
-  no real legend layout yet) — real pane art (reusing `screens.js`'s exported
-  `drawFireLegend` plus a new gamepad legend) is Phases 5-6.
+  pane toggle.
+- **Gamepad pane DONE (Phase 6), `optionsmenu.js`'s `_drawGamepadPane`.** Static flat-
+  palette schematic (rounded body, left/right stick circles, d-pad plus-of-rects,
+  4 face buttons A/B/X/Y, LB/RB + LT/RT top rects, center Start pill) with thin
+  leader lines to labels: LEFT STICK→MOVE, RIGHT STICK→AIM/FIRE, BUMPERS/TRIGGERS→
+  ATOMIC DUSTBIN, START/A→START·PAUSE, B→BACK. No gradients, matches the keyboard
+  pane's flat style. Keyboard pane (Phase 5) unchanged.
+- **Options reachable from the title (Phase 6).** `screens.js`'s `drawTitle` checks
+  `G._titlePhase === "options"` first and delegates to `optionsmenu.js`'s
+  `drawOptions()`. The title's fire-legend (`drawFireLegend(28, VIEW_H-150)`) was
+  removed from the device-select screen — controls are now only shown via
+  Options→Controls. The device-select screen instead shows two muted hint lines:
+  "O — OPTIONS" (keyboard) and "X — OPTIONS (GAMEPAD)" (`CFG.GAMEPAD.BTN_VIEW`,
+  btn 2). `input.js` owns the wiring: keydown "o" and `pollGamepad`'s BTN_VIEW
+  rising edge both call `openOptions()` and set `G._titlePhase = "options"` (only
+  from `_titlePhase === "input"`); the gamepad path also previews `G.inputMode =
+  "gamepad"` (unlocked — `startRun()` still re-locks it) so `defaultPane()` opens
+  the gamepad Controls pane first, matching keyboard's implicit "keyboard" default.
+  A new self-contained edge tracker, `pollTitleOptions()` in `input.js` (module-
+  local `_optPrev*` flags, deliberately NOT reusing `pause.js`'s private `_held`/
+  `_edge` per the circular-import boundary), drives `handleOptionsEdge` every
+  frame while `_titlePhase === "options"` — called unconditionally from
+  `pollGamepad()` before its no-pad early return, so keyboard-only play still
+  navigates Options with no gamepad connected. Backing out of the top-level
+  Options screen (`handleOptionsEdge` returning `"exit"`) resets `_titlePhase` to
+  `"input"`.
 - **`state="paused"` freezes the world.** `update.js` returns immediately after
   `pollPause(dt)` when `G.state === "paused"` — no Dan, enemies, spawns, or effects
   run. `updateWipe(dt)` and `pollGamepad()` still run (they're called before the

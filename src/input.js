@@ -21,6 +21,7 @@ import { loadSave } from "./savegame.js";
 import { unlock, toggleMute, music } from "./audio.js";
 import { emit } from "./events.js";
 import { openPause, handlePauseKeydown } from "./pause.js";
+import { openOptions, handleOptionsEdge, optionsScreen } from "./optionsmenu.js";
 
 /* ---- Raw input state (still exported: mouse aim, M mute, debug) ---------- */
 export const keys = {};
@@ -62,6 +63,12 @@ window.addEventListener('gamepaddisconnected', () => { pad = null; prevStart = f
 // BTN_START. Called from update.js before any state branching.
 export function pollGamepad(){
   pad = (navigator.getGamepads ? navigator.getGamepads()[0] : null) || null;
+
+  // Drive the title's Options screen every frame regardless of gamepad presence
+  // (keyboard alone must be able to navigate it) — must run before the no-pad
+  // early return below.
+  if (G.state === "title" && G._titlePhase === "options") pollTitleOptions();
+
   if (!pad){ prevStart = false; padWasNull = true; return; }
 
   const start = CFG.GAMEPAD.BTN_START.some(i => pad.buttons[i] && pad.buttons[i].pressed);
@@ -88,6 +95,17 @@ export function pollGamepad(){
     // levelclear auto-advances; nothing to trigger there.
   }
   prevStart = start;
+
+  // Title "input" phase: BTN_VIEW (X) rising edge opens Options (gamepad path).
+  const view = CFG.GAMEPAD.BTN_VIEW.some(i => pad.buttons[i] && pad.buttons[i].pressed);
+  if (view && !_prevView && G.state === "title" && G._titlePhase === "input"
+      && !G._showLifetimeModal){
+    unlock();
+    G.inputMode = "gamepad";   // preview only — startRun() re-locks it for the run
+    openOptions();
+    G._titlePhase = "options";
+  }
+  _prevView = view;
 
   // Navigate the mode/playlist menu via d-pad when the title is past "input" phase.
   if (G.state === "title" && (G._titlePhase === "mode" || G._titlePhase === "playlist")){
@@ -351,6 +369,71 @@ function pollTitleMenu(){
   _prevConfirm = confirm; _prevUp = up; _prevDown = down; _prevBack = back;
 }
 
+/* ---- Title Options polling (Part C) --------------------------------------
+   Self-contained edge tracker for the title's "options" phase — does NOT reuse
+   pause.js's private _held/_edge (per CLAUDE.md instructions), following the
+   same prev-state edge-detection pattern as pollTitleMenu above. */
+let _optPrevUp = false, _optPrevDown = false, _optPrevLeft = false, _optPrevRight = false;
+let _optPrevConfirm = false, _optPrevBack = false;
+let _prevView = false;   // gamepad BTN_VIEW rising-edge (title "input" phase only)
+
+function _titleOptionsHeld(action){
+  const kb = () => {
+    switch (action){
+      case "up":      return !!(keys["arrowup"]    || keys["w"]);
+      case "down":     return !!(keys["arrowdown"]   || keys["s"]);
+      case "left":    return !!(keys["arrowleft"]   || keys["a"]);
+      case "right":   return !!(keys["arrowright"]  || keys["d"]);
+      case "confirm": return !!(keys["enter"] || keys[" "]);
+      case "back":    return !!(keys["escape"]);
+    }
+    return false;
+  };
+  const gp = () => {
+    if (!pad) return false;
+    const btn = i => !!(pad.buttons[i] && pad.buttons[i].pressed);
+    switch (action){
+      case "up":      return btn(12) || (pad.axes[1] || 0) < -0.5;
+      case "down":    return btn(13) || (pad.axes[1] || 0) > 0.5;
+      case "left":    return btn(14) || (pad.axes[0] || 0) < -0.5;
+      case "right":   return btn(15) || (pad.axes[0] || 0) > 0.5;
+      case "confirm": return CFG.GAMEPAD.BTN_START.some(btn);
+      case "back":    return CFG.GAMEPAD.BTN_BACK.some(btn);
+    }
+    return false;
+  };
+  if (G.inputMode === "gamepad") return gp();
+  if (G.inputMode === "keyboard") return kb();
+  return kb() || gp();
+}
+
+// Polls the title's Options screen once G._titlePhase === "options". Builds
+// fresh edges each frame and drives optionsmenu.js's handleOptionsEdge
+// (mirrors pause.js's _pollOptionsScreen, minus the private _held/_edge reuse).
+function pollTitleOptions(){
+  const up = _titleOptionsHeld("up"), down = _titleOptionsHeld("down");
+  const left = _titleOptionsHeld("left"), right = _titleOptionsHeld("right");
+  const confirm = _titleOptionsHeld("confirm"), back = _titleOptionsHeld("back");
+  const edgeUp = up && !_optPrevUp, edgeDown = down && !_optPrevDown;
+  const edgeLeft = left && !_optPrevLeft, edgeRight = right && !_optPrevRight;
+  const edgeConfirm = confirm && !_optPrevConfirm, edgeBack = back && !_optPrevBack;
+
+  for (const [edge, action] of [[edgeUp,"up"],[edgeDown,"down"],[edgeConfirm,"confirm"],[edgeBack,"back"]]){
+    if (edge){
+      const result = handleOptionsEdge(action, left, right);
+      if (result === "exit") G._titlePhase = "input";
+    }
+  }
+  if (optionsScreen() === "options"){
+    if (left || right) handleOptionsEdge(right ? "right" : "left", left, right);
+  } else {
+    if (edgeLeft || edgeRight) handleOptionsEdge("left", left, right);
+  }
+
+  _optPrevUp = up; _optPrevDown = down; _optPrevLeft = left; _optPrevRight = right;
+  _optPrevConfirm = confirm; _optPrevBack = back;
+}
+
 /* ---- Listeners ---------------------------------------------------------- */
 addEventListener("keydown", e => {
   const k = e.key.toLowerCase();
@@ -395,6 +478,13 @@ addEventListener("keydown", e => {
   if (G.state === "title" && G._titlePhase === "input" && k === "l"){
     G._titlePhase = "load";
     G._loadSaveCursor = 0;
+    return;
+  }
+
+  // Title "input" phase: O key opens Options (keyboard path).
+  if (G.state === "title" && G._titlePhase === "input" && k === "o" && !G._showLifetimeModal){
+    openOptions();
+    G._titlePhase = "options";
     return;
   }
 
