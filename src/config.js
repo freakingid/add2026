@@ -103,8 +103,8 @@ export const CFG = {
   // big AoE in `blastRadius`. `blastDmg` is high enough to destroy any current type.
   DUSTBIN: {
     r: 14,                  // pickup + deployed contact/visual radius
-    throwSpeed: 300,        // initial slide speed when thrown while moving (px/s)
-    friction: 2.2,          // exponential velocity decay rate while sliding
+    throwSpeed: 460,        // initial slide speed when thrown while moving (px/s) — was 300
+    friction: 1.5,          // exponential velocity decay rate while sliding — was 2.2
     stopSpeed: 30,          // below this slide speed it settles -> attract begins
     bounce: 0.7,            // fraction of speed kept per wall bounce
     attractDur: 2.5,        // attract-phase length (GDD §5.2)
@@ -114,6 +114,51 @@ export const CFG = {
     blastDmg: 99,           // heavy enough to destroy any current robot type
     spawnChance: 0.5,       // odds of a dustbin pickup per level (L1 always seeds one)
     pickupMinDist: 6,       // keep the floor pickup off Dan's spawn pocket
+  },
+
+  // Camera/screen feedback effects (SPEC-camera-effects.md). Shake/flash values
+  // are peak magnitude + duration; overlapping shakes/flashes of the same kind
+  // take the STRONGER one rather than stacking additively (see camerafx.js) —
+  // avoids a runaway camera when several triggers land on the same frame.
+  CAMERAFX: {
+    // player:died
+    playerDiedShakeMag: 9, playerDiedShakeDur: 0.6,
+    playerDiedFlashColor: '#ff5b4d', playerDiedFlashPeak: 0.55, playerDiedFlashDur: 1.0,
+
+    // dustbin:detonated — scales with killCount, capped
+    dustbinDetonateShakeBase: 5, dustbinDetonateShakePerKill: 1.2, dustbinDetonateShakeMax: 14, dustbinDetonateShakeDur: 0.5,
+    dustbinDetonateFlashColor: '#5dff8f', dustbinDetonateFlashPeakBase: 0.35, dustbinDetonateFlashPeakPerKill: 0.03, dustbinDetonateFlashPeakMax: 0.7, dustbinDetonateFlashDur: 0.45,
+
+    // dustbin:bounced / dustbin:thrown
+    dustbinBounceShakeMag: 2, dustbinBounceShakeDur: 0.15,
+    dustbinThrowKickMag: 3, dustbinThrowKickDur: 0.12,
+
+    // manager:berserk_pulse (new event, emitted from combat.js)
+    managerPulseShakeMag: 7, managerPulseShakeDur: 0.35,
+    managerPulseFlashColor: '#ff6414', managerPulseFlashPeak: 0.28, managerPulseFlashDur: 0.4,
+
+    // powerup:collected — punch-zoom, no shake
+    powerupPunchZoom: 1.045, powerupPunchDur: 0.14,
+
+    // player:hp_changed — sustained, recomputed live from G.dan each frame (NOT a timer)
+    lowHpFraction: 0.30,          // HP/maxHp at/below this = vignette active
+    lowHpVignetteColor: '#ff5b4d',
+    lowHpVignetteMaxAlpha: 0.30,
+    lowHpPulseHz: 1.6,
+
+    // Cleaner spray slow status — sustained, polls G.dan.slow > 0, smooth fade
+    cleanerSickColor: '#9bff7a',   // reuses the Cleaner's own spray color (thematic tie)
+    cleanerSickMaxAlpha: 0.16,
+    cleanerFadeRate: 4.0,          // per-second lerp rate toward target alpha (~250ms crossfade)
+    cleanerWobbleMag: 1.4, cleanerWobbleHz: 2.2,   // continuous low-amplitude camera wobble
+
+    // worker:died — one-shot desaturation, distinct visual language from combat (loss, not hit)
+    workerDiedDesatPeak: 0.6, workerDiedDesatDur: 0.5,
+
+    // Manager berserk enemy visual (consumed by render-entities.js, not camerafx.js)
+    berserkTintAmount: 0.45,        // 0..1 lerp toward berserkTintColor on the enemy's main body fill
+    berserkTintColor: '#ff5b1f',
+    berserkShimmyMag: 1.5, berserkShimmyHzA: 40, berserkShimmyHzB: 33,
   },
 
   // Power-ups (GDD 3) — shot-count based, fully stackable
