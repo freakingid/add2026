@@ -289,6 +289,8 @@ function _tryLoadFromTitle(slot){
 function advanceTitleToMode(inputDevice){
   G.inputMode = inputDevice;   // lock device for menu navigation
   G._titlePhase = "mode";
+  _modeJustEntered = true;     // one-frame guard against the same-frame double-edge
+  _menuCursor = 0;
 }
 
 // Handle a numeric selection [1..n] on the mode or playlist screen.
@@ -311,12 +313,32 @@ function titleMenuSelect(n){
 
 // Gamepad D-pad / cursor selection for the mode + playlist menus.
 let _menuCursor = 0;   // 0-based index into visible options
-let _prevConfirm = false, _prevUp = false, _prevDown = false;
+let _prevConfirm = false, _prevUp = false, _prevDown = false, _prevBack = false;
+let _modeJustEntered = false;   // set when advanceTitleToMode ran this frame
 function pollTitleMenu(){
   if (!pad) return;
   const confirm = CFG.GAMEPAD.BTN_START.some(i => pad.buttons[i] && pad.buttons[i].pressed);
   const up   = pad.buttons[12] && pad.buttons[12].pressed;
   const down = pad.buttons[13] && pad.buttons[13].pressed;
+  const back = CFG.GAMEPAD.BTN_BACK.some(i => pad.buttons[i] && pad.buttons[i].pressed);
+
+  // Guards the same-frame double-edge: entering "mode" during pollGamepad must not
+  // let the still-held START read as a fresh confirm here. Seed all edges from the
+  // current pad reads and skip acting for this one frame.
+  if (_modeJustEntered){
+    _prevConfirm = confirm; _prevUp = up; _prevDown = down; _prevBack = back;
+    _modeJustEntered = false;
+    return;
+  }
+
+  // B backs out one level: playlist → mode → input.
+  if (back && !_prevBack){
+    if (G._titlePhase === "playlist")   G._titlePhase = "mode";
+    else if (G._titlePhase === "mode")  G._titlePhase = "input";
+    _menuCursor = 0;
+    _prevConfirm = confirm; _prevUp = up; _prevDown = down; _prevBack = back;
+    return;
+  }
 
   if (up && !_prevUp)   _menuCursor = Math.max(0, _menuCursor - 1);
   if (down && !_prevDown){
@@ -327,7 +349,7 @@ function pollTitleMenu(){
   }
   if (confirm && !_prevConfirm) titleMenuSelect(_menuCursor + 1);
 
-  _prevConfirm = confirm; _prevUp = up; _prevDown = down;
+  _prevConfirm = confirm; _prevUp = up; _prevDown = down; _prevBack = back;
 }
 
 /* ---- Listeners ---------------------------------------------------------- */
@@ -358,6 +380,15 @@ addEventListener("keydown", e => {
     if (k === "arrowdown" || k === "s")
       G._loadSaveCursor = (G._loadSaveCursor + 1) % 5;
     if (k === "enter" || k === " ")             { _tryLoadFromTitle(G._loadSaveCursor); }
+    return;
+  }
+
+  // Title ESC back-navigation out of mode/playlist: playlist → mode → input.
+  if (G.state === "title" && k === "escape" && !G._showLifetimeModal
+      && (G._titlePhase === "mode" || G._titlePhase === "playlist")){
+    if (G._titlePhase === "playlist")   G._titlePhase = "mode";
+    else                                G._titlePhase = "input";
+    _menuCursor = 0;
     return;
   }
 
