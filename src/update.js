@@ -26,7 +26,7 @@ import { updateWipe, startWipeClose, startWipeOpen } from "./wipe.js";
 import { updateFlash, startFlash } from "./flash.js";
 import { pollPause } from "./pause.js";
 
-on('level:all_enemies_dead', () => { sfx.lastEnemyCleared(); startFlash(); });
+on('level:all_enemies_dead', () => { sfx.lastEnemyCleared(); startFlash(0.45, 0.76); });
 
 export function update(dt){
   updateWipe(dt);    // runs in all states including levelclear

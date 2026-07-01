@@ -359,17 +359,17 @@ export const sfx = {
   lastEnemyCleared(){ if (!ensure()) return;
     // Sub-bass thump anchors the phrase — nothing else in the SFX palette
     // reaches this low, so it cuts through music + combat noise even when
-    // the player isn't looking at the screen.
-    tone({ type:"sine", freq:65, dur:0.25, gain:0.30, attack:0.008 });
-    tone({ type:"sawtooth", freq:196, dur:0.1, gain:0.22 });
-    tone({ type:"sawtooth", freq:294, dur:0.1, gain:0.16 });
-    tone({ type:"sawtooth", freq:233, dur:0.1, gain:0.24, delay:0.11 });
-    tone({ type:"sawtooth", freq:349, dur:0.1, gain:0.18, delay:0.11 });
-    tone({ type:"sawtooth", freq:294, dur:0.16, gain:0.27, delay:0.22 });
-    tone({ type:"sawtooth", freq:440, dur:0.16, gain:0.20, delay:0.22 });
-    // Ringing tail after the stomps finish — gives the ear something to
-    // catch a beat later, unlike the combat one-shots which just stop.
-    tone({ type:"triangle", freq:1568, dur:0.5, gain:0.15, attack:0.02, delay:0.4 }); },
+    // the player isn't looking at the screen. Durations doubled and gains
+    // boosted (~1.5x, capped at 0.38 to avoid clipping) after playtesting
+    // showed the first pass still wasn't prominent enough. Tail removed —
+    // didn't earn its place once the stomps themselves got bigger.
+    tone({ type:"sine",     freq:65,  dur:0.50, gain:0.38, attack:0.008 });
+    tone({ type:"sawtooth", freq:196, dur:0.2,  gain:0.33 });
+    tone({ type:"sawtooth", freq:294, dur:0.2,  gain:0.24 });
+    tone({ type:"sawtooth", freq:233, dur:0.2,  gain:0.36, delay:0.22 });
+    tone({ type:"sawtooth", freq:349, dur:0.2,  gain:0.27, delay:0.22 });
+    tone({ type:"sawtooth", freq:294, dur:0.32, gain:0.38, delay:0.44 });
+    tone({ type:"sawtooth", freq:440, dur:0.32, gain:0.30, delay:0.44 }); },
 
   // Temporary alias — removed in Phase 2 once workers.js no longer calls it.
   noWorkers(){ this.lastWorkerSaved(); },
