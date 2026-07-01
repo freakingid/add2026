@@ -64,6 +64,104 @@ Drone, Manager) live in STATUS.md next to each system.
 
 ---
 
+## Claude Code session conventions
+
+These govern *how* a session works, not *what* the game does. They exist mainly
+for token efficiency and to catch a couple of specific, recurring failure modes.
+Follow them by default; an individual phase prompt may call out an explicit
+exception (e.g. "thinking ON for this phase") — honor that override when given one.
+
+### Editing & reading
+
+- **Prefer `str_replace` over full-file rewrites.** A targeted edit costs a
+  fraction of the tokens a full rewrite does, and rewriting risks silently
+  dropping unrelated code a full-file view didn't surface as relevant.
+- **Prefer targeted reads over full-file loads.** Use `grep` to locate what
+  you need, then `sed -n '<start>,<end>p'` (or equivalent) for just that
+  range, instead of loading an entire file — especially the larger ones
+  (`music.js`, `achievements.js`, `screens.js`, `level.js`). Load a file in
+  full only when you genuinely need the whole thing (e.g. before a split).
+
+### File size discipline (`src/*.js`)
+
+- **Soft ceiling: 24KB per logic file.** This isn't about one file's token
+  count in isolation (trivial against the context window on its own) — it's
+  a proxy for "small enough that reading the whole file is a reasonable
+  default instead of a deliberate choice." Large files make it tempting to
+  paste the whole thing instead of doing a targeted read.
+- **Split proactively**, following the naming pattern already established:
+  `render-entities.js` / `render-ebolts.js` split from `render.js`;
+  `music.js` split from `audio.js`; `pause.js` hit 23.6KB (near the line) and
+  that drove a pull-out. New split targets should follow the same
+  `<parent>-<concern>.js` shape.
+- **Soft-warning zone: flag a file if it's within ~2KB of the line before
+  your edit**, even if your edit itself doesn't cross it. Don't wait for the
+  ceiling to actually be crossed to start planning a split — note it in that
+  session's STATUS.md update so the next session isn't surprised.
+- **Data-file exception.** Files that are predominantly declarative data —
+  track note data (`music.js`), achievement definitions (`achievements.js`)
+  — are exempt from the 24KB ceiling. A large data table is a different kind
+  of read than dense interleaved logic, and splitting a table for size alone
+  doesn't buy the same benefit a logic split does. Currently exempted:
+  `music.js`, `achievements.js`. Use judgment before extending this list —
+  the bar is "mostly declarative data," not just "large for a good reason."
+
+### After any file split
+
+Three checks, in order, every time code moves between files:
+
+1. **Module load check.** `node --input-type=module -e "import('./src/<file>.js')"`
+   for every file touched by the split. Cheap, catches a broken/missing
+   import immediately — don't wait for the browser to find it.
+2. **Identifier-vs-import cross-check.** Grep the file for identifiers it
+   actually uses against its import list. The specific failure mode this
+   catches: a symbol still referenced in the file, but the import line for it
+   got dropped during the move.
+3. **Browser canary check.** Load a level and confirm the level-intro
+   animation completes. A stuck or incomplete intro is a reliable canary
+   symptom for a missing-import bug that the module-load check alone can
+   miss (the module loads fine; it just doesn't *work* once something tries
+   to call the missing export).
+
+### Phased implementation
+
+For any complex feature: write a `SPEC-*.md` first (design, schemas,
+architecture, exact tuning values), then a separate phase-by-phase prompts
+doc (`CLAUDE-CODE-PROMPTS-*.md`, or a "Phase sequencing" section inside the
+spec itself for smaller features). Each phase should be self-contained —
+state which files it touches, what to watch for, and how to verify it —
+and phases are meant to run in **separate sessions**, not pasted into
+Claude Code all at once. Later phases routinely depend on earlier ones
+existing (a new file created in Phase 1, wired in during Phase 2), and each
+phase's manual verification step is a real stopping point, not a formality —
+running every phase in one shot skips the checkpoint that catches problems
+before they compound.
+
+### Git discipline
+
+Claude Code **never** runs `git add`/`commit`/`push`. Paul runs all git
+operations manually. Solo project, single `main` branch, no branching
+workflow.
+
+### Audio/music work
+
+Before any game code is written or wired in, build a standalone
+browser-based audition tool (no server required) for the audio/music itself,
+so it can be approved by ear first. Music specs should include
+programmatically generated/validated note data, not hand-transcribed
+guesses.
+
+### Model defaults
+
+Default: **Sonnet, normal effort, thinking off** for implementation phases.
+Escalate to Opus only if Sonnet produces broken output after one correction
+attempt. When a phase prompt calls out a specific exception (e.g. thinking
+ON for a phase with unusual ordering/compositing risk), that override wins
+for that phase only — it doesn't change the default for the rest of the
+feature.
+
+---
+
 ## Code map (ES modules under `src/`)
 
 The game is **modularized**: `atomic-dustbin-dan.html` is just the entry point
