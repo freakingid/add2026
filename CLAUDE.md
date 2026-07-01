@@ -64,117 +64,25 @@ Drone, Manager) live in STATUS.md next to each system.
 
 ---
 
-## Claude Code session conventions
-
-These govern *how* a session works, not *what* the game does. They exist mainly
-for token efficiency and to catch a couple of specific, recurring failure modes.
-Follow them by default; an individual phase prompt may call out an explicit
-exception (e.g. "thinking ON for this phase") — honor that override when given one.
-
-### Editing & reading
-
-- **Prefer `str_replace` over full-file rewrites.** A targeted edit costs a
-  fraction of the tokens a full rewrite does, and rewriting risks silently
-  dropping unrelated code a full-file view didn't surface as relevant.
-- **Prefer targeted reads over full-file loads.** Use `grep` to locate what
-  you need, then `sed -n '<start>,<end>p'` (or equivalent) for just that
-  range, instead of loading an entire file — especially the larger ones
-  (`music.js`, `achievements.js`, `screens.js`, `level.js`). Load a file in
-  full only when you genuinely need the whole thing (e.g. before a split).
-
-### File size discipline (`src/*.js`)
-
-- **Soft ceiling: 24KB per logic file.** This isn't about one file's token
-  count in isolation (trivial against the context window on its own) — it's
-  a proxy for "small enough that reading the whole file is a reasonable
-  default instead of a deliberate choice." Large files make it tempting to
-  paste the whole thing instead of doing a targeted read.
-- **Split proactively**, following the naming pattern already established:
-  `render-entities.js` / `render-ebolts.js` split from `render.js`;
-  `music.js` split from `audio.js`; `pause.js` hit 23.6KB (near the line) and
-  that drove a pull-out. New split targets should follow the same
-  `<parent>-<concern>.js` shape.
-- **Soft-warning zone: flag a file if it's within ~2KB of the line before
-  your edit**, even if your edit itself doesn't cross it. Don't wait for the
-  ceiling to actually be crossed to start planning a split — note it in that
-  session's STATUS.md update so the next session isn't surprised.
-- **Data-file exception.** Files that are predominantly declarative data —
-  track note data (`music.js`), achievement definitions (`achievements.js`)
-  — are exempt from the 24KB ceiling. A large data table is a different kind
-  of read than dense interleaved logic, and splitting a table for size alone
-  doesn't buy the same benefit a logic split does. Currently exempted:
-  `music.js`, `achievements.js`. Use judgment before extending this list —
-  the bar is "mostly declarative data," not just "large for a good reason."
-
-### After any file split
-
-Three checks, in order, every time code moves between files:
-
-1. **Module load check.** `node --input-type=module -e "import('./src/<file>.js')"`
-   for every file touched by the split. Cheap, catches a broken/missing
-   import immediately — don't wait for the browser to find it.
-2. **Identifier-vs-import cross-check.** Grep the file for identifiers it
-   actually uses against its import list. The specific failure mode this
-   catches: a symbol still referenced in the file, but the import line for it
-   got dropped during the move.
-3. **Browser canary check.** Load a level and confirm the level-intro
-   animation completes. A stuck or incomplete intro is a reliable canary
-   symptom for a missing-import bug that the module-load check alone can
-   miss (the module loads fine; it just doesn't *work* once something tries
-   to call the missing export).
-
-### Phased implementation
-
-For any complex feature: write a `SPEC-*.md` first (design, schemas,
-architecture, exact tuning values), then a separate phase-by-phase prompts
-doc (`CLAUDE-CODE-PROMPTS-*.md`, or a "Phase sequencing" section inside the
-spec itself for smaller features). Each phase should be self-contained —
-state which files it touches, what to watch for, and how to verify it —
-and phases are meant to run in **separate sessions**, not pasted into
-Claude Code all at once. Later phases routinely depend on earlier ones
-existing (a new file created in Phase 1, wired in during Phase 2), and each
-phase's manual verification step is a real stopping point, not a formality —
-running every phase in one shot skips the checkpoint that catches problems
-before they compound.
-
-### Git discipline
-
-Claude Code **never** runs `git add`/`commit`/`push`. Paul runs all git
-operations manually. Solo project, single `main` branch, no branching
-workflow.
-
-### Audio/music work
-
-Before any game code is written or wired in, build a standalone
-browser-based audition tool (no server required) for the audio/music itself,
-so it can be approved by ear first. Music specs should include
-programmatically generated/validated note data, not hand-transcribed
-guesses.
-
-### Model defaults
-
-Default: **Sonnet, normal effort, thinking off** for implementation phases.
-Escalate to Opus only if Sonnet produces broken output after one correction
-attempt. When a phase prompt calls out a specific exception (e.g. thinking
-ON for a phase with unusual ordering/compositing risk), that override wins
-for that phase only — it doesn't change the default for the rest of the
-feature.
-
----
-
 ## Code map (ES modules under `src/`)
+
+*This section lags real growth — it's known to be missing several files that
+exist and are built per `STATUS.md` (e.g. `render-ebolts.js`, `wipe.js`,
+`pause.js`, `achievements.js`, `optionsmenu.js`, `savegame.js`, `playlists.js`,
+`menuedge.js`, `events.js`). Treat `STATUS.md`'s "Architecture map" as
+authoritative when the two disagree; this stays useful for core-loop
+orientation, not as a complete file list.*
 
 The game is **modularized**: `atomic-dustbin-dan.html` is just the entry point
 (imports + the delta-timed loop). Serve it over http(s) — `file://` blocks ES
-module loads (`python3 -m http.server`). The full module-by-module map (imports
-and responsibilities) is in **STATUS.md → "Architecture map"**. Quick orientation:
+module loads (`python3 -m http.server`). Quick orientation:
 
 - **Data/leaves:** `config.js` (`CFG`, `ENEMY`, `POWERUPS`, `LEVEL_PLAN`), `palette.js` (`COL`), `canvas.js` (`ctx`/view dims), `audio.js` (Web Audio `sfx.*` SFX — GDD §10; called at each gameplay event).
 - **State:** `state.js` — the single mutable `G` object (run meta + all entities `dan/shots/enemies/terminals/pickups/marks/floats/ebolts/camera/exit` + timers) and `levelType()`. Modules read/mutate `G.*`; whole-value resets (`G.shots = []`) live in `level.js`.
 - **World:** `world.js` — `map`, collision (`moveBody`), geometry/LOS, `destroyShelf`.
 - **Sim:** `player.js` (Dan + soap shots), `enemies.js` (spawn + per-type AI incl. Inventory worker-hunter; `buffSpd` combines Manager berserk + Scanner alarm), `projectiles.js` (`G.ebolts` pool; `kind`: `bolt`/`arc`/`drop`/`homing`), `combat.js` (damage/kill/berserk), `workers.js` (human workers wander/flee + `rescueWorker`/`killWorker`), `dustbin.js` (Atomic Dustbin special §5 — carry/throw/slide/attract/detonate + `vortexHold`), `level.js` (newGame/nextLevel + the §8.1 **generator** `generateLevelDef` and **loader** `loadLevel` — `buildLevel` = `loadLevel(generateLevelDef())`; terminals/pickups/5 workers via spawn rules; `"mixed"` branch), `effects.js`. `update.js` orchestrates one frame.
 - **Render:** `render.js` (compositor + world draws), `render-entities.js` (enemy/ebolt sprites), `screens.js` (HUD + title/levelclear/gameover). `input.js` registers listeners on import.
-- States: `title` / `playing` / `levelclear` / `dead`.
+- States: `title` / `playing` / `paused` / `levelclear` / `dead`.
 - **Adding an enemy:** stats in `config.js` (`ENEMY` + `LEVEL_PLAN`), color in `palette.js`, spawn-init + AI in `enemies.js`, sprite in `render-entities.js`, any new projectile `kind` in `projectiles.js`.
 
 ---
@@ -206,3 +114,102 @@ tile/conveyor primitives, `CFG.TILES`) — see STATUS "Level Definition format &
 — see STATUS "Conveyors". **Larger unbuilt GDD features:** seeding conveyor strips from the
 *generator* (so generated levels get belts), richer generator geometry /
 guaranteed-placement tuning (the §8.1 *loader contract* is done), sprite-art polish (§10).
+
+---
+
+## Claude Code session conventions
+
+*Last reviewed 2026-07-01 — current judgment, not permanent law. Revisit the
+size numbers and exemption list as the codebase grows; bump this date when you
+do.* Each rule below leads with the imperative; the trailing clause is the
+"why," read once and skip thereafter. A phase prompt may override any of these
+for that phase only.
+
+**Model.** Default **Sonnet, normal effort, thinking off**. Escalate to Opus
+only after Sonnet produces broken output and one correction attempt fails.
+
+**Git.** Claude Code **never** runs `git add`/`commit`/`push` — Paul does all
+git manually. Solo project, single `main`, no branches.
+
+**Edit with `str_replace`, not full rewrites** — far cheaper — *but* grep
+`old_str` first; if it isn't unique, add context or rewrite instead (per-type
+blocks repeat a lot: 9 enemy draws in `render-entities.js`, 5 track arrays in
+`music.js`, per-type updaters in `enemies-ai.js`, per-state draws in
+`screens.js`). A change touching many scattered lines is often cheaper as one
+rewrite anyway.
+
+**Read targeted, not whole files** — `grep` to locate, then `sed -n 'A,Bp'`
+for the range. Load a whole file only when you truly need it (e.g. before a
+split).
+
+**Keep logic files ≤24KB** (soft ceiling). Two reasons: skimmability (large
+files tempt whole-file pastes over targeted reads), and reasoning locality in
+hot-path render code (see canvas rule below). **Flag any file within ~2KB of
+the line** before editing, and note it in STATUS.md even if your edit doesn't
+cross it. **Exempt: `music.js`, `achievements.js`** — mostly declarative data
+read in isolation, where a size-only split buys nothing. **Not exempt:
+`config.js`** — it's data too, but read constantly during logic work, so
+skimmability matters; if it nears 24KB, make the exemption call explicitly
+rather than defaulting into it. When splitting, follow precedent shape: suffix
+split (`render-ebolts.js` from `render.js`) or full extraction (`music.js`
+from `audio.js`).
+
+**Know which coordinate space your render code runs in.** The camera
+`translate` in `render.js` is the boundary: world-space draws (floor, walls,
+entities, marks) go *inside* it and move with the camera; screen-space draws
+(HUD, vignettes/flashes, wipe, achievement banner) go *outside* it and stay
+fixed. Drawing on the wrong side of that line is the most common Canvas bug in
+this codebase — and camera-effects code straddles it deliberately (world-space
+desaturation inside, screen-space vignettes outside), so it's the easiest
+place to get it wrong. Relatedly, when splitting a hot-path render file, keep
+each `ctx.save()`/`restore()` pair and transform sequence within one file — a
+byte-count split that severs one makes transform bugs harder to catch.
+
+**Use `dt`, never frame counts, for timed math** — a frame-count accumulator
+(`elapsed += 1`) or a rate that assumes ~60fps runs wrong on other refresh
+rates and won't show up in normal testing. When touching timing math, reason
+it through at a large `dt` (e.g. 1/30) and confirm it degrades gracefully —
+doesn't overshoot, freeze, or divide-by-something-tiny — rather than assuming
+step-size invariance (the exponential decays in `camerafx.js`/`dustbin.js` and
+the piecewise curves in `wipe.js` are *not* linearly step-invariant, so a
+"same result under uneven steps" test gives false positives on them).
+
+**Smoke-test pure-math modules headlessly** — any module with no canvas/DOM
+import (like `test-input.js`) gets `node`-runnable assertions. Add to
+`test-input.js` unless that pushes it toward 24KB, then split to
+`test-<feature>.js` (precedent: `test-achievements.js` → four files under
+`run-tests-achievements.sh`).
+
+**Verify logic, not just wiring.** After any split or cross-file move, three
+cheap wiring checks: (1) `node --input-type=module -e "import('./src/<file>.js')"`
+per touched file; (2) grep used identifiers against the import list (catches a
+dropped import for a still-referenced symbol); (3) load a level and confirm the
+intro animation completes (canary for a missing import that loads fine but
+breaks on call). These catch wiring only — a module can load, resolve every
+import, and animate while the *logic* is wrong (bad formula, flipped
+conditional). For logic changes, trigger the actual in-game situation and
+confirm the visible/audible/scored result; the feature's spec or phase prompt
+should say concretely what "correct" looks like.
+
+**Spec then phase, in separate sessions.** For any complex feature: write
+`SPEC-*.md` first (design, schemas, exact tuning values), then a phased
+prompts doc (`CLAUDE-CODE-PROMPTS-*.md`). Each phase block is
+**self-contained** — restates what to read first and the model/effort setting,
+plus files touched, watch-fors, and how to verify — because later phases
+depend on earlier ones existing and each phase's manual verify step is a real
+stopping point. Don't paste multiple phases at once.
+
+**Audition audio by ear before wiring it in** — build a standalone
+(no-server) browser audition tool first; specs carry programmatically
+validated note data, not hand-transcribed guesses. Note the Web Audio gotcha:
+playback needs a user gesture (`input.js` calls `audio.js`'s `unlock()` on
+first input). Gameplay audio is safe (the title requires a gesture to start),
+but anything playing *before* that — a boot sound, a fresh audition tool,
+module-load playback — fails silently until unlocked; confirm unlock timing if
+new audio isn't obviously post-title.
+
+**If you break a convention mid-session, say so** — don't silently patch or
+continue. Note it in STATUS.md (what happened, fixed-now or followup), the same
+"STATUS.md reflects reality" standard everything else here holds to. Fix it
+this session only if cheap and safe given what's in flight; otherwise flag it
+for next session rather than risking an in-flight correction.
