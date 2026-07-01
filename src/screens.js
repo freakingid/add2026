@@ -329,41 +329,53 @@ function _drawTitleLoadScreen(){
 }
 
 // Centered highlight rect behind a selected title-menu row (load-screen style).
-function _drawTitleMenuHighlight(rowCenterY){
+// `h` lets callers size the rect to a taller row (e.g. label + description).
+function _drawTitleMenuHighlight(rowCenterY, h = 34){
   ctx.fillStyle = "rgba(95, 210, 255, 0.08)";
-  ctx.fillRect(VIEW_W/2 - 200, rowCenterY - 18, 400, 34);
+  ctx.fillRect(VIEW_W/2 - 200, rowCenterY - h/2, 400, h);
   ctx.strokeStyle = COL.soap; ctx.lineWidth = 1; ctx.globalAlpha = 0.5;
-  ctx.strokeRect(VIEW_W/2 - 200 + 0.5, rowCenterY - 18 + 0.5, 399, 33);
+  ctx.strokeRect(VIEW_W/2 - 200 + 0.5, rowCenterY - h/2 + 0.5, 399, h - 1);
   ctx.globalAlpha = 1;
 }
 
-// Mode select screen: LEVEL PLAN vs HAND AUTHORED.
+// Mode select screen: ENDLESS SHIFT vs STORY ROUTE.
 function drawTitleModeSelect(){
   drawTitleBackdrop();
-  drawTitleLogo(-60);
+  drawTitleLogo(-84);
 
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
 
   ctx.font = "bold 18px 'Courier New', monospace";
   ctx.fillStyle = "#aeb6c0";
-  ctx.fillText("SELECT MODE", VIEW_W/2, VIEW_H/2 + 36);
+  ctx.fillText("SELECT MODE", VIEW_W/2, VIEW_H/2 + 14);
 
-  if (G._titleMenuCursor === 0) _drawTitleMenuHighlight(VIEW_H/2 + 76);
+  const row1Y = VIEW_H/2 + 50, row2Y = VIEW_H/2 + 98;
+  if (G._titleMenuCursor === 0) _drawTitleMenuHighlight(row1Y + 5, 46);
   ctx.font = "bold 20px 'Arial Black', sans-serif";
   ctx.fillStyle = COL.soap;
-  ctx.fillText("[1]  LEVEL PLAN", VIEW_W/2, VIEW_H/2 + 76);
+  ctx.fillText("[1]  ENDLESS SHIFT", VIEW_W/2, row1Y);
+  ctx.font = "11px 'Courier New', monospace";
+  ctx.fillStyle = "#6f7884";
+  ctx.fillText("Randomized levels, one enemy type at a time. Endless.", VIEW_W/2, row1Y + 18);
 
   const hasPlaylists = G.availablePlaylists.length > 0;
-  if (hasPlaylists && G._titleMenuCursor === 1) _drawTitleMenuHighlight(VIEW_H/2 + 108);
+  if (hasPlaylists && G._titleMenuCursor === 1) _drawTitleMenuHighlight(row2Y + 5, 46);
+  ctx.font = "bold 20px 'Arial Black', sans-serif";
   ctx.fillStyle = hasPlaylists ? COL.atomic : "#4a5260";
-  ctx.fillText("[2]  HAND AUTHORED" + (hasPlaylists ? "" : "  (unavailable)"), VIEW_W/2, VIEW_H/2 + 108);
+  ctx.fillText("[2]  STORY ROUTE" + (hasPlaylists ? "" : "  (unavailable)"), VIEW_W/2, row2Y);
+  ctx.font = "11px 'Courier New', monospace";
+  ctx.fillStyle = "#6f7884";
+  ctx.fillText("Hand-built levels in a fixed order.", VIEW_W/2, row2Y + 18);
 
   ctx.font = "bold 11px 'Courier New', monospace";
   ctx.fillStyle = "#6f7884";
   const gpHint = G.inputMode === "gamepad"
     ? "D-PAD UP/DOWN + A — SELECT"
     : "1 / 2 — SELECT";
-  ctx.fillText(gpHint, VIEW_W/2, VIEW_H/2 + 148);
+  ctx.fillText(gpHint, VIEW_W/2, VIEW_H/2 + 150);
+  ctx.font = "11px 'Courier New', monospace";
+  ctx.fillStyle = "#4a5260";
+  ctx.fillText("ESC / B — BACK", VIEW_W/2, VIEW_H/2 + 168);
 }
 
 // Playlist picker screen: list available playlists by name.

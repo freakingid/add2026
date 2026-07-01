@@ -216,6 +216,16 @@ wipe transitions, pause menu, or save/load. See STATUS.md for the build table an
   →`input` (resets `G._titleMenuCursor`). Keyboard: the keydown handler does the same one-level
   step-back on ESC while `G.state==="title"` and phase is `"mode"`/`"playlist"`. (The
   `"load"` phase keeps its own separate ESC→`input` handling.)
+- **Mode-select copy relabeled to ENDLESS SHIFT / STORY ROUTE (ids unchanged).**
+  `drawTitleModeSelect` (screens.js) now shows `[1] ENDLESS SHIFT` / `[2] STORY ROUTE`
+  (was `LEVEL PLAN` / `HAND AUTHORED`) with a one-line description under each and a
+  small muted "ESC / B — BACK" hint below the existing gp/keyboard select hint. Purely
+  cosmetic — `titleMenuSelect`/internal mode ids (`"levelPlan"`/`"hand-authored"` etc.)
+  are untouched, only the on-screen labels changed. The Phase 2b cursor-highlight rect
+  (`_drawTitleMenuHighlight`) now takes an optional height (`h=34` default) so it can
+  cover the taller label+description row (46px) without a second helper; row y-offsets
+  and the logo's `yOffset` (`-60`→`-84`) were retuned so header/rows/hints all fit under
+  the logo without overlap.
 - **Title mode/playlist cursor is rendered (was a missing-render bug, not an input bug).**
   D-pad up/down updated the cursor correctly all along, but `drawTitleModeSelect`/
   `drawTitlePlaylistPicker` drew static rows with no highlight, so the cursor moved an
