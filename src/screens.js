@@ -472,7 +472,7 @@ function drawWeeklyPanel(ox, oy){
 
 // Compact 3x3 reference of the keyboard fire layout (GDD §4.3): O/P/L/K cardinals,
 // diagonals = two adjacent cardinals held. Corners show the combo, center is empty.
-function drawFireLegend(ox, oy){
+export function drawFireLegend(ox, oy){
   const cell = 36, gap = 4;
   const labels = [
     ["O+K","↖"], ["O","↑"],   ["O+;","↗"],

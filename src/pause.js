@@ -14,10 +14,10 @@
 import { ctx, VIEW_W, VIEW_H } from "./canvas.js";
 import { G } from "./state.js";
 import { COL } from "./palette.js";
-import { sfx, music, isMuted, setMasterVolume, getMasterVolume, toggleMute,
-         getMusicVolume, setMusicVolume, getSfxVolume, setSfxVolume } from "./audio.js";
+import { sfx, music } from "./audio.js";
 import { getWeeklyAchievements } from "./achievements.js";
-import { listSaves, saveGame, savePrefs } from "./savegame.js";
+import { listSaves, saveGame } from "./savegame.js";
+import { openOptions, handleOptionsEdge, drawOptions, optionsScreen } from "./optionsmenu.js";
 
 /* ---- Module-local key state (avoids circular import with input.js) ------- */
 const _keys = {};
@@ -31,12 +31,6 @@ let subScreen = "menu";
 // Root menu
 let menuCursor = 0;
 const MENU_ITEMS = ["CONTINUE", "OPTIONS", "SAVE & QUIT", "QUIT"];
-
-// Options
-let optVolume = 0.35;
-let optMusicVolume = 0.7;
-let optSfxVolume   = 1.0;
-let optCursor = 0;   // 0=master 1=music 2=sfx 3=mute
 
 // Save screen state
 let saveCursor = 0;
@@ -127,7 +121,7 @@ export function pollPause(dt){
 
   switch(subScreen){
     case "menu":              _pollMenu(); break;
-    case "options":           _pollOptions(dt); break;
+    case "options":           _pollOptionsScreen(); break;
     case "save":              _pollSave(); break;
     case "confirm_overwrite": _pollConfirmOverwrite(); break;
     case "confirm_quit":      _pollConfirmQuit(); break;
@@ -144,10 +138,7 @@ function _pollMenu(){
       case 0: closePause(); break;                       // CONTINUE
       case 1:                                            // OPTIONS
         subScreen = "options";
-        optVolume = getMasterVolume();
-        optMusicVolume = getMusicVolume();
-        optSfxVolume   = getSfxVolume();
-        optCursor = 0;
+        openOptions();
         break;
       case 2:                                            // SAVE & QUIT
         subScreen = "save";
@@ -163,36 +154,22 @@ function _pollMenu(){
   _refreshEdges();
 }
 
-function _pollOptions(dt){
-  if (_edge("back")){ subScreen = "menu"; _refreshEdges(); return; }
-
-  // Up/Down navigate cursor (4 rows: 0=master 1=music 2=sfx 3=mute)
-  if (_edge("up"))   optCursor = (optCursor - 1 + 4) % 4;
-  if (_edge("down")) optCursor = (optCursor + 1) % 4;
-
-  // Left/Right adjust the focused slider (rows 0-2 only)
-  if (optCursor < 3){
-    const leftHeld  = _held("left");
-    const rightHeld = _held("right");
-    if (leftHeld || rightHeld){
-      const dir = rightHeld ? 1 : -1;
-      if (optCursor === 0){
-        optVolume = Math.max(0, Math.min(1, optVolume + dir * 0.005));
-        setMasterVolume(optVolume);
-      } else if (optCursor === 1){
-        optMusicVolume = Math.max(0, Math.min(1, optMusicVolume + dir * 0.005));
-        setMusicVolume(optMusicVolume);
-      } else {
-        optSfxVolume = Math.max(0, Math.min(1, optSfxVolume + dir * 0.005));
-        setSfxVolume(optSfxVolume);
-      }
-      savePrefs({ masterVolume: optVolume, musicVolume: optMusicVolume, sfxVolume: optSfxVolume });
+function _pollOptionsScreen(){
+  const heldLeft  = _held("left");
+  const heldRight = _held("right");
+  for (const action of ["up","down","confirm","back"]){
+    if (_edge(action)){
+      const result = handleOptionsEdge(action, heldLeft, heldRight);
+      if (result === "exit"){ subScreen = "menu"; break; }
     }
   }
-
-  // Confirm on mute row toggles mute
-  if (optCursor === 3 && _edge("confirm")){ toggleMute(); }
-
+  if (optionsScreen() === "options"){
+    // Sliders adjust continuously while held, not just on edge.
+    if (heldLeft || heldRight) handleOptionsEdge(heldRight ? "right" : "left", heldLeft, heldRight);
+  } else {
+    // Controls screen: left/right toggle the pane once per press.
+    if (_edge("left") || _edge("right")) handleOptionsEdge("left", heldLeft, heldRight);
+  }
   _refreshEdges();
 }
 
@@ -324,7 +301,7 @@ export function drawPause(){
 
   switch(subScreen){
     case "menu":              _drawMenu(); break;
-    case "options":           _drawOptions(); break;
+    case "options":           drawOptions(); break;
     case "save":              _drawSave(); break;
     case "confirm_overwrite": _drawConfirmOverwrite(); break;
     case "confirm_quit":      _drawConfirmQuit(); break;
@@ -426,86 +403,6 @@ function _drawMenu(){
   ctx.font = "bold 11px 'Courier New', monospace";
   ctx.fillStyle = "#6f7884";
   ctx.textAlign = "center";
-  ctx.fillText(backHint, VIEW_W / 2, y + h - 20);
-}
-
-/* ---- _drawOptions -------------------------------------------------------- */
-
-function _drawOptions(){
-  const { x, y, w, h } = _panel(360, 340);
-  const slX = x + 28, slW = w - 56;
-  const adjHint = G.inputMode === "gamepad" ? "◀ / ▶ — ADJUST" : "← / → — ADJUST";
-  const togHint = G.inputMode === "gamepad" ? "A — TOGGLE"      : "ENTER — TOGGLE";
-
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = "bold 26px 'Arial Black', sans-serif";
-  ctx.fillStyle = COL.soap;
-  ctx.fillText("OPTIONS", VIEW_W / 2, y + 40);
-
-  ctx.strokeStyle = COL.soap;
-  ctx.globalAlpha = 0.3;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(x + 20, y + 60);
-  ctx.lineTo(x + w - 20, y + 60);
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-
-  // Helper to draw one slider row
-  function _sliderRow(label, value, labelY, trackY, hintY, focused){
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.font = "bold 13px 'Courier New', monospace";
-    ctx.fillStyle = focused ? COL.amber : COL.text;
-    ctx.fillText(label, x + 28, labelY);
-    ctx.textAlign = "right";
-    ctx.fillStyle = COL.amber;
-    ctx.fillText(Math.round(value * 100) + "%", x + w - 28, labelY);
-
-    ctx.fillStyle = "#232a34";
-    ctx.fillRect(slX, trackY, slW, 6);
-    ctx.fillStyle = COL.soap;
-    ctx.fillRect(slX, trackY, slW * value, 6);
-    const thumbX = slX + slW * value;
-    ctx.beginPath();
-    ctx.arc(thumbX, trackY + 3, 7, 0, Math.PI * 2);
-    ctx.fillStyle = COL.soap;
-    ctx.fill();
-
-    ctx.textAlign = "left";
-    ctx.font = "10px 'Courier New', monospace";
-    ctx.fillStyle = "#6f7884";
-    ctx.fillText(adjHint, x + 28, hintY);
-  }
-
-  // Row 0 — Master Volume
-  _sliderRow("MASTER VOLUME", optVolume,      y + 88,  y + 106, y + 120, optCursor === 0);
-  // Row 1 — Music Volume
-  _sliderRow("MUSIC VOLUME",  optMusicVolume, y + 148, y + 166, y + 180, optCursor === 1);
-  // Row 2 — SFX Volume
-  _sliderRow("SFX VOLUME",    optSfxVolume,   y + 208, y + 226, y + 240, optCursor === 2);
-
-  // Row 3 — Mute
-  const muteY = y + 272;
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  ctx.font = "bold 13px 'Courier New', monospace";
-  ctx.fillStyle = optCursor === 3 ? COL.amber : COL.text;
-  ctx.fillText("MUTE", x + 28, muteY);
-  ctx.textAlign = "right";
-  ctx.fillStyle = isMuted() ? "#ff5b4d" : "#5dff8f";
-  ctx.fillText(isMuted() ? "ON" : "OFF", x + w - 28, muteY);
-  ctx.textAlign = "left";
-  ctx.font = "10px 'Courier New', monospace";
-  ctx.fillStyle = "#6f7884";
-  ctx.fillText(togHint, x + 28, y + 290);
-
-  // Footer
-  ctx.textAlign = "center";
-  ctx.font = "bold 11px 'Courier New', monospace";
-  ctx.fillStyle = "#6f7884";
-  const backHint = G.inputMode === "gamepad" ? "B — BACK" : "ESC — BACK";
   ctx.fillText(backHint, VIEW_W / 2, y + h - 20);
 }
 

@@ -282,6 +282,23 @@ wipe transitions, pause menu, or save/load. See STATUS.md for the build table an
 
 ### Pause menu + Save/Load system
 
+- **Options screen lives in `optionsmenu.js`, not `pause.js`.** Size pressure on
+  `pause.js` (was 23.6 KB, near the 24 KB module-split line) drove pulling the
+  sliders/mute/CONTROLS-row implementation into a standalone module shared by
+  anything that wants an options surface (title, later). `pause.js`'s `options`
+  sub-screen now just calls `openOptions()` on entry, forwards up/down/left/right/
+  confirm/back edges to `handleOptionsEdge(action, heldLeft, heldRight)` (`"exit"`
+  return → back to the pause menu), and calls `drawOptions()` to render. Slider
+  left/right still needs continuous (held, not edge) adjustment, so `pause.js`
+  special-cases that one axis; the Controls pane's left/right (pane toggle) stays
+  edge-triggered. Module-local cursor/volume-mirror state (`_optCursor`,
+  `optVolume`/`optMusicVolume`/`optSfxVolume`, `_screen`, `_pane`) all live in
+  `optionsmenu.js` now, not on `G` or in `pause.js`.
+- **CONTROLS row + Controls screen scaffold added (Phase 4).** Options row 4 is
+  "CONTROLS ▸"; confirming it opens a Controls sub-screen with a keyboard/gamepad
+  pane toggle. This phase is a placeholder (header + tab button + back hint only,
+  no real legend layout yet) — real pane art (reusing `screens.js`'s exported
+  `drawFireLegend` plus a new gamepad legend) is Phases 5-6.
 - **`state="paused"` freezes the world.** `update.js` returns immediately after
   `pollPause(dt)` when `G.state === "paused"` — no Dan, enemies, spawns, or effects
   run. `updateWipe(dt)` and `pollGamepad()` still run (they're called before the
