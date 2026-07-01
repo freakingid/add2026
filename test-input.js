@@ -1,6 +1,11 @@
 /* test-input.js — self-contained unit test for the input.js direction math.
    Inlines the pure functions (no imports / no DOM) and checks the GDD §4 cases.
+   Also covers camerafx.js (pure math, no canvas imports — safe to import for real).
    Run: node test-input.js   */
+
+import { CFG } from "./src/config.js";
+import { G } from "./src/state.js";
+import * as fx from "./src/camerafx.js";
 
 // --- Mirror of the constants/helpers in input.js (screen space, y-down) ---
 const DIR = { N:[0,-1], E:[1,0], S:[0,1], W:[-1,0] };
@@ -78,6 +83,54 @@ checkVec("S+A = SW diagonal (normalized)", moveVecKeyboard(held("s","a")), -inv,
 checkVec("W alone = North unit",           moveVecKeyboard(held("w")),       0,  -1);
 checkVec("W+S opposing = zero",            moveVecKeyboard(held("w","s")),    0,   0);
 checkVec("none = zero",                    moveVecKeyboard(held()),           0,   0);
+
+console.log("\ncamerafx.js — shake decays monotonically and reaches 0 at/after dur ->");
+{
+  fx.shake(10, 0.5);
+  fx.tickShake(0.2);
+  const mid = fx.currentShakeMag();
+  fx.tickShake(0.2);
+  const later = fx.currentShakeMag();
+  check("mag decreased over time", mid > later ? 1 : 0, 1);
+  fx.tickShake(0.2);   // total elapsed 0.6 > dur 0.5
+  check("mag is 0 at/after dur", fx.currentShakeMag(), 0);
+}
+
+console.log("camerafx.js — shake takes the stronger, not additive ->");
+{
+  fx.shake(10, 1.0);
+  fx.tickShake(0.1);
+  const before = fx.currentShakeMag();
+  fx.shake(2, 1.0);   // weaker while stronger still running -> ignored
+  check("weaker shake while running does not override", fx.currentShakeMag(), before);
+  fx.shake(10, 1.0);  // equal-or-larger -> resets
+  check("equal/larger shake resets", fx.currentShakeMag(), 10);
+}
+
+console.log("camerafx.js — lowHpAlpha threshold ->");
+{
+  G.dan = { hp: 100, maxHp: 100, slow: 0 };
+  check("above lowHpFraction -> 0", fx.lowHpAlpha(), 0);
+  G.dan.hp = Math.floor(CFG.CAMERAFX.lowHpFraction * G.dan.maxHp) - 1;
+  check("below lowHpFraction -> > 0", fx.lowHpAlpha() > 0 ? 1 : 0, 1);
+  G.dan = null;
+  check("G.dan null -> 0 (no throw)", fx.lowHpAlpha(), 0);
+}
+
+console.log("camerafx.js — pulseDesat decays to 0 by dur ->");
+{
+  fx.pulseDesat(0.6, 0.5);
+  fx.tickDesat(0.5);
+  check("currentDesat is 0 at dur", fx.currentDesat(), 0);
+}
+
+console.log("camerafx.js — currentZoom is 1 outside the punch window ->");
+{
+  check("no punch yet -> 1", fx.currentZoom(), 1);
+  fx.punchZoom(1.2, 0.2);
+  fx.tickZoom(0.25);   // past duration
+  check("past punch duration -> 1", fx.currentZoom(), 1);
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

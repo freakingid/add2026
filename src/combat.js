@@ -112,14 +112,17 @@ export function killEnemy(index, { score = true, killerKind = 'mop', bounceCount
   // If two Managers die near the same robot, the timer refreshes to whichever is longer.
   if (e.type === "manager"){
     const md = ENEMY.manager;
+    let buffedCount = 0;
     for (const other of G.enemies){
       if (other === e) continue;   // will be spliced out below
       if (Math.hypot(other.x - e.x, other.y - e.y) <= md.berserRadius){
         other.berserk = Math.max(other.berserk || 0, md.berserDur);
+        buffedCount++;
       }
     }
     // Expanding ring telegraph for the pulse (drawn in drawMarks as "berserk" kind)
     G.marks.push({ x:e.x, y:e.y, life:1.5, kind:"berserk" });
+    emit('manager:berserk_pulse', { count: buffedCount, x: e.x, y: e.y });
   }
 
   G.enemies.splice(index, 1);

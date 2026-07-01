@@ -36,6 +36,7 @@ All core systems are complete. The table below is the canonical build status; GD
 | Conveyor push mechanic + rendering + hum | ✅ Built | §8.1.2 | `world.js`, `render.js` |
 | Screen transition wipe | ✅ Built | — | `wipe.js`, `render.js`, `update.js`, `level.js` |
 | Screen flash (last-enemy-cleared VFX) | 🔲 Removed — built then manually reverted; not in current camera-effects scope | — | — |
+| Camera effects (shake/zoom/vignettes/flash/desat) | 🔧 In progress — Phase 1 complete: `camerafx.js` core module (math only, not wired into rendering yet) | `SPEC-camera-effects.md` | `camerafx.js`, `combat.js` |
 | Audio — 21 SFX + looping conveyor bed | ✅ Built | §10 | `audio.js` |
 | Music — title track + 5 gameplay tracks (9 bars each), scheduler, duck/unduck, bassoon voice, chorus arrival treatments | ✅ Built | §10 | `audio.js` (SFX/buses/re-export; `tone()` + bassoon wave), `music.js` (scheduler + all track data), `level.js`, `update.js`, `input.js`, `pause.js`, `playlists.js` |
 | Game states (title / playing / levelclear / dead) | ✅ Built | — | `state.js`, `screens.js` |
