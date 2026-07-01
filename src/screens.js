@@ -328,6 +328,15 @@ function _drawTitleLoadScreen(){
   ctx.fillText("↑ / ↓ — SELECT   ·   ENTER — LOAD   ·   ESC — BACK", VIEW_W/2, VIEW_H/2 + 168);
 }
 
+// Centered highlight rect behind a selected title-menu row (load-screen style).
+function _drawTitleMenuHighlight(rowCenterY){
+  ctx.fillStyle = "rgba(95, 210, 255, 0.08)";
+  ctx.fillRect(VIEW_W/2 - 200, rowCenterY - 18, 400, 34);
+  ctx.strokeStyle = COL.soap; ctx.lineWidth = 1; ctx.globalAlpha = 0.5;
+  ctx.strokeRect(VIEW_W/2 - 200 + 0.5, rowCenterY - 18 + 0.5, 399, 33);
+  ctx.globalAlpha = 1;
+}
+
 // Mode select screen: LEVEL PLAN vs HAND AUTHORED.
 function drawTitleModeSelect(){
   drawTitleBackdrop();
@@ -339,11 +348,13 @@ function drawTitleModeSelect(){
   ctx.fillStyle = "#aeb6c0";
   ctx.fillText("SELECT MODE", VIEW_W/2, VIEW_H/2 + 36);
 
+  if (G._titleMenuCursor === 0) _drawTitleMenuHighlight(VIEW_H/2 + 76);
   ctx.font = "bold 20px 'Arial Black', sans-serif";
   ctx.fillStyle = COL.soap;
   ctx.fillText("[1]  LEVEL PLAN", VIEW_W/2, VIEW_H/2 + 76);
 
   const hasPlaylists = G.availablePlaylists.length > 0;
+  if (hasPlaylists && G._titleMenuCursor === 1) _drawTitleMenuHighlight(VIEW_H/2 + 108);
   ctx.fillStyle = hasPlaylists ? COL.atomic : "#4a5260";
   ctx.fillText("[2]  HAND AUTHORED" + (hasPlaylists ? "" : "  (unavailable)"), VIEW_W/2, VIEW_H/2 + 108);
 
@@ -367,6 +378,7 @@ function drawTitlePlaylistPicker(){
   const playlists = G.availablePlaylists;
   const startY = VIEW_H/2 - 30;
   for (let i = 0; i < playlists.length; i++){
+    if (i === G._titleMenuCursor) _drawTitleMenuHighlight(startY + i * 44);
     ctx.font = "bold 20px 'Arial Black', sans-serif";
     ctx.fillStyle = COL.soap;
     ctx.fillText(`[${i+1}]  ${playlists[i].name}`, VIEW_W/2, startY + i * 44);

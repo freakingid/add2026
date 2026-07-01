@@ -290,7 +290,7 @@ function advanceTitleToMode(inputDevice){
   G.inputMode = inputDevice;   // lock device for menu navigation
   G._titlePhase = "mode";
   _modeJustEntered = true;     // one-frame guard against the same-frame double-edge
-  _menuCursor = 0;
+  G._titleMenuCursor = 0;
 }
 
 // Handle a numeric selection [1..n] on the mode or playlist screen.
@@ -312,7 +312,6 @@ function titleMenuSelect(n){
 }
 
 // Gamepad D-pad / cursor selection for the mode + playlist menus.
-let _menuCursor = 0;   // 0-based index into visible options
 let _prevConfirm = false, _prevUp = false, _prevDown = false, _prevBack = false;
 let _modeJustEntered = false;   // set when advanceTitleToMode ran this frame
 function pollTitleMenu(){
@@ -335,19 +334,19 @@ function pollTitleMenu(){
   if (back && !_prevBack){
     if (G._titlePhase === "playlist")   G._titlePhase = "mode";
     else if (G._titlePhase === "mode")  G._titlePhase = "input";
-    _menuCursor = 0;
+    G._titleMenuCursor = 0;
     _prevConfirm = confirm; _prevUp = up; _prevDown = down; _prevBack = back;
     return;
   }
 
-  if (up && !_prevUp)   _menuCursor = Math.max(0, _menuCursor - 1);
+  if (up && !_prevUp)   G._titleMenuCursor = Math.max(0, G._titleMenuCursor - 1);
   if (down && !_prevDown){
     const maxOpts = G._titlePhase === "mode"
       ? (G.availablePlaylists.length > 0 ? 2 : 1)
       : G.availablePlaylists.length;
-    _menuCursor = Math.min(maxOpts - 1, _menuCursor + 1);
+    G._titleMenuCursor = Math.min(maxOpts - 1, G._titleMenuCursor + 1);
   }
-  if (confirm && !_prevConfirm) titleMenuSelect(_menuCursor + 1);
+  if (confirm && !_prevConfirm) titleMenuSelect(G._titleMenuCursor + 1);
 
   _prevConfirm = confirm; _prevUp = up; _prevDown = down; _prevBack = back;
 }
@@ -388,7 +387,7 @@ addEventListener("keydown", e => {
       && (G._titlePhase === "mode" || G._titlePhase === "playlist")){
     if (G._titlePhase === "playlist")   G._titlePhase = "mode";
     else                                G._titlePhase = "input";
-    _menuCursor = 0;
+    G._titleMenuCursor = 0;
     return;
   }
 

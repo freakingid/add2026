@@ -26,6 +26,7 @@ export const G = {
   availablePlaylists:[],      // [{name, filename, levels}] loaded at boot
   _titlePhase:"input",        // "input" | "mode" | "playlist" (title sub-state)
   _loadSaveCursor:0,          // highlighted slot on the title load screen (Phase 3)
+  _titleMenuCursor:0,         // selected row on the mode / playlist title screens
 
   // entities (populated by newGame / buildLevel)
   dan:null,

@@ -208,14 +208,23 @@ wipe transitions, pause menu, or save/load. See STATUS.md for the build table an
   is still `false`, so the still-held START read as a fresh confirm and auto-picked Level
   Plan before the modal rendered (it "self-corrected" after one run once `_prevConfirm`
   cycled). Fix: `advanceTitleToMode` sets `_modeJustEntered = true` (+ resets
-  `_menuCursor`); `pollTitleMenu` bails on its first frame after that, seeding all edge
+  `G._titleMenuCursor`); `pollTitleMenu` bails on its first frame after that, seeding all edge
   trackers (`_prevConfirm/_prevUp/_prevDown/_prevBack`) from the current pad reads so the
   held button can't re-trigger. Keyboard was always immune (discrete keydown events).
 - **ESC/B back-navigation out of mode/playlist.** Gamepad: `pollTitleMenu` edge-detects
   `CFG.GAMEPAD.BTN_BACK` (B, btn 1) via `_prevBack` — rising edge steps `playlist`→`mode`
-  →`input` (resets `_menuCursor`). Keyboard: the keydown handler does the same one-level
+  →`input` (resets `G._titleMenuCursor`). Keyboard: the keydown handler does the same one-level
   step-back on ESC while `G.state==="title"` and phase is `"mode"`/`"playlist"`. (The
   `"load"` phase keeps its own separate ESC→`input` handling.)
+- **Title mode/playlist cursor is rendered (was a missing-render bug, not an input bug).**
+  D-pad up/down updated the cursor correctly all along, but `drawTitleModeSelect`/
+  `drawTitlePlaylistPicker` drew static rows with no highlight, so the cursor moved an
+  off-screen value with no visible feedback. Fix: the cursor moved from a module-local
+  `input.js` variable (`_menuCursor`) onto `G._titleMenuCursor` (`state.js`) so `screens.js`
+  can read it, and both draw functions now call a shared `_drawTitleMenuHighlight(rowCenterY)`
+  helper (translucent soap fill + stroke, same treatment as the load-screen's selected-slot
+  highlight) before drawing each row's text. `HAND AUTHORED` only highlights when
+  `G.availablePlaylists.length > 0` (cursor can't land there otherwise).
 - **`]` debug authored-level cycle removed.** The key, its cycle state vars
   (`authoredIdx`, `cycleAuthoredLevel`), and the `AUTHORED_LEVELS` import in `input.js`
   are all gone. Authored levels are live gameplay via `MAP_POOL` now.
