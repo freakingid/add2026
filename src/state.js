@@ -46,6 +46,7 @@ export const G = {
   _levelStartTime:0,     // performance.now() at the start of the current level
   _runStartTime:0,       // performance.now() at the start of the current run
   _allEnemiesDeadEmitted:false,  // one-shot guard for level:all_enemies_dead
+  _levelWorkerKilled:false,   // true if any worker was killed by a robot this level (for worker-exit sound selection)
 
   // Achievement UI modal state (Phase 6 — render/input flags, not sim state).
   _wipeOpenPending:false,         // set by loadLevel; consumed by update.js after updateCamera()

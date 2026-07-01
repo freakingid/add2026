@@ -79,10 +79,15 @@ export function killWorker(w){
   const i = G.workers.indexOf(w);
   if (i < 0) return;
   addFloat(w.x, w.y - 14, "WORKER LOST", COL.chargeWarn);
-  sfx.workerLost();
+  G._levelWorkerKilled = true;
+  if (G.workers.length === 1){
+    // this IS the last worker — last-worker-death replaces any-worker-death, not both
+    sfx.lastWorkerDeath();
+  } else {
+    sfx.workerLost();
+  }
   G.workers.splice(i, 1);
   emit('worker:died', { workerIndex: w.index ?? i });
-  if (G.workers.length === 0) sfx.noWorkers();   // last human gone (GDD 7, 10)
 }
 
 // Award the escalating rescue value, count it, and remove the worker.
@@ -102,5 +107,8 @@ function rescueWorker(i){
   G.workers.splice(i, 1);
   // Celebratory callout for the full clear of all workers (GDD 7.2).
   if (G.rescued === d.count) addFloat(G.dan.x, G.dan.y - 30, "ALL " + d.count + " SAVED!", COL.amber);
-  if (G.workers.length === 0) sfx.noWorkers();   // last human gone (GDD 7, 10)
+  if (G.workers.length === 0){
+    if (G._levelWorkerKilled) sfx.lastWorkerSaved();
+    else sfx.allWorkersSaved();
+  }
 }

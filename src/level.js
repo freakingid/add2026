@@ -388,6 +388,7 @@ export function loadLevel(def){
   G.rescued = 0; G.spawnTimer = 0.6; G.pickupTimer = 0;
   G._allEnemiesDeadEmitted = false;
   G._levelEndEmitted = false;     // re-arm the levelclear level:end one-shot
+  G._levelWorkerKilled = false;   // re-arm worker-exit sound selection
   G._showAchievementModal = false;
 
   // Fixed placements: player start + exit door. Resolve the player FIRST so any

@@ -21,9 +21,11 @@ import { updateEffects } from "./effects.js";
 import { nextLevel, spawnWave, spawnPickup, updatePickups } from "./level.js";
 import { getLevelAchievementSummary } from "./achievements.js";
 import { sfx, music } from "./audio.js";
-import { emit } from "./events.js";
+import { emit, on } from "./events.js";
 import { updateWipe, startWipeClose, startWipeOpen } from "./wipe.js";
 import { pollPause } from "./pause.js";
+
+on('level:all_enemies_dead', () => sfx.lastEnemyCleared());
 
 export function update(dt){
   updateWipe(dt);    // runs in all states including levelclear

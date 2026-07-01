@@ -1,7 +1,7 @@
 /* =========================================================================
    events.js — synchronous pub/sub bus.
 
-   Any module may emit. Only achievements.js subscribes.
+   Any module may emit. achievements.js and update.js currently subscribe.
    Zero imports — this is a dependency-graph leaf.
    ========================================================================= */
 const _listeners = {}; // { [eventName: string]: Set<Function> }

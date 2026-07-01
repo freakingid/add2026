@@ -313,15 +313,56 @@ export const sfx = {
     // Low sub-boom under it all for weight and menace.
     tone({ type:"sine", freq:130, freqEnd:48, dur:0.85, gain:0.30, delay:0.04 }); },
 
-  // The LAST human worker has left the level (rescued or killed) — a hollow,
-  // final descending motif: there's no one left to save. Sparse, somber sine
-  // line over a low drone; deliberately distinct from the bright `rescue` blip,
-  // the dramatic `workerLost` death sting, and the sawtooth `gameOver`. One-shot,
-  // never throttled.
-  noWorkers(){ if (!ensure()) return;
-    sequence([{freq:330,dur:0.18},{freq:262,dur:0.18},{freq:196,dur:0.5}],
-      { type:"sine", gain:0.22, gap:0.06 });
-    tone({ type:"triangle", freq:110, freqEnd:55, dur:0.95, gain:0.15 }); },
+  // The LAST human worker was killed by a robot — mournful, not alarming.
+  // Fast (~2x speed) minor-key descent over a sustained sub-drone, closing on a
+  // dissonant tritone dyad. Deliberately distinct from the dramatic klaxon-style
+  // `workerLost` sting: this reads as grief, not urgency. One-shot, never throttled.
+  lastWorkerDeath(){ if (!ensure()) return;
+    tone({ type:"sine", freq:98, dur:0.85, gain:0.22, attack:0.08 });
+    sequence([{freq:392,dur:0.2},{freq:349,dur:0.2}], { type:"bassoon", gain:0.28, gap:0.025 });
+    tone({ type:"bassoon", freq:294, dur:0.4, gain:0.26, delay:0.45 });
+    tone({ type:"bassoon", freq:208, dur:0.4, gain:0.18, delay:0.45 }); },  // tritone below
+
+  // The LAST worker was rescued and NO worker was killed by a robot this level —
+  // a perfect-clear celebration. Big 3-chord rising fanfare, gain-matched to sit in
+  // the same loudness range as `lastWorkerSaved` below (not louder).
+  allWorkersSaved(){ if (!ensure()) return;
+    tone({ type:"square", freq:330, dur:0.18, gain:0.09 });
+    tone({ type:"square", freq:392, dur:0.18, gain:0.08 });
+    tone({ type:"triangle", freq:494, dur:0.18, gain:0.065 });
+    tone({ type:"square", freq:392, dur:0.18, gain:0.095, delay:0.18 });
+    tone({ type:"square", freq:494, dur:0.18, gain:0.085, delay:0.18 });
+    tone({ type:"triangle", freq:587, dur:0.18, gain:0.07, delay:0.18 });
+    tone({ type:"square", freq:523, dur:0.75, gain:0.13, delay:0.36 });
+    tone({ type:"square", freq:659, dur:0.75, gain:0.12, delay:0.36 });
+    tone({ type:"triangle", freq:784, dur:0.75, gain:0.10, delay:0.36 });
+    tone({ type:"square", freq:1047, dur:0.75, gain:0.09, delay:0.36 });
+    tone({ type:"triangle", freq:1319, dur:0.75, gain:0.06, delay:0.36 }); },
+
+  // The LAST worker was rescued, but one or more workers WERE killed by a robot
+  // this level — a small positive nod, not a full celebration. Same square+triangle
+  // character family as `allWorkersSaved`, narrower voicing and quieter — its "little
+  // sibling," clearly less than a perfect-clear fanfare.
+  lastWorkerSaved(){ if (!ensure()) return;
+    tone({ type:"square", freq:392, dur:0.16, gain:0.10 });
+    tone({ type:"triangle", freq:494, dur:0.16, gain:0.08 });
+    tone({ type:"square", freq:523, dur:0.45, gain:0.13, delay:0.17 });
+    tone({ type:"triangle", freq:659, dur:0.45, gain:0.10, delay:0.17 }); },
+
+  // The last enemy in the level is destroyed AND no spawn terminals remain —
+  // triumphant, not polite: three rising sawtooth power-chord stomps, no final held
+  // chord. Fires regardless of what destroyed the last enemy (mop, friendly fire,
+  // Atomic Dustbin, etc) via the `level:all_enemies_dead` event.
+  lastEnemyCleared(){ if (!ensure()) return;
+    tone({ type:"sawtooth", freq:196, dur:0.1, gain:0.22 });
+    tone({ type:"sawtooth", freq:294, dur:0.1, gain:0.16 });
+    tone({ type:"sawtooth", freq:233, dur:0.1, gain:0.24, delay:0.11 });
+    tone({ type:"sawtooth", freq:349, dur:0.1, gain:0.18, delay:0.11 });
+    tone({ type:"sawtooth", freq:294, dur:0.16, gain:0.27, delay:0.22 });
+    tone({ type:"sawtooth", freq:440, dur:0.16, gain:0.20, delay:0.22 }); },
+
+  // Temporary alias — removed in Phase 2 once workers.js no longer calls it.
+  noWorkers(){ this.lastWorkerSaved(); },
 
   // Achievement unlocked / weekly progress — a short, bright ascending two-tone
   // blip. Deliberately distinct from `rescue` (triangle up-blip): this is a
