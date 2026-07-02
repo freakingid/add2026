@@ -25,13 +25,13 @@
   }
   #wrap{
     position:relative;
-    width:min(96vw, 960px);
+    width:min(96vw, 1280px);
   }
   canvas{
     display:block;
     width:100%;
     height:auto;
-    aspect-ratio:3/2;
+    aspect-ratio:16/9;
     background:var(--concrete);
     border:3px solid #3a4049;
     border-radius:6px;
@@ -39,6 +39,22 @@
                inset 0 0 80px rgba(0,0,0,.5);
     image-rendering:pixelated;
     cursor:crosshair;
+  }
+  #wrap:fullscreen{
+    width:100vw;
+    height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:#000;
+  }
+  #wrap:fullscreen canvas{
+    width:auto;
+    height:100%;
+    max-width:100%;
+    aspect-ratio:16/9;
+    border:none;
+    border-radius:0;
   }
   #hint{
     margin-top:10px; text-align:center;

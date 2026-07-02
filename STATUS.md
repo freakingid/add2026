@@ -52,7 +52,31 @@ decisions into the relevant "Subsystem decisions" entry and remove the entry her
   panels, menus) is NOT yet retrofitted to `UI_SCALE` — it renders at its old fixed
   pixel sizes, so it now looks small and off-center against the bigger canvas. That
   retrofit is Phases 2/3 of the resolution-rail work; this is expected mid-migration
-  state, not a bug. Phase 0b (fullscreen/CSS) is next and untouched by this phase.
+  state, not a bug.
+- Resolution rail Phase 0b (fullscreen wiring) — COMPLETE. `atomic-dustbin-dan.html`'s
+  CSS: `#wrap` width `min(96vw,960px)` → `min(96vw,1280px)`; `aspect-ratio` on
+  `canvas` fixed from stale `3/2` (960:640's ratio) to `16/9` (matches the
+  1280×720/1920×1080 targets — this was a latent bug from Phase 0a, which only
+  touched the `<canvas>` tag attributes, not this CSS rule). New `#wrap:fullscreen`
+  + `#wrap:fullscreen canvas` rules center/letterbox the canvas at real screen size
+  in fullscreen (canvas keeps `aspect-ratio:16/9`, height-driven, border/radius
+  stripped). `toggleFullscreen()` added to `input.js` (calls
+  `document.getElementById("wrap").requestFullscreen()` /
+  `document.exitFullscreen()`; `#wrap` is the fullscreen target, not the canvas
+  alone, so the CSS rule above applies) and bound to key **`G`** (confirmed free —
+  checked `CFG.KEYS` + every `keys["..."]` site in `input.js`/`menuedge.js`/
+  `pause.js` — against WASD/O;LK/E,F/M/V/arrows/Space/Enter/Escape/Backspace; Paul
+  chose `G` over `F` — `F` is already Dustbin special — via AskUserQuestion). A
+  `fullscreenchange` listener calls `setResolution(1920,1080)` on entry and
+  `setResolution(1280,720)` on exit — standard (unprefixed) Fullscreen API only,
+  no Safari `webkit`-prefixed fallback (Paul's call via AskUserQuestion; revisit if
+  cross-browser support becomes a priority). Verified in-browser via Playwright:
+  page loads at 1280×720 with zero console errors; clicking the canvas (user
+  gesture) then pressing `G` actually enters fullscreen (`document.fullscreenElement`
+  truthy) and live-resizes the canvas backing store to 1920×1080 via the
+  `fullscreenchange`→`setResolution` wiring — not just a CSS stretch; exiting
+  fullscreen reverts it to 1280×720. `input.js` is now **23,638 bytes — within
+  ~360 bytes of the 24KB soft ceiling; flag before the next edit to this file.**
 
 ---
 
@@ -270,7 +294,7 @@ changes.
 - **`vending.js`** — `spawnVendingMachine(variant, spot)` (builds one flush-against-wall cabinet at a wall-adjacent spot the loader picks) + `updateVending` (contact trigger, maxHp-capped heal, single-use depletion; calls `addHealRing(G.dan.x, G.dan.y + 10, color)` next to the existing `addFloat`, Camera-effects Phase 4). ← config, state, world (`tileCenter`), effects, palette. Called from `level.js` (loader's vending spawn rules) and `update.js` (update); drawn by `render.js`.
 - **`dustbin.js`** — the Atomic Dustbin special (GDD §5): `spawnDustbinPickup(pos)` (one floor pickup; the loader's atomicDustbin rule drives count/rarity), `updateDustbin` (collect + deploy E/F + slide→attract→detonate state machine), `vortexHold` (the attract-phase pull, called from `enemies.js`). ← config, state, **input** (`isDeploySpecial`/`getMoveVec`), world (`moveBody`/`isWall`), combat (`killEnemy`), effects, palette. Called from `level.js` (loader) and `update.js` (update); drawn by `render.js`. NB: `dustbin → input → level → dustbin` is an import cycle, but every cross-module use is inside a function (runtime), so module evaluation is safe.
 - **`workers.js`** — `updateWorkers` (wander/avoid + rescue-on-contact), `rescueWorker` (escalating points + counter + callout), and `killWorker` (exported; Inventory Bot's no-points worker kill). ← config, palette, state, world, effects.
-- **`input.js`** — device-agnostic input layer. Exports `getMoveVec()`/`getFireAngle()`/`isDeploySpecial()` (route by `G.inputMode`), `pollGamepad()` (called from `update.js`; also drives the title's Options screen via `pollTitleOptions()` + `optionsmenu.js`'s `handleOptionsEdge`), and the raw `keys`/`mouse` (mouse aim, `M` mute, debug). Registers key/mouse/touch listeners on import (side-effect), unlocks audio on the first gesture, binds `M` = mute, "o" opens title Options, and starts/restarts runs via `startRun(mode)`. ← config, canvas, state, level (`newGame`), audio (`unlock`/`toggleMute`), optionsmenu (`openOptions`/`handleOptionsEdge`/`optionsScreen`).
+- **`input.js`** — device-agnostic input layer. Exports `getMoveVec()`/`getFireAngle()`/`isDeploySpecial()` (route by `G.inputMode`), `pollGamepad()` (called from `update.js`; also drives the title's Options screen via `pollTitleOptions()` + `optionsmenu.js`'s `handleOptionsEdge`), `toggleFullscreen()` (Phase 0b: `#wrap.requestFullscreen()`/`document.exitFullscreen()`), and the raw `keys`/`mouse` (mouse aim, `M` mute, debug). Registers key/mouse/touch listeners on import (side-effect), unlocks audio on the first gesture, binds `M` = mute, `G` = fullscreen toggle, "o" opens title Options, and starts/restarts runs via `startRun(mode)`; also registers a `fullscreenchange` listener that calls `setResolution(1920,1080)`/`setResolution(1280,720)` on enter/exit. ← config, canvas (`setResolution`), state, level (`newGame`), audio (`unlock`/`toggleMute`), optionsmenu (`openOptions`/`handleOptionsEdge`/`optionsScreen`). **23,638 bytes — within ~360 bytes of the 24KB ceiling, flag before next edit.**
 - **`player.js`** — `updateDan` (slow move-scaling, decays `slow`/`sprayTick`), `fireVolley`/`fireBubble`, `updateShots` (bubble↔enemy↔terminal). ← config, state, input, world, combat.
 - **`camerafx.js`** (NEW, Camera-effects Phase 1) — pure math/state leaf for camera & screen feedback effects (`SPEC-camera-effects.md`): shake (`shake`/`tickShake`/`currentShakeMag`/`impactShakeOffset`, "take the stronger, don't stack" semantics), zoom-punch (`punchZoom`/`tickZoom`/`currentZoom`), the sustained low-HP vignette (`lowHpAlpha`/`getLowHpAlpha` — polled live from `G.dan` each frame, not a timer; binary threshold trigger, see "Camera effects — subsystem decisions"), the Cleaner-sick fade envelope (`tickCleanerSick`/`getCleanerSickAlpha` — now drives a local glow drawn in `render-camerafx.js`, not a screen effect here), the one-shot flash queue (`flash`/`tickFlashes`/`getFlashLayers`), and the worker-died desaturation pulse (`pulseDesat`/`tickDesat`/`getDesatAlpha`). `updateCameraFx(dt)` ticks all of the above and is called unconditionally from `update.js` (every state, mirrors `updateWipe`). Subscribes to `events.js` at module-load time (side effect on import) for `player:died`, `dustbin:detonated`, `dustbin:bounced`, `dustbin:thrown`, `manager:berserk_pulse`, `worker:died`, `powerup:collected`. Zero canvas involvement by design — `render-camerafx.js` reads these getters to draw. ← config (`CFG.CAMERAFX`, `POWERUPS`), state, events.
 - **`update.js`** — `update(dt)` orchestrator: `updateWipe(dt)` + `updateCameraFx(dt)` first, unconditionally in every state (camera effects must keep decaying through state transitions — see "Camera effects — subsystem decisions"), then `pollGamepad()`, then (when playing) Dan → shots → **dustbin** → spawn → enemies → ebolts → pickups → vending → workers → effects → camera + `updateCamera` + spawn/terminal/exit/death bookkeeping. ← state, config, input (`pollGamepad`), player, enemies, projectiles, workers, vending, dustbin, level, effects, world, canvas, wipe (`updateWipe`), camerafx (`updateCameraFx`).

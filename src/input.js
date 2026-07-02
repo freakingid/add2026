@@ -14,7 +14,7 @@
    two adjacent cardinals (so O+P = NE fire, W+D = NE move) — no per-diagonal keys.
    ========================================================================= */
 import { CFG } from "./config.js";
-import { canvas, VIEW_W, VIEW_H } from "./canvas.js";
+import { canvas, VIEW_W, VIEW_H, setResolution } from "./canvas.js";
 import { G } from "./state.js";
 import { newGame, nextLevel, resumeFromSave } from "./level.js";
 import { loadSave } from "./savegame.js";
@@ -439,6 +439,7 @@ addEventListener("keydown", e => {
   const k = e.key.toLowerCase();
   unlock();                          // resume AudioContext on first gesture (autoplay policy)
   if (k === "m" && !e.repeat) toggleMute();   // M = mute toggle (GDD §10 audio)
+  if (k === "g" && !e.repeat) toggleFullscreen();   // G = fullscreen toggle (Phase 0b)
   if (G.state === "playing" && HANDLED_KEYS.has(k)) e.preventDefault();
   keys[k] = true;
 
@@ -531,3 +532,20 @@ canvas.addEventListener("touchstart", e => {
   if (G.state === "title" && G._titlePhase === "input") advanceTitleToMode("keyboard");
   else if (G.state === "dead" && G.inputMode === "keyboard") startRun("keyboard");
 }, {passive:false});
+
+/* ---- Fullscreen (Phase 0b) ----------------------------------------------
+   requestFullscreen() must be called from a user gesture (keydown qualifies).
+   The element made fullscreen is #wrap (not the canvas alone) so the CSS
+   #wrap:fullscreen rule can center/letterbox the canvas within the screen. */
+export function toggleFullscreen(){
+  if (!document.fullscreenElement){
+    const wrap = document.getElementById("wrap");
+    wrap.requestFullscreen();
+  } else {
+    document.exitFullscreen();
+  }
+}
+document.addEventListener("fullscreenchange", () => {
+  if (document.fullscreenElement) setResolution(1920, 1080);
+  else setResolution(1280, 720);
+});
