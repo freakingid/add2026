@@ -110,6 +110,64 @@ decisions into the relevant "Subsystem decisions" entry and remove the entry her
   are well clear of the 24KB ceiling. `drawWeeklyPanel`/`drawTitle` still use
   the OLD (pre-`UI_SCALE`) fixed pixel layout, unchanged by this phase — the
   next phase retrofits the layout itself.
+- Resolution rail Phase 2 (`screens-title.js` rail rebuild) — COMPLETE. Per
+  `SPEC-title-rail.md`'s "Layout" section, `drawWeeklyPanel()` and the
+  "input"-phase body of `drawTitle()` rewritten to the two-zone layout: a
+  right rail (`RAIL_W = 460*UI_SCALE`, right-anchored via
+  `railX = VIEW_W - RAIL_W`, full height) and a left/center zone
+  (`VIEW_W - RAIL_W` wide, content centered within *that* zone's midpoint,
+  not full-canvas center — the visual change from the old centered-on-full-
+  canvas title). Every spec pixel value multiplied by `UI_SCALE` at draw
+  time (newly imported from `canvas.js`); no literals left over from the old
+  fixed layout. `drawWeeklyPanel(railX, oy, railW, railH)` gained two params
+  (`railW`/`railH`) vs. the old `(ox, oy)` two-arg form — full-height panel
+  now, not just an achievement-row stack — and draws: translucent bg + 1px
+  left hairline border (stays 1px, doesn't scale — per spec), header row
+  (`WEEKLY ACHIEVEMENTS` label + `N/target` progress chip reusing the
+  `meta_eotw` entry's `progress`/`target` fields, unchanged derivation from
+  before), 5 weekly rows + EOTW row vertically centered in remaining rail
+  height with per-row dividers, and a footer (`VIEW ALL ACHIEVEMENTS` /
+  `[V]` hint). Progress bars render `progress/target` as a fraction-of-width
+  fill (per Paul's locked decision in the phase prompt: option 1 from the
+  spec's flagged N/5-vs-N/1 mismatch — cosmetically a binary checkbox today
+  since `target` is always 1 for weeklies, but written as a true fraction so
+  it degrades gracefully for free if any weekly ever gets `target > 1`).
+  Description text now word-wraps (`_wrapText` helper) instead of single-
+  line truncating, since the new `23*UI_SCALE`px name size needed the extra
+  vertical room the old compact rows didn't have. Added two small helpers,
+  `_roundRect` (chip/bar rounded-rect paths) and `_weeklyRowHeight`
+  (approximate row height for the centering pass only — the actual draw
+  loop uses its own absolute `cy` math per row, so the estimate only affects
+  vertical centering, not layout correctness). No new input handling
+  added — confirmed `pollModals()` (`input.js`) already reads `keys["v"]`
+  via `_modalHeld('view', mode)` and is called every frame from
+  `update.js`, unchanged by this phase. The stale `GOLD` import (used by the
+  old checkmark-style row, no longer needed now the rail uses its own
+  chip/fraction/bar styling) was dropped from `screens-title.js` — `GOLD`
+  stays defined and used independently in `screens.js`. File is now
+  **16,104 bytes** (up from 10,864), still well under the 24KB ceiling.
+  Verified in-browser via a scripted headless-Chromium session (no
+  Playwright MCP registered in this environment, so the verifying agent
+  drove Chromium directly via the `playwright` npm package): zero console
+  errors across the full click-through — title screen renders with the
+  rail visibly occupying ~36% of canvas width right-anchored (starts
+  ~x=818 of 1280) and the left-zone content (logo/tagline/prompts) visibly
+  centered around the left zone's own midpoint (~x=422), not full-canvas
+  center (~x=640) — confirming the intended "shifted left" layout change;
+  Options (`O`), Load Game (`L`), and Mode Select (`SPACE`) all open and
+  return to title correctly, unaffected by the layout rewrite. One flow
+  (`V` to lifetime modal) did not visibly open during the agent's automated
+  keypress — traced by hand afterward to `pollModals()`/`_modalHeld` and
+  confirmed the wiring is correct and unchanged (`keys["v"]` read every
+  frame via `update.js`'s unconditional `pollModals(dt)` call); most likely
+  a headless key-event/focus quirk in the automation itself, not a code
+  defect — flagging rather than silently "fixing" code that traces out as
+  already correct. Fullscreen (1920x1080) proportional-scaling check not
+  automated (`requestFullscreen` needs a real user gesture); the geometry
+  is purely `UI_SCALE`-multiplied with no hardcoded absolute pixels left, so
+  it should scale correctly by construction, but this is not yet eyeballed
+  in-browser at 1920x1080 — flag for a manual check next session before
+  calling Phase 2 fully closed on the fullscreen axis specifically.
 
 ---
 
@@ -335,7 +393,7 @@ changes.
 - **`render-ebolts.js`** (NEW split from render-entities.js) — `drawEbolts` (all projectile kinds: bolt/arc/drop/homing). ← canvas, state, config, palette. Imported by `render.js`.
 - **`render-marks.js`** (NEW split from render.js, Camera-effects Phase 0) — `drawMarks` (the `"berserk"`/`"blast"`/`"debris"`/default-soap/`"healRing"` mark kinds; `"healRing"`, Camera-effects Phase 4, added last for the vending heal cascade — a stroked circle growing 4→20px radius, alpha faded via the imported `hexA`). ← canvas, state, config, render-camerafx (`hexA`). Imported by `render.js`.
 - **`screens.js`** — `drawHUD` / `drawLevelClear` (+ `drawPostLevelModal`) / `drawFireLegend` (exported for reuse by `optionsmenu.js`) / `drawLifetimeModal` / `drawGameOver` (continue prompt keyed to `G.inputMode`) / `export const GOLD`. Title screens (`drawTitle` and its sub-phases) moved out to **`screens-title.js`** (Resolution rail Phase 1) — this file is now **14,384 bytes**, down from 24,695 (was over the 24KB ceiling before the split). ← canvas, state, config, palette, achievements (`getLevelAchievementSummary`/`getLifetimeAchievements`).
-- **`screens-title.js`** (NEW, Resolution rail Phase 1, split from `screens.js`) — `drawTitle` (device-select screen offers "SPACE — KEYBOARD" / "A / START — GAMEPAD" plus muted "O — OPTIONS" / "X — OPTIONS (GAMEPAD)" hints; `_titlePhase === "options"` delegates to `optionsmenu.js`'s `drawOptions`) + its sub-phase draws `drawTitleBackdrop`/`drawTitleLogo`/`drawWeeklyPanel`/`_drawTitleLoadScreen`/`drawTitleModeSelect`/`drawTitlePlaylistPicker`/`_drawTitleMenuHighlight`. **10,864 bytes.** ← canvas, state, palette, achievements (`getWeeklyAchievements`/`getXP`), savegame (`listSaves`), optionsmenu (`drawOptions`; one-way — `optionsmenu.js` does not import this file), screens (`GOLD`, used by `drawWeeklyPanel`). Still uses the OLD (pre-`UI_SCALE`) fixed pixel layout — a later resolution-rail phase retrofits it.
+- **`screens-title.js`** (NEW, Resolution rail Phase 1, split from `screens.js`; rail rebuilt Phase 2) — `drawTitle` (device-select screen offers "SPACE — KEYBOARD" / "A / START — GAMEPAD" plus muted "O — OPTIONS" / "X — OPTIONS (GAMEPAD)" hints; `_titlePhase === "options"` delegates to `optionsmenu.js`'s `drawOptions`) + its sub-phase draws `drawTitleBackdrop`/`drawTitleLogo`/`drawWeeklyPanel`/`_drawTitleLoadScreen`/`drawTitleModeSelect`/`drawTitlePlaylistPicker`/`_drawTitleMenuHighlight`. **16,104 bytes.** ← canvas (incl. `UI_SCALE`), state, palette, achievements (`getWeeklyAchievements`/`getXP`), savegame (`listSaves`), optionsmenu (`drawOptions`; one-way — `optionsmenu.js` does not import this file). No longer imports `GOLD` from `screens.js` (dropped, unused post-rail-rebuild). The "input" phase now uses the two-zone `UI_SCALE`-relative layout from `SPEC-title-rail.md` (right rail + left/center zone) — see "Resolution rail Phase 2" above for the full breakdown; the `drawTitleModeSelect`/`drawTitlePlaylistPicker`/`_drawTitleLoadScreen` sub-phases are unchanged, still full-canvas-centered (out of this phase's scope).
 - **`optionsmenu.js`** — shared Options + Controls screens: `openOptions`/`openControls`/`optionsScreen`/`defaultPane`/`handleOptionsEdge`/`drawOptions`. Owns the volume sliders + mute row (moved from `pause.js`) plus a 5th "CONTROLS ▸" row, and a Controls sub-screen (keyboard/gamepad pane toggle). Keyboard pane (Phase 5): FIRE grid (via imported `drawFireLegend`) + a matching MOVE 3×3 grid (WASD + arrow glyphs, same cell/stroke style), OTHER (E/F Dustbin, ESC Pause, M Mute, SPACE Start) and MOUSE (aim/fire) label columns below; panel sized 460×460 to fit. Gamepad pane (Phase 6, DONE): static flat-palette controller schematic (body/sticks/d-pad/face buttons/bumpers+triggers/Start pill) with leader lines to MOVE / AIM·FIRE / ATOMIC DUSTBIN / START·PAUSE / BACK labels. `pause.js` delegates nav/draw here instead of owning options state directly; reachable from the title too (see STATUS-WORLD "Pause menu + Save/Load system"). ← canvas, palette, state, audio (volume/mute getters+setters), savegame (`savePrefs`), screens (`drawFireLegend`). Must NOT import `input.js`/`pause.js`/`screens-title.js` (the latter imports `optionsmenu.js`, one-way).
 - **`render.js`** — `render()` compositor + world/entity draws (`drawFloor`/`drawWalls`/`drawExit`/`drawExitPointer`/`drawVending`/`drawDustbins`(floor pickups + sliding canister + attract vortex, via `drawDustbinCan`)/`drawTerminals`/`drawShots`/`drawPickups`/`drawWorkers`/`drawFloats`/`drawDan` incl. carried-dustbin cue). `drawMarks` moved to `render-marks.js` (Camera-effects Phase 0, freeing headroom under the 24KB module-split convention). Camera-effects Phase 2 wired in zoom/shake (camera-translate line) + `drawDesaturation()`/`drawVignettes()`/`drawFlashes()` calls (from `render-camerafx.js`), plus `drawCleanerGlow(G.dan.x, G.dan.y)` immediately before `drawDan()` — **now 23,350 bytes, within ~1.2KB of the 24KB ceiling; watch this file on the next edit.** `drawTitle` now imported from `screens-title.js` (Resolution rail Phase 1); the other screens.js imports unchanged. ← canvas, state, config, palette, world, render-entities, render-ebolts (`drawEbolts`), render-marks (`drawMarks`), render-camerafx (`drawVignettes`/`drawFlashes`/`drawDesaturation`/`drawCleanerGlow`), camerafx (`getZoomScale`/`getShakeOffset`), screens, screens-title.
 - **`render-camerafx.js`** (NEW, Camera-effects Phase 2) — the `ctx` drawing calls for `camerafx.js`'s getters: `drawVignettes()` (low-HP radial gradient only — Cleaner-sick was reworked to a local Dan-glow, see "Camera effects — subsystem decisions"), `drawFlashes()` (one-shot flash-layer queue), `drawDesaturation()` (worker:died world-space saturation wash), `drawCleanerGlow(x, y)` (Cleaner-sick's replacement: a soft aura around Dan, drawn behind his sprite same as enemy berserk/alarm auras), plus a local `hexA(hex, alpha)` helper. Mirrors the `render-entities.js`/`render-ebolts.js` split-from-`render.js` pattern; no state of its own. ← canvas, camerafx, config.
