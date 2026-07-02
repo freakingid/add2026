@@ -4,7 +4,8 @@
    render() lays down the world under the camera transform (floor, walls, marks,
    exit, terminals, pickups, shots, enemies, ebolts, Dan, floats), then the
    screen-space overlays (exit pointer + HUD + state screens). The enemy/ebolt
-   sprites live in render-entities.js; the HUD/title/end screens in screens.js.
+   sprites live in render-entities.js; the HUD/end screens in screens.js, the
+   title screens in screens-title.js.
    ========================================================================= */
 import { ctx, VIEW_W, VIEW_H } from "./canvas.js";
 import { G } from "./state.js";
@@ -17,7 +18,8 @@ import { drawMarks } from "./render-marks.js";
 import { drawScanFX } from "./render-scanfx.js";
 import { getZoomScale, getShakeOffset } from "./camerafx.js";
 import { drawVignettes, drawFlashes, drawDesaturation, drawCleanerGlow } from "./render-camerafx.js";
-import { drawHUD, drawTitle, drawLevelClear, drawGameOver, drawLifetimeModal } from "./screens.js";
+import { drawHUD, drawLevelClear, drawGameOver, drawLifetimeModal } from "./screens.js";
+import { drawTitle } from "./screens-title.js";
 import { popAchievementBanner } from "./achievements.js";
 import { drawWipe } from "./wipe.js";
 import { drawPause } from "./pause.js";
