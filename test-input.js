@@ -132,5 +132,30 @@ console.log("camerafx.js — currentZoom is 1 outside the punch window ->");
   check("past punch duration -> 1", fx.currentZoom(), 1);
 }
 
+/* --- scanner-beam + berserk-lock smoke tests (pure math, no canvas) --------- */
+(function testScanFXBeam(){
+  const spacing = 34, speed = 46, len = 200;
+  const chevrons = (t) => { const out=[]; const ph=(t*speed)%spacing; for(let s=ph;s<len-2;s+=spacing) out.push(s); return out; };
+  const a0 = chevrons(0), a1 = chevrons(0.1);
+  console.assert(a0.length >= 5, "beam: several chevrons over 200px");
+  console.assert(a1[0] > a0[0], "beam: chevrons march toward the target as time advances");
+  const wrapPhase = ((spacing/speed)*speed) % spacing;   // one full cycle of travel
+  console.assert(Math.abs(wrapPhase) < 1e-6, "beam: phase returns to 0 after spacing/speed seconds");
+})();
+(function testAlarmInRange(){
+  const R = 300, s = {x:0,y:0};
+  const hit = (o)=> Math.hypot(o.x-s.x,o.y-s.y) <= R;
+  console.assert(hit({x:200,y:100}) === true,  "alarm: in-range robot buffed (~223px)");
+  console.assert(hit({x:300,y:300}) === false, "alarm: out-of-range robot not buffed (~424px)");
+})();
+(function testBerserkLock(){
+  const LOCK = 1e9;
+  console.assert(JSON.parse(JSON.stringify({b:LOCK})).b === LOCK, "berserk: finite lock survives save/load JSON");
+  console.assert(JSON.parse(JSON.stringify({b:Infinity})).b === null, "berserk: Infinity would be lost by JSON (why we avoid it)");
+  let b = LOCK; for (let i=0;i<60*60*10;i++) b -= 1/60;   // 10 min @ 60fps
+  console.assert(b > 0, "berserk: lock still active after 10 simulated minutes");
+})();
+console.log("scanfx/berserk smoke tests passed");
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

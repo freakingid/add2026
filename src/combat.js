@@ -13,6 +13,11 @@ import { sfx } from "./audio.js";
 import { emit } from "./events.js";
 import { pushAtWorld } from "./world.js";
 
+// Manager berserk now persists until the buffed robot dies (design change). Use a
+// large FINITE sentinel, not Infinity: JSON.stringify(Infinity) === "null", which
+// would silently drop the buff across a save/load; 1e9 s (~31 yr) never decays out.
+const BERSERK_LOCK = 1e9;
+
 // Apply a ranged hit to Dan: shared i-frame + a lighter knockback along the
 // bolt's travel direction.
 export function hitDanRanged(b){
@@ -116,7 +121,7 @@ export function killEnemy(index, { score = true, killerKind = 'mop', bounceCount
     for (const other of G.enemies){
       if (other === e) continue;   // will be spliced out below
       if (Math.hypot(other.x - e.x, other.y - e.y) <= md.berserRadius){
-        other.berserk = Math.max(other.berserk || 0, md.berserDur);
+        other.berserk = BERSERK_LOCK;   // permanent until this robot dies
         buffedCount++;
       }
     }

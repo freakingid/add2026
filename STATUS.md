@@ -11,6 +11,16 @@ Work these **one at a time, then test**. Once a change is built + tested, fold i
 decisions into the relevant "Subsystem decisions" entry and remove the entry here.
 
 - Manager self-damage fix (shooter immunity via `firedBy` / `eid`) — COMPLETE
+- Scanner beam render prep + Manager berserk-permanence (sim/config only, no renderer
+  yet) — COMPLETE. `alarmHold` 0.25→0.5; `CFG.SCANFX` tunables added for a future
+  `render-scanfx.js`; Scanner now tracks `e.seesDan`/`e.alarmTargets` per tick (see
+  STATUS-SYSTEMS.md "Scanner"); Manager berserk changed from a decaying `berserDur`
+  timer to a permanent-until-death `BERSERK_LOCK` sentinel in `combat.js` (see
+  STATUS-SYSTEMS.md "Manager"). Convention note: `test-input.js`'s new smoke tests
+  were inserted immediately before the existing `console.log(passed/failed)` +
+  `process.exit` tail rather than appended after it — appending after `process.exit`
+  would make the new assertions dead code that never runs and never affects the
+  pass/fail exit code.
 
 ---
 

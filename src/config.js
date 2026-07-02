@@ -160,6 +160,17 @@ export const CFG = {
     berserkShimmyMag: 1.5, berserkShimmyHzA: 40, berserkShimmyHzB: 33,
   },
 
+  // Scanner sensor beams (consumed by render-scanfx.js). Blue = Dan->Scanner LOS
+  // link; Red = Scanner->each buffed robot. Pure visual; tune alphas/speed by eye.
+  SCANFX: {
+    coreWidth: 2, glowWidth: 7,
+    arrowSpacing: 34,     // px between ">" chevrons along a beam
+    arrowSpeed: 46,       // px/s the chevrons march toward the target
+    arrowFont: '700 14px system-ui, sans-serif',
+    blueCore: 'rgba(120,200,255,0.55)', blueGlow: 'rgba(90,170,255,0.16)', blueArrow: 'rgba(185,228,255,0.90)',
+    redCore:  'rgba(255,110,90,0.52)',  redGlow:  'rgba(255,70,60,0.15)',  redArrow:  'rgba(255,175,155,0.90)',
+  },
+
   // Power-ups (GDD 3) — shot-count based, fully stackable
   POWERUP_SHOTS: 75,            // enhanced shots granted per pickup
   TRIPLE_SPREAD: 0.22,         // rad between fan projectiles
@@ -317,7 +328,7 @@ export const ENEMY = {
     losCheckEvery:0.2,                       // throttled LOS poll
     alarmGrace:0.8,                          // alarm lingers this long after LOS breaks
     alarmRadius:300,                         // buff reaches robots within this radius
-    alarmHold:0.25,                          // per-robot buff timer (refreshed each frame in range)
+    alarmHold:0.5,                           // per-robot buff timer (refreshed each frame in range) — was 0.25
     alarmSpeedMult:1.4,                      // speed mult while alarmed (Manager berserk = 1.7)
     alarmDmgBonus:1,                         // melee dmg added while alarmed (Manager berserk = +2)
     sweepRate:3.2,                           // radar-dish sweep angular speed (visual)

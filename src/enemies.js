@@ -163,6 +163,8 @@ export function spawnEnemy(type, pos){
     e.face = Math.atan2(w.y - e.y, w.x - e.x);
     e.losCheck = Math.random() * d.losCheckEvery;
     e.alarmT = 0; e.alarming = false;       // alarm timer + state (set by LOS to Dan)
+    e.seesDan = false;                      // current LOS-to-Dan (drives the blue render beam)
+    e.alarmTargets = [];                    // robots currently in the buff (drives the red beams)
     e.sweep = Math.random() * Math.PI * 2;  // radar-dish sweep phase
   }
   if (type === "inventory"){

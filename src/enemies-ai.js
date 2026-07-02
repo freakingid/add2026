@@ -325,8 +325,9 @@ export function updateScanner(e, dt){
   e.losCheck -= dt;
   if (e.losCheck <= 0){
     e.losCheck = d.losCheckEvery;
-    if (Math.hypot(G.dan.x - e.x, G.dan.y - e.y) < d.sight &&
-        hasLineOfSight(e.x, e.y, G.dan.x, G.dan.y)){
+    e.seesDan = (Math.hypot(G.dan.x - e.x, G.dan.y - e.y) < d.sight &&
+                 hasLineOfSight(e.x, e.y, G.dan.x, G.dan.y));
+    if (e.seesDan){
       e.alarmT = d.alarmGrace;            // refresh; lingers alarmGrace after LOS breaks
     }
   }
@@ -335,12 +336,16 @@ export function updateScanner(e, dt){
   e.alarming = e.alarmT > 0;
   if (e.alarming && !wasAlarming) sfx.alarm();   // klaxon on the rising edge only
 
-  // Broadcast: refresh a short buff timer on every robot in range each frame.
+  // Broadcast: refresh a short buff timer on every robot in range each frame, and
+  // collect the in-range set so drawScanFX can draw the red beams (render-only).
+  if (!e.alarmTargets) e.alarmTargets = [];   // guard: robots loaded from an old save
+  e.alarmTargets.length = 0;
   if (e.alarming){
     for (const other of G.enemies){
       if (other === e || other.spawn > 0) continue;
       if (Math.hypot(other.x - e.x, other.y - e.y) <= d.alarmRadius){
         other.alarmed = d.alarmHold;
+        e.alarmTargets.push(other);
       }
     }
   }
