@@ -39,6 +39,20 @@ decisions into the relevant "Subsystem decisions" entry and remove the entry her
   the AI tick immediately overwrote back to `true` since the enemies were still in
   open LOS, proving the renderer is reading live per-frame state rather than a stale
   flag. Console clean, no errors, level intro completes normally.
+- Resolution rail Phase 0a (`canvas.js` live resolution + `UI_SCALE`) — COMPLETE.
+  `canvas.js` now boots the backing store at 1280×720 (was 960×640, set via the
+  `<canvas>` tag's `width`/`height` attributes in `atomic-dustbin-dan.html`).
+  `VIEW_W`/`VIEW_H` changed from `const` to `let` (still exported under the same
+  names — every one of the 12 importing modules only reads them, confirmed by grep,
+  so this is a safe widening) plus a new `setResolution(w, h)` function and a
+  derived `UI_SCALE` export (`w / 1280`, currently `1` since nothing calls
+  `setResolution` yet). Verified in-browser via Playwright: title screen renders,
+  `[1] ENDLESS SHIFT` reaches Level 1 with intro complete, Dan moves and the camera
+  pans correctly at the larger view, zero console errors. Screen-space UI (HUD text,
+  panels, menus) is NOT yet retrofitted to `UI_SCALE` — it renders at its old fixed
+  pixel sizes, so it now looks small and off-center against the bigger canvas. That
+  retrofit is Phases 2/3 of the resolution-rail work; this is expected mid-migration
+  state, not a bug. Phase 0b (fullscreen/CSS) is next and untouched by this phase.
 
 ---
 
