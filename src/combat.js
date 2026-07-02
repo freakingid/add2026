@@ -120,6 +120,7 @@ export function killEnemy(index, { score = true, killerKind = 'mop', bounceCount
     let buffedCount = 0;
     for (const other of G.enemies){
       if (other === e) continue;   // will be spliced out below
+      if (other.type === "manager" || other.type === "scanner") continue;   // Managers/Scanners don't buff each other's kind
       if (Math.hypot(other.x - e.x, other.y - e.y) <= md.berserRadius){
         other.berserk = BERSERK_LOCK;   // permanent until this robot dies
         buffedCount++;

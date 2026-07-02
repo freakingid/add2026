@@ -343,6 +343,7 @@ export function updateScanner(e, dt){
   if (e.alarming){
     for (const other of G.enemies){
       if (other === e || other.spawn > 0) continue;
+      if (other.type === "scanner" || other.type === "manager") continue;   // Managers/Scanners don't buff each other's kind
       if (Math.hypot(other.x - e.x, other.y - e.y) <= d.alarmRadius){
         other.alarmed = d.alarmHold;
         e.alarmTargets.push(other);

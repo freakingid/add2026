@@ -141,6 +141,16 @@ y }`) added to `combat.js`, emitted next to the existing berserk-buff loop
 that sets `other.berserk` on nearby robots — `camerafx.js` subscribes to
 trigger the shake+flash.
 
+**Manager<->Scanner cross-buff exclusion.** Manager on-death pulse
+(`combat.js`) and Scanner alarm broadcast (`enemies-ai.js`) now both skip
+`other.type === "manager" || other.type === "scanner"` in their buff loops —
+neither support type buffs the other's kind anymore. This is a named-type
+exclusion (Manager and Scanner specifically), not a general "support types
+don't buff support types" category — Scanner<->Scanner alarm stacking and
+Manager<->Manager pulse stacking on other bot types (Picker, Forklift, etc.)
+is unchanged. Two-line guard each, no new state/render/files; smoke-tested in
+`test-input.js` (`testBuffExclusion`).
+
 **Manager berserk enemy visual (Phase 3, DONE).** Buffed robots (`e.berserk >
 0`) now get a body-color tint + a subtle shimmy, on top of the existing
 orange aura ring (unchanged, still drawn before the per-type dispatch and NOT

@@ -157,5 +157,19 @@ console.log("camerafx.js — currentZoom is 1 outside the punch window ->");
 })();
 console.log("scanfx/berserk smoke tests passed");
 
+/* --- manager/scanner cross-buff exclusion smoke test (pure math, no canvas) - */
+(function testBuffExclusion(){
+  const shouldSkipManagerPulse = (otherType) => (otherType === "manager" || otherType === "scanner");
+  const shouldSkipScannerAlarm = (otherType) => (otherType === "scanner" || otherType === "manager");
+  console.assert(shouldSkipManagerPulse("manager") === true,  "manager pulse: skips other Managers");
+  console.assert(shouldSkipManagerPulse("scanner") === true,  "manager pulse: skips Scanners");
+  console.assert(shouldSkipManagerPulse("picker")  === false, "manager pulse: still buffs Pickers");
+  console.assert(shouldSkipManagerPulse("forklift") === false,"manager pulse: still buffs Forklifts");
+  console.assert(shouldSkipScannerAlarm("scanner") === true,  "scanner alarm: skips other Scanners");
+  console.assert(shouldSkipScannerAlarm("manager") === true,  "scanner alarm: skips Managers");
+  console.assert(shouldSkipScannerAlarm("cleaner") === false, "scanner alarm: still buffs Cleaners");
+})();
+console.log("manager/scanner buff-exclusion smoke tests passed");
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
