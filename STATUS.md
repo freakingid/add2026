@@ -21,6 +21,24 @@ decisions into the relevant "Subsystem decisions" entry and remove the entry her
   `process.exit` tail rather than appended after it — appending after `process.exit`
   would make the new assertions dead code that never runs and never affects the
   pass/fail exit code.
+- Scanner beam renderer — COMPLETE. New `render-scanfx.js` (`drawScanFX`, ~2.5KB)
+  draws, inside the world transform just before `drawEnemies()`: a translucent
+  glowing BLUE beam Dan→Scanner with ">" chevrons flowing toward the Scanner whenever
+  `e.seesDan` is true, and translucent glowing RED beams Scanner→each `e.alarmTargets`
+  entry with chevrons flowing toward those robots. Pure visual, no LOS logic of its
+  own — reads only `e.seesDan`/`e.alarmTargets` (set live in `enemies-ai.js`), so it
+  gates correctly every frame with zero duplicated geometry checks. Tunables in
+  `CFG.SCANFX` (widths, chevron spacing/speed/font, per-color core/glow/arrow rgba).
+  `render.js` gained one import + one `drawScanFX()` call (before `drawEnemies()`,
+  so beams sit under sprites) — now 23,527 bytes, still under the 24KB ceiling.
+  Verified in-browser via Playwright (no debug level-skip key exists in `input.js`;
+  reached L8 by calling `level.buildLevel()` after forcing `G.level = 8` through a
+  dynamic import): with real wall-gated LOS (`world.hasLineOfSight`), the beam
+  renders correctly across open floor and disappears completely the instant Dan is
+  behind a wall tile — confirmed by first naively flipping `seesDan` by hand, which
+  the AI tick immediately overwrote back to `true` since the enemies were still in
+  open LOS, proving the renderer is reading live per-frame state rather than a stale
+  flag. Console clean, no errors, level intro completes normally.
 
 ---
 

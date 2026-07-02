@@ -14,6 +14,7 @@ import { isWall, clamp, pushAt } from "./world.js";
 import { drawEnemies } from "./render-entities.js";
 import { drawEbolts } from "./render-ebolts.js";
 import { drawMarks } from "./render-marks.js";
+import { drawScanFX } from "./render-scanfx.js";
 import { getZoomScale, getShakeOffset } from "./camerafx.js";
 import { drawVignettes, drawFlashes, drawDesaturation, drawCleanerGlow } from "./render-camerafx.js";
 import { drawHUD, drawTitle, drawLevelClear, drawGameOver, drawLifetimeModal } from "./screens.js";
@@ -90,6 +91,7 @@ export function render(){
   drawPickups();
   drawWorkers();
   drawShots();
+  drawScanFX();          // Scanner sensor beams, under the robot sprites
   drawEnemies();
   drawEbolts();
   drawCleanerGlow(G.dan.x, G.dan.y);
