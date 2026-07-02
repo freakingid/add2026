@@ -168,6 +168,50 @@ decisions into the relevant "Subsystem decisions" entry and remove the entry her
   it should scale correctly by construction, but this is not yet eyeballed
   in-browser at 1920x1080 — flag for a manual check next session before
   calling Phase 2 fully closed on the fullscreen axis specifically.
+- **Resolution rail Phase 3 (`screens.js` lifetime + post-level modal
+  typography) — COMPLETE.** This closes out the title-rail spec's scope.
+  Mechanical retrofit only, per the phase prompt: every fixed `ctx.font =
+  "... Npx ..."` and every fixed row-height/padding/offset literal in
+  `drawLifetimeModal()` and `drawPostLevelModal()` multiplied by `UI_SCALE`
+  (newly imported from `canvas.js` alongside the existing `ctx`/`VIEW_W`/
+  `VIEW_H`). Did both functions in one pass (not split into two turns) since
+  they're adjacent in the file and share the same mechanical transformation
+  plus several constants (`GOLD`, similar row patterns) — no reason to
+  separate them. No layout restructuring, no new features, no change to what
+  data is shown or how scrolling/grouping works. `drawHUD`, `drawGameOver`,
+  `drawLevelClear`'s non-modal branch, and `drawFireLegend` were explicitly
+  out of scope for this phase (untouched) — those are `SPEC-resolution-
+  system.md` Phase 3 (a broader mechanical pass across the whole codebase),
+  a separate, still-open piece of future work, not part of this delivery.
+  In `drawLifetimeModal()`, confirmed the scroll-accumulator arithmetic
+  (`y`/`lineTop`/`contentH`, feeding `G._lifetimeMaxScroll`) still holds:
+  every increment added to `y` inside the loop is now `N * UI_SCALE`
+  alongside the draw calls that use it, so `contentH` and `vpH` scale by the
+  same factor and the max-scroll fraction is unchanged — verified this
+  in-browser rather than just by inspection (see below). File is now
+  **15,014 bytes** (up from 14,384), still well under the 24KB ceiling.
+  Verified in-browser via a scripted headless-Chromium session (Playwright,
+  same approach as Phase 2 — no `chromium-cli`/Playwright MCP registered in
+  this environment): drove the real title → lifetime-modal flow (`V` key
+  while `_titlePhase === "input"`, i.e. *before* pressing Space/mode-select,
+  since `_modalHeld('view', mode)` only opens it from that phase) at both
+  1280×720 and 1920×1080 — fonts/rows/badges/progress-bars scale
+  proportionally, panel width and position track `UI_SCALE`, nothing
+  overlaps or clips at either resolution. Scrolling verified by holding
+  ArrowDown and confirming content advances with correctly clipped rows at
+  both resolutions. For `drawPostLevelModal()`, real gameplay data wasn't
+  practical to trigger headlessly (no exported hook to inject fabricated
+  `_levelProgressLog` entries, and scripting a full level-clear via input
+  emulation was judged too brittle for this check) — instead drove the
+  actual code path directly: a standalone harness page imported `state.js`/
+  `events.js`/`achievements.js`, called `initAchievements()`, emitted real
+  `level:start` → `worker:rescued` × 5 → `enemy:died` × 10 → `level:end`
+  events to populate genuine achievement-progress data (including "NEW!"
+  tier-ups), set `G._showAchievementModal = true`, and called the real
+  `drawLevelClear()` from `screens.js` at both resolutions. Confirmed
+  correct proportional scaling of the panel, header, rows, "NEW!" badges,
+  gold progress counts, and footer at both sizes, zero console errors.
+  Temp harness files removed after verification; nothing left in the repo.
 
 ---
 
@@ -392,7 +436,7 @@ changes.
 - **`render-entities.js`** — enemy sprites only: `drawEnemies` (per-type sprites + berserk aura). ← canvas, state, config, palette, enemies (`coneRayDist`).
 - **`render-ebolts.js`** (NEW split from render-entities.js) — `drawEbolts` (all projectile kinds: bolt/arc/drop/homing). ← canvas, state, config, palette. Imported by `render.js`.
 - **`render-marks.js`** (NEW split from render.js, Camera-effects Phase 0) — `drawMarks` (the `"berserk"`/`"blast"`/`"debris"`/default-soap/`"healRing"` mark kinds; `"healRing"`, Camera-effects Phase 4, added last for the vending heal cascade — a stroked circle growing 4→20px radius, alpha faded via the imported `hexA`). ← canvas, state, config, render-camerafx (`hexA`). Imported by `render.js`.
-- **`screens.js`** — `drawHUD` / `drawLevelClear` (+ `drawPostLevelModal`) / `drawFireLegend` (exported for reuse by `optionsmenu.js`) / `drawLifetimeModal` / `drawGameOver` (continue prompt keyed to `G.inputMode`) / `export const GOLD`. Title screens (`drawTitle` and its sub-phases) moved out to **`screens-title.js`** (Resolution rail Phase 1) — this file is now **14,384 bytes**, down from 24,695 (was over the 24KB ceiling before the split). ← canvas, state, config, palette, achievements (`getLevelAchievementSummary`/`getLifetimeAchievements`).
+- **`screens.js`** — `drawHUD` / `drawLevelClear` (+ `drawPostLevelModal`) / `drawFireLegend` (exported for reuse by `optionsmenu.js`) / `drawLifetimeModal` / `drawGameOver` (continue prompt keyed to `G.inputMode`) / `export const GOLD`. Title screens (`drawTitle` and its sub-phases) moved out to **`screens-title.js`** (Resolution rail Phase 1) — this file is now **15,014 bytes** (Resolution rail Phase 3 retrofitted `drawLifetimeModal`/`drawPostLevelModal` typography to `UI_SCALE`; up from 14,384, down from the original 24,695 pre-split). `drawHUD`/`drawGameOver`/`drawLevelClear`'s non-modal splash/`drawFireLegend` still use fixed pixel sizes, out of scope for Phase 3 — that retrofit is `SPEC-resolution-system.md` Phase 3 (separate, still open). ← canvas (incl. `UI_SCALE`), state, config, palette, achievements (`getLevelAchievementSummary`/`getLifetimeAchievements`).
 - **`screens-title.js`** (NEW, Resolution rail Phase 1, split from `screens.js`; rail rebuilt Phase 2) — `drawTitle` (device-select screen offers "SPACE — KEYBOARD" / "A / START — GAMEPAD" plus muted "O — OPTIONS" / "X — OPTIONS (GAMEPAD)" hints; `_titlePhase === "options"` delegates to `optionsmenu.js`'s `drawOptions`) + its sub-phase draws `drawTitleBackdrop`/`drawTitleLogo`/`drawWeeklyPanel`/`_drawTitleLoadScreen`/`drawTitleModeSelect`/`drawTitlePlaylistPicker`/`_drawTitleMenuHighlight`. **16,104 bytes.** ← canvas (incl. `UI_SCALE`), state, palette, achievements (`getWeeklyAchievements`/`getXP`), savegame (`listSaves`), optionsmenu (`drawOptions`; one-way — `optionsmenu.js` does not import this file). No longer imports `GOLD` from `screens.js` (dropped, unused post-rail-rebuild). The "input" phase now uses the two-zone `UI_SCALE`-relative layout from `SPEC-title-rail.md` (right rail + left/center zone) — see "Resolution rail Phase 2" above for the full breakdown; the `drawTitleModeSelect`/`drawTitlePlaylistPicker`/`_drawTitleLoadScreen` sub-phases are unchanged, still full-canvas-centered (out of this phase's scope).
 - **`optionsmenu.js`** — shared Options + Controls screens: `openOptions`/`openControls`/`optionsScreen`/`defaultPane`/`handleOptionsEdge`/`drawOptions`. Owns the volume sliders + mute row (moved from `pause.js`) plus a 5th "CONTROLS ▸" row, and a Controls sub-screen (keyboard/gamepad pane toggle). Keyboard pane (Phase 5): FIRE grid (via imported `drawFireLegend`) + a matching MOVE 3×3 grid (WASD + arrow glyphs, same cell/stroke style), OTHER (E/F Dustbin, ESC Pause, M Mute, SPACE Start) and MOUSE (aim/fire) label columns below; panel sized 460×460 to fit. Gamepad pane (Phase 6, DONE): static flat-palette controller schematic (body/sticks/d-pad/face buttons/bumpers+triggers/Start pill) with leader lines to MOVE / AIM·FIRE / ATOMIC DUSTBIN / START·PAUSE / BACK labels. `pause.js` delegates nav/draw here instead of owning options state directly; reachable from the title too (see STATUS-WORLD "Pause menu + Save/Load system"). ← canvas, palette, state, audio (volume/mute getters+setters), savegame (`savePrefs`), screens (`drawFireLegend`). Must NOT import `input.js`/`pause.js`/`screens-title.js` (the latter imports `optionsmenu.js`, one-way).
 - **`render.js`** — `render()` compositor + world/entity draws (`drawFloor`/`drawWalls`/`drawExit`/`drawExitPointer`/`drawVending`/`drawDustbins`(floor pickups + sliding canister + attract vortex, via `drawDustbinCan`)/`drawTerminals`/`drawShots`/`drawPickups`/`drawWorkers`/`drawFloats`/`drawDan` incl. carried-dustbin cue). `drawMarks` moved to `render-marks.js` (Camera-effects Phase 0, freeing headroom under the 24KB module-split convention). Camera-effects Phase 2 wired in zoom/shake (camera-translate line) + `drawDesaturation()`/`drawVignettes()`/`drawFlashes()` calls (from `render-camerafx.js`), plus `drawCleanerGlow(G.dan.x, G.dan.y)` immediately before `drawDan()` — **now 23,350 bytes, within ~1.2KB of the 24KB ceiling; watch this file on the next edit.** `drawTitle` now imported from `screens-title.js` (Resolution rail Phase 1); the other screens.js imports unchanged. ← canvas, state, config, palette, world, render-entities, render-ebolts (`drawEbolts`), render-marks (`drawMarks`), render-camerafx (`drawVignettes`/`drawFlashes`/`drawDesaturation`/`drawCleanerGlow`), camerafx (`getZoomScale`/`getShakeOffset`), screens, screens-title.

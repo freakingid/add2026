@@ -5,7 +5,7 @@
    the title / level-clear / game-over screens, plus the keyboard-fire legend
    shown on the title. All draw in screen space (no camera transform).
    ========================================================================= */
-import { ctx, VIEW_W, VIEW_H } from "./canvas.js";
+import { ctx, VIEW_W, VIEW_H, UI_SCALE } from "./canvas.js";
 import { G, levelType } from "./state.js";
 import { POWERUPS, POWERUP_KEYS } from "./config.js";
 import { COL } from "./palette.js";
@@ -138,9 +138,10 @@ function drawPostLevelModal(){
   ctx.fillStyle = "rgba(6,9,12,0.84)";
   ctx.fillRect(0,0,VIEW_W,VIEW_H);
 
-  const PW = Math.min(560, VIEW_W - 80);
+  const PW = Math.min(560 * UI_SCALE, VIEW_W - 80);
   const rows = Math.min(data.length, 6);          // cap visible rows
-  const PH = 120 + rows * 46 + 64;
+  const rowH = 46 * UI_SCALE;
+  const PH = 120 * UI_SCALE + rows * rowH + 64 * UI_SCALE;
   const px = (VIEW_W - PW) / 2, py = (VIEW_H - PH) / 2;
 
   // panel
@@ -151,56 +152,56 @@ function drawPostLevelModal(){
 
   // header
   ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-  ctx.font = "bold 26px 'Arial Black', sans-serif";
+  ctx.font = `bold ${26 * UI_SCALE}px 'Arial Black', sans-serif`;
   ctx.fillStyle = COL.atomic;
-  ctx.fillText("Achievement Progress", VIEW_W/2, py + 42);
+  ctx.fillText("Achievement Progress", VIEW_W/2, py + 42 * UI_SCALE);
 
   // list
   ctx.textAlign = "left";
-  let y = py + 84;
+  let y = py + 84 * UI_SCALE;
   for (let i = 0; i < rows; i++){
     const e = data[i];
     // name + NEW! badge
-    ctx.font = "bold 15px 'Courier New', monospace";
+    ctx.font = `bold ${15 * UI_SCALE}px 'Courier New', monospace`;
     ctx.fillStyle = "#e8ebef";
-    ctx.fillText(e.name, px + 24, y);
+    ctx.fillText(e.name, px + 24 * UI_SCALE, y);
     if (e.isNew){
-      const nx = px + 24 + ctx.measureText(e.name).width + 10;
-      ctx.font = "bold 11px 'Arial Black', sans-serif";
+      const nx = px + 24 * UI_SCALE + ctx.measureText(e.name).width + 10 * UI_SCALE;
+      ctx.font = `bold ${11 * UI_SCALE}px 'Arial Black', sans-serif`;
       ctx.fillStyle = "#11151c";
-      const bw = 38;
+      const bw = 38 * UI_SCALE;
       ctx.fillStyle = COL.amber;
-      ctx.fillRect(nx, y - 12, bw, 16);
+      ctx.fillRect(nx, y - 12 * UI_SCALE, bw, 16 * UI_SCALE);
       ctx.fillStyle = "#11151c";
       ctx.textAlign = "center";
-      ctx.fillText("NEW!", nx + bw/2, y + 1);
+      ctx.fillText("NEW!", nx + bw/2, y + 1 * UI_SCALE);
       ctx.textAlign = "left";
     }
     // progress n / target, right-aligned
     ctx.textAlign = "right";
-    ctx.font = "bold 13px 'Courier New', monospace";
+    ctx.font = `bold ${13 * UI_SCALE}px 'Courier New', monospace`;
     ctx.fillStyle = GOLD;
-    ctx.fillText(`${e.progress} / ${e.target}`, px + PW - 24, y);
+    ctx.fillText(`${e.progress} / ${e.target}`, px + PW - 24 * UI_SCALE, y);
     ctx.textAlign = "left";
     // description
-    ctx.font = "11px 'Courier New', monospace";
+    ctx.font = `${11 * UI_SCALE}px 'Courier New', monospace`;
     ctx.fillStyle = "#8b94a0";
-    ctx.fillText(e.description || "", px + 24, y + 16);
-    y += 46;
+    ctx.fillText(e.description || "", px + 24 * UI_SCALE, y + 16 * UI_SCALE);
+    y += rowH;
   }
 
   // footer buttons
-  const fy = py + PH - 30;
+  const fy = py + PH - 30 * UI_SCALE;
   const contLabel = G.inputMode === "gamepad" ? "START — CONTINUE" : "SPACE / ENTER — CONTINUE";
   const viewLabel = G.inputMode === "gamepad" ? "X — VIEW ALL ACHIEVEMENTS" : "V — VIEW ALL ACHIEVEMENTS";
   ctx.textBaseline = "middle";
-  ctx.font = "bold 13px 'Courier New', monospace";
+  ctx.font = `bold ${13 * UI_SCALE}px 'Courier New', monospace`;
   ctx.textAlign = "left";
   ctx.fillStyle = COL.soap;
-  ctx.fillText("▸ " + contLabel, px + 24, fy);
+  ctx.fillText("▸ " + contLabel, px + 24 * UI_SCALE, fy);
   ctx.textAlign = "right";
   ctx.fillStyle = "#9aa3ae";
-  ctx.fillText(viewLabel + " ◂", px + PW - 24, fy);
+  ctx.fillText(viewLabel + " ◂", px + PW - 24 * UI_SCALE, fy);
   ctx.textBaseline = "alphabetic";
 }
 
@@ -250,9 +251,9 @@ export function drawLifetimeModal(){
   ctx.fillStyle = "rgba(4,6,9,0.9)";
   ctx.fillRect(0,0,VIEW_W,VIEW_H);
 
-  const MW = Math.min(720, VIEW_W - 48);
+  const MW = Math.min(720 * UI_SCALE, VIEW_W - 48);
   const mx = (VIEW_W - MW) / 2;
-  const top = 24, bottom = VIEW_H - 24;
+  const top = 24 * UI_SCALE, bottom = VIEW_H - 24 * UI_SCALE;
   const MH = bottom - top;
 
   // panel frame
@@ -262,17 +263,17 @@ export function drawLifetimeModal(){
   ctx.strokeRect(mx + 1, top + 1, MW - 2, MH - 2);
 
   // header (outside the clip)
-  const headerH = 40;
+  const headerH = 40 * UI_SCALE;
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.font = "bold 22px 'Arial Black', sans-serif";
+  ctx.font = `bold ${22 * UI_SCALE}px 'Arial Black', sans-serif`;
   ctx.fillStyle = COL.atomic;
-  ctx.fillText("ALL ACHIEVEMENTS", VIEW_W/2, top + headerH/2 + 2);
+  ctx.fillText("ALL ACHIEVEMENTS", VIEW_W/2, top + headerH/2 + 2 * UI_SCALE);
 
   // dismiss hint (footer, outside the clip)
-  const footerH = 26;
+  const footerH = 26 * UI_SCALE;
   const backLabel = G.inputMode === "gamepad" ? "B — BACK"
                   : "ESC / BACKSPACE — BACK";
-  ctx.font = "bold 11px 'Courier New', monospace";
+  ctx.font = `bold ${11 * UI_SCALE}px 'Courier New', monospace`;
   ctx.fillStyle = "#9aa3ae";
   ctx.fillText(backLabel + "      ↑ / ↓ SCROLL", VIEW_W/2, bottom - footerH/2);
 
@@ -284,42 +285,42 @@ export function drawLifetimeModal(){
   ctx.rect(mx + 2, vpTop, MW - 4, vpH);
   ctx.clip();
 
-  const colX = mx + 24;
-  const colW = MW - 48;
+  const colX = mx + 24 * UI_SCALE;
+  const colW = MW - 48 * UI_SCALE;
   const scroll = G._lifetimeScrollY;
-  let y = vpTop - scroll + 8;
+  let y = vpTop - scroll + 8 * UI_SCALE;
   const lineTop = y;   // remember start to measure content height
 
   ctx.textBaseline = "alphabetic";
   for (const g of groups){
     // category header
     ctx.textAlign = "left";
-    ctx.font = "bold 15px 'Arial Black', sans-serif";
+    ctx.font = `bold ${15 * UI_SCALE}px 'Arial Black', sans-serif`;
     ctx.fillStyle = COL.amber;
-    ctx.fillText(`${g.emoji} ${g.name}`, colX, y + 14);
-    y += 30;
+    ctx.fillText(`${g.emoji} ${g.name}`, colX, y + 14 * UI_SCALE);
+    y += 30 * UI_SCALE;
 
     for (const a of g.achievements){
       // name
-      ctx.font = "bold 13px 'Courier New', monospace";
+      ctx.font = `bold ${13 * UI_SCALE}px 'Courier New', monospace`;
       ctx.fillStyle = a.hidden && a.tier === 0 ? "#5a636f" : "#e8ebef";
-      ctx.fillText(a.name, colX, y + 12);
+      ctx.fillText(a.name, colX, y + 12 * UI_SCALE);
 
       // 5-tier badge row (greyed until earned), right-aligned
       ctx.textAlign = "right";
-      ctx.font = "13px 'Arial', sans-serif";
+      ctx.font = `${13 * UI_SCALE}px 'Arial', sans-serif`;
       let bx = colX + colW;
       for (let t = TIER_BADGES.length - 1; t >= 0; t--){
         const earned = a.tier > t;
         ctx.globalAlpha = earned ? 1 : 0.22;
-        ctx.fillText(TIER_BADGES[t], bx, y + 12);
-        bx -= 22;
+        ctx.fillText(TIER_BADGES[t], bx, y + 12 * UI_SCALE);
+        bx -= 22 * UI_SCALE;
       }
       ctx.globalAlpha = 1;
       ctx.textAlign = "left";
 
       // progress bar toward the next tier
-      const barY = y + 20, barW = colW, barH = 5;
+      const barY = y + 20 * UI_SCALE, barW = colW, barH = 5 * UI_SCALE;
       ctx.fillStyle = "#1d232c";
       ctx.fillRect(colX, barY, barW, barH);
       const target = a.nextTarget || 1;
@@ -328,18 +329,18 @@ export function drawLifetimeModal(){
       ctx.fillRect(colX, barY, barW * frac, barH);
 
       // description + progress count
-      ctx.font = "10px 'Courier New', monospace";
+      ctx.font = `${10 * UI_SCALE}px 'Courier New', monospace`;
       ctx.fillStyle = "#727b86";
-      ctx.fillText(a.description || "", colX, y + 38);
+      ctx.fillText(a.description || "", colX, y + 38 * UI_SCALE);
       ctx.textAlign = "right";
       ctx.fillStyle = "#8b94a0";
       const count = a.tier >= 5 ? "MAX" : `${a.progress} / ${target}`;
-      ctx.fillText(count, colX + colW, y + 38);
+      ctx.fillText(count, colX + colW, y + 38 * UI_SCALE);
       ctx.textAlign = "left";
 
-      y += 48;
+      y += 48 * UI_SCALE;
     }
-    y += 10;
+    y += 10 * UI_SCALE;
   }
 
   ctx.restore();
