@@ -5,8 +5,9 @@ that touch enemy AI, stats, or new enemy types. For all other sessions, GDD.md
 alone is sufficient. Cross-references to GDD section numbers (§6.x) remain stable.
 
 **Status: All 9 enemies + Dispatch Terminal are fully built.** Implementation
-decisions for each enemy are in STATUS.md under the corresponding subsystem entry.
-Feel dials (speed, HP, damage, range, timers) live in `config.js` → `ENEMY` table.
+decisions for each enemy are in STATUS.md / STATUS-SYSTEMS.md under the corresponding
+subsystem entry. Feel dials (speed, HP, damage, range, timers) live in `config.js` →
+`ENEMY` table.
 
 ---
 
@@ -14,6 +15,27 @@ Feel dials (speed, HP, damage, range, timers) live in `config.js` → `ENEMY` ta
 
 Dan has **20 HP** — reference this when reading damage values. Per-enemy detail
 below; the summary table in §6.2 is the canonical stat reference.
+
+### 6.0 Buff model (Scanner alarm & Manager berserk)
+
+Two robots can raise the combat stats of *other* robots: the **Scanner's alarm**
+(§6.1.3) and the **Manager's on-death berserk** (§6.1.9). Both share the same gate:
+
+- A buffed robot gains a **movement-speed** multiplier.
+- The **melee damage** bonus applies **only to robots that already deal melee
+  damage** (`dmg > 0`). No ranged bonus is ever granted.
+- Consequence: robots whose contact damage is `0` — the **Scanner** and the
+  **Manager** themselves, and the Dispatch Terminal — receive no melee bonus from
+  either source, so **Scanners and Managers do not meaningfully buff each other**.
+  They can still receive the speed component, but with no melee to amplify it is
+  inert on them. This is a natural result of the `dmg > 0` gate, not a special-cased
+  exclusion.
+- The two buffs **stack** (`buffSpd` reads both the berserk and alarm states).
+
+The key behavioral difference is duration: the Scanner's alarm is a **continuous
+field** that lapses almost immediately once its source is gone, while the Manager's
+berserk is now **permanent-until-death** on each buffed robot (see the respective
+entries).
 
 ### 6.1 Enemy Roster
 
@@ -27,8 +49,14 @@ on and charges in a straight line. Can destroy shelving in its path. Dangerous t
 stand in front of.
 
 **6.1.3 SCANNER BOT** — support / alarm emitter. HP 2, 150 pts. No direct attack
-(0 HP). Patrols; on spotting Dan it broadcasts an alarm making nearby robots
-temporarily faster and more aggressive. Priority kill before engaging clusters.
+(0 HP contact damage). Patrols a fixed route (oblivious to Dan's position — only its
+alarm reacts to line of sight). While it has LOS to Dan it broadcasts a **continuous
+area alarm**: every robot within its alarm radius is buffed each frame (faster, +1
+melee per the §6.0 gate) and stays buffed for a short hold. Because the alarm refreshes
+a *short* timer rather than setting a long one, the buff **lapses almost immediately
+(~0.25 s) once the Scanner dies or a robot leaves the radius** — so "kill the Scanner to
+stop it" works without special-casing its death. The alarm itself lingers briefly after
+LOS breaks so it doesn't strobe through doorways. Priority kill before engaging clusters.
 
 **6.1.4 SORTER BOT** — cowardly ranged lobber; bombards from behind cover. HP 2,
 100 pts. Ranged arcing cardboard box (arcs over walls/shelving), 1 HP per hit.
@@ -50,7 +78,8 @@ Always knows Dan's location; mood flips on line of sight:
 ahead of it, 1 HP per tick while Dan is inside the cone, plus a **strong slow
 movement debuff** (a heavy movement penalty while sprayed — significantly more than
 a gentle slow). Wanders slowly. Most dangerous in corridors where Dan cannot escape
-the cone.
+the cone. (The slow also triggers a sustained screen tint + wobble while active —
+GDD §14, effect 6.)
 
 **6.1.8 SECURITY BOT** — fast ranged pursuer; mid-game primary threat. HP 3, 200
 pts. Ranged taser bolt, 2 HP per bolt. Fast, aggressive; fires direct-line bolts at
@@ -59,15 +88,18 @@ they strike** (friendly fire) — **drones are immune** (bolts travel below dron
 altitude). Robots destroyed this way award **no points** to Dan (§9).
 
 **6.1.9 MANAGER BOT** — rare, high-value, boss-tier. HP 6, 500 pts. Ranged seeking
-missile, 3 HP per hit. Rare spawn; fires slow-tracking missiles that follow Dan.
-The missile **launches slow and accelerates over its flight up to a fast maximum** —
-easy to outrun at first, but it closes the gap if it chases too long, so commit to
-luring it into a wall (detonates harmlessly) before it reaches top speed. **Missiles
-also damage any ground robot they hit** (friendly fire); **drones are immune**
-(missiles fly below drone altitude), and robots killed this way award **no points**
-to Dan (§9). On death the Manager emits a **berserk pulse**: nearby robots gain
-increased movement speed + increased melee damage (no added ranged) for a temporary
-duration.
+missile, 3 HP per hit. Contact damage is **0** (pure ranged unit — no melee even when
+buffed). Rare spawn; fires slow-tracking missiles that follow Dan. The missile
+**launches slow and accelerates over its flight up to a fast maximum** — easy to
+outrun at first, but it closes the gap if it chases too long, so commit to luring it
+into a wall (detonates harmlessly) before it reaches top speed. **Missiles also damage
+any ground robot they hit** (friendly fire, radial blast on the impact point whether it
+hits a wall or a robot body); **drones are immune** (missiles fly below drone altitude),
+and robots killed this way award **no points** to Dan (§9). On death the Manager emits a
+**berserk pulse**: nearby robots gain increased movement speed + increased melee damage
+(no added ranged; melee bonus gated per §6.0). **The berserk buff is permanent — it
+lasts for the rest of each buffed robot's life, not a decaying timer.** A buffed robot
+stays tinted / shimmying / speed-boosted until it dies (GDD §14, effect 5).
 
 **6.1.10 DISPATCH TERMINAL** — static spawner (like Gauntlet's generators). HP 4,
 300 pts. No attack (0 HP). Stationary; spawns enemies on a fixed timer.
@@ -88,3 +120,11 @@ Multiple terminals may exist per level.
 | Security Bot | 3 | 200 | Taser bolt | 2 HP | Yes |
 | Manager Bot | 6 | 500 | Seeking missile | 3 HP | Yes |
 | Dispatch Terminal | 4 | 300 | None (spawner) | 0 HP | No |
+
+### 6.3 Mixed sandbox ("mixed" pseudo-type)
+
+Not an enemy — a level type. `"mixed"` levels seed one Dispatch Terminal of every real
+enemy type at once (each capped by its own spawn `max`), producing an all-types arena.
+It is the endless tail of Level Plan mode (§8.4). `ENEMY["mixed"]` deliberately does
+not exist; the two generic code paths that index the stat table special-case it. See
+STATUS-SYSTEMS.md → "Mixed sandbox level".
